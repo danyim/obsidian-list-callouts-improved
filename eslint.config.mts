@@ -54,6 +54,10 @@ export default tseslint.config(
       // Test helpers run in the Node-side wdio runner, not inside Obsidian,
       // so the mobile-compatibility ban on Node builtins doesn't apply.
       'import/no-nodejs-modules': 'off',
+      // The screenshot capture deliberately restyles the editor to frame the
+      // image. That is not shipped plugin code, so the theming rule that
+      // pushes style changes into CSS classes does not apply.
+      'obsidianmd/no-static-styles-assignment': 'off',
     },
   },
   {

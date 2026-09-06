@@ -15,11 +15,15 @@ Create callouts in lists in Obsidian.
 
 Typing a configurable character at the beginning of a list item will turn the item into a callout:
 
-<img src="https://raw.githubusercontent.com/danyim/callout-bullets/main/screenshots/01.png" alt="A screenshot of list callouts">
+![A note with each built-in callout character applied to a list item](screenshots/01.png)
 
 The characters can also be replaced with icons:
 
-<img src="https://raw.githubusercontent.com/danyim/callout-bullets/main/screenshots/02.png" alt="A screenshot of list callouts with icons">
+![The same note with each callout character replaced by an icon](screenshots/02.png)
+
+Characters, icons and colours are all configurable, and you can add your own callouts:
+
+![The plugin settings tab, showing a preview and controls for each callout](screenshots/03.png)
 
 The padding of the callouts can be adjusted using the Style Settings plugin.
 
@@ -43,6 +47,10 @@ npm run dev     # rebuild on change
 npm run build   # type-check and produce main.js
 npm run lint
 ```
+
+`npm run screenshots` regenerates the images above from a real Obsidian render, so
+the README always shows what the current code actually produces. It writes into
+`screenshots/` and needs a display, same as the tests.
 
 `npm run icons` regenerates `src/iconAliases.ts` from the `lucide-static` package.
 That table only supplies *search aliases* for the icon picker. The icons themselves

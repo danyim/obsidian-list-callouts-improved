@@ -14,6 +14,7 @@
     "clean": "npm run prettier && npm run lint:fix",
     "test": "npm run test:e2e",
     "test:e2e": "wdio run ./wdio.conf.mts",
+    "screenshots": "wdio run ./wdio.screenshots.mts",
     "rlnotes": "git log $(git describe --tags --abbrev=0)..HEAD --oneline > release-notes.md && git add release-notes.md",
     "bump": "node version-bump.mjs && git add package.json manifest.json versions.json && npm run rlnotes",
     "release": "git commit -m $npm_package_version && git tag $npm_package_version && git push && git push --tags"
