@@ -231,6 +231,16 @@ settings:
   margin-bottom: 10px;
 }
 
+/* The preview is a single mocked-up list line, but it carries Obsidian's
+   .markdown-source-view classes so it picks up the editor's styling. Those
+   rules also make it flex and fill the available height, which would leave a
+   tall empty box under the line. */
+.lc-callout-container .markdown-source-view {
+  display: block;
+  height: auto;
+  min-height: 0;
+}
+
 .lc-input-container {
   display: flex;
   align-items: center;
@@ -294,6 +304,9 @@ settings:
 .setting-item.lc-setting .setting-item-control {
   display: block;
   width: 100%;
+  /* The control column right-aligns its contents by default, which would
+     push the callout preview and its inputs to the right edge. */
+  text-align: left;
 }
 
 /* Inside a modal there is no .vertical-tab-content to position against, so
