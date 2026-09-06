@@ -318,7 +318,7 @@ export function iconMenuGeometry(): Promise<null | {
   width: number;
   height: number;
   belowButton: boolean;
-  horizontallyAligned: boolean;
+  horizontallyAnchored: boolean;
   insideViewport: boolean;
 }> {
   return browser.executeObsidian(({ app }) => {
@@ -345,7 +345,11 @@ export function iconMenuGeometry(): Promise<null | {
       width: m.width,
       height: m.height,
       belowButton: !!b && m.top >= b.top,
-      horizontallyAligned: !!b && Math.abs(m.left - b.left) < 200,
+      // The picker anchors to the button's left edge on desktop and its right
+      // edge on mobile, so either one being close counts as anchored.
+      horizontallyAnchored:
+        !!b &&
+        Math.min(Math.abs(m.left - b.left), Math.abs(m.right - b.right)) < 200,
       insideViewport:
         m.left >= -1 &&
         m.top >= -1 &&

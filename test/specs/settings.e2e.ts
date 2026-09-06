@@ -1,6 +1,7 @@
 import { browser, expect } from '@wdio/globals';
 import { afterEach, before, beforeEach, describe, it } from 'mocha';
 
+import { DEFAULT_SETTINGS } from '../../src/settings';
 import {
   calloutPreviewCount,
   clickAddCallout,
@@ -80,7 +81,7 @@ describe('Adding a callout', function () {
       expect(geo.height).toBeGreaterThan(0);
       expect(geo.insideViewport).toBe(true);
       expect(geo.belowButton).toBe(true);
-      expect(geo.horizontallyAligned).toBe(true);
+      expect(geo.horizontallyAnchored).toBe(true);
     });
 
     it('lists icons and narrows them by search', async function () {
@@ -118,8 +119,14 @@ describe('Adding a callout', function () {
 });
 
 describe('Editing callouts', function () {
-  beforeEach(async function () {
+  before(async function () {
     await browser.reloadObsidian({ vault: 'test/vaults/callouts' });
+  });
+
+  beforeEach(async function () {
+    // Reset the callouts rather than rebooting Obsidian for every test: a
+    // reload costs enough that four of them push this spec past the timeout.
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
   });
 
   it('persists a new callout across a plugin reload', async function () {

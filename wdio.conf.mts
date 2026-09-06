@@ -73,7 +73,9 @@ export const config: WebdriverIO.Config = {
 
   mochaOpts: {
     ui: 'bdd',
-    timeout: 60 * 1000,
+    // reloadObsidian reboots the app, which is slow enough on a loaded CI box
+    // that a 60s ceiling trips on hooks that use it.
+    timeout: 120 * 1000,
   },
 
   waitforInterval: 250,
