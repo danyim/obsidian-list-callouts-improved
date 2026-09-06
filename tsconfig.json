@@ -7,13 +7,19 @@
     "inlineSourceMap": true,
     "inlineSources": true,
     "isolatedModules": true,
-    "jsx": "react",
-    "lib": ["dom", "es6", "scripthost", "es2018"],
+    "lib": ["dom", "dom.iterable", "es2018", "scripthost"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noImplicitAny": true,
     "skipLibCheck": true,
-    "target": "es2018"
+    "strictNullChecks": false,
+    "target": "es2018",
+    "types": [
+      "node",
+      "mocha",
+      "@wdio/globals/types",
+      "wdio-obsidian-service"
+    ]
   },
-  "include": ["./src/**/*.ts", "./src/**/*.tsx"]
+  "include": ["./src/**/*.ts", "./test/**/*.ts"]
 }

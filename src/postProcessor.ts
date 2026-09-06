@@ -74,11 +74,15 @@ function wrapLiContent(li: HTMLElement) {
 export function buildPostProcessor(
   getConfig: () => CalloutConfig
 ): MarkdownPostProcessor {
-  return async (el, ctx: any) => {
+  return async (el, ctx) => {
     const config = getConfig();
 
-    if (ctx.promises?.length) {
-      await Promise.all(ctx.promises);
+    // `promises` is internal: it lets a post-processor wait for the ones
+    // registered before it (embeds, for instance) to finish rendering.
+    const pending = (ctx as { promises?: Promise<unknown>[] }).promises;
+
+    if (pending?.length) {
+      await Promise.all(pending);
     }
 
     el.findAll('li').forEach((li) => {

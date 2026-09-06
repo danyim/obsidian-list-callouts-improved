@@ -1,58 +1,40 @@
 import { EditorView } from '@codemirror/view';
 import escapeStringRegexp from 'escape-string-regexp';
-import { Events, MarkdownView, Plugin, debounce } from 'obsidian';
+import { MarkdownView, Plugin, debounce } from 'obsidian';
 
 import { calloutExtension, calloutsConfigField, setConfig } from './extension';
+import { legacySettingsExist, readLegacySettings } from './import';
 import { buildPostProcessor } from './postProcessor';
 import {
   Callout,
   CalloutConfig,
-  ListCalloutSettings,
   ListCalloutsSettings,
+  mergeCallouts,
 } from './settings';
-
-const DEFAULT_SETTINGS: ListCalloutsSettings = [
-  {
-    color: '255, 214, 0',
-    char: '&',
-  },
-  {
-    color: '255, 145, 0',
-    char: '?',
-  },
-  {
-    color: '255, 23, 68',
-    char: '!',
-  },
-  {
-    color: '124, 77, 255',
-    char: '~',
-  },
-  {
-    color: '0, 184, 212',
-    char: '@',
-  },
-  {
-    color: '0, 200, 83',
-    char: '$',
-  },
-  {
-    color: '158, 158, 158',
-    char: '%',
-  },
-];
+import { ListCalloutSettingTab } from './settingsTab';
 
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
-  emitter: Events;
   postProcessorConfig: CalloutConfig;
+
+  /**
+   * Whether this vault still holds settings from the plugin this one was
+   * forked from. Resolved once during load so the settings tab can decide
+   * synchronously whether to offer the import.
+   */
+  legacyDataAvailable = false;
+
+  /** The settings tab, kept so structural changes can ask it to re-read. */
+  settingTab: ListCalloutSettingTab;
 
   async onload() {
     await this.loadSettings();
     this.buildPostProcessorConfig();
-    this.addSettingTab(new ListCalloutSettings(this));
 
-    this.emitter = new Events();
+    this.legacyDataAvailable = await legacySettingsExist(this.app);
+
+    this.settingTab = new ListCalloutSettingTab(this);
+    this.addSettingTab(this.settingTab);
 
     this.registerMarkdownPostProcessor(
       buildPostProcessor(() => this.postProcessorConfig),
@@ -66,7 +48,7 @@ export default class ListCalloutsPlugin extends Plugin {
       calloutExtension,
     ]);
 
-    app.workspace.trigger('parse-style-settings');
+    this.app.workspace.trigger('parse-style-settings');
   }
 
   emitSettingsUpdate = debounce(() => this.dispatchUpdate(), 2000, true);
@@ -74,8 +56,10 @@ export default class ListCalloutsPlugin extends Plugin {
   dispatchUpdate() {
     const newConfig = this.buildEditorConfig();
 
-    app.workspace.getLeavesOfType('markdown').find((l) => {
-      const view = l.view as MarkdownView;
+    this.app.workspace.getLeavesOfType('markdown').forEach((leaf) => {
+      const view = leaf.view as MarkdownView;
+      // `cm` is the underlying CodeMirror instance; not part of the public API.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const cm = (view.editor as any).cm as EditorView;
 
       cm?.dispatch({
@@ -84,50 +68,51 @@ export default class ListCalloutsPlugin extends Plugin {
     });
   }
 
+  private calloutsByChar(): Record<string, Callout> {
+    return this.settings.reduce<Record<string, Callout>>((record, curr) => {
+      record[curr.char] = curr;
+      return record;
+    }, {});
+  }
+
+  private charPattern(): string {
+    return this.settings
+      .map((callout) => escapeStringRegexp(callout.char))
+      .join('|');
+  }
+
   buildEditorConfig(): CalloutConfig {
     return {
-      callouts: this.settings.reduce<Record<string, Callout>>((record, curr) => {
-        record[curr.char] = curr;
-        return record
-      }, {}),
+      callouts: this.calloutsByChar(),
       re: new RegExp(
-        `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${
-          this.settings.map(callout => escapeStringRegexp(callout.char)).join('|')
-        }) `
+        `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${this.charPattern()}) `
       ),
-    }
+    };
   }
 
   buildPostProcessorConfig() {
     this.postProcessorConfig = {
-      callouts: this.settings.reduce<Record<string, Callout>>((record, curr) => {
-        record[curr.char] = curr;
-        return record
-      }, {}),
-      re: new RegExp(
-        `^(${
-          this.settings.map(callout => escapeStringRegexp(callout.char)).join('|')
-        }) `
-      ),
-    }
+      callouts: this.calloutsByChar(),
+      re: new RegExp(`^(${this.charPattern()}) `),
+    };
+  }
+
+  /**
+   * Replace the current callouts with the ones saved by List Callouts.
+   * Resolves with the number of callouts read, or rejects with a displayable
+   * message if the stored data is missing or malformed.
+   */
+  async importLegacySettings(): Promise<number> {
+    const legacy = await readLegacySettings(this.app);
+
+    this.settings = mergeCallouts(legacy);
+    await this.saveSettings();
+
+    return legacy.length;
   }
 
   async loadSettings() {
-    const loadedSettings = (await this.loadData()) as Callout[];
-    const customCallouts = loadedSettings?.filter(
-      (callout) => callout.custom === true
-    );
-    const modifiedBuiltins = loadedSettings?.filter(
-      (callout) => callout.custom !== true
-    );
-
-    this.settings = DEFAULT_SETTINGS.map((s, i) => {
-      return Object.assign({}, s, modifiedBuiltins ? modifiedBuiltins[i] : {});
-    });
-
-    if (customCallouts) {
-      this.settings.push(...customCallouts);
-    }
+    this.settings = mergeCallouts((await this.loadData()) as Callout[]);
   }
 
   async saveSettings() {

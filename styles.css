@@ -277,3 +277,35 @@ settings:
   align-content: flex-start;
   justify-content: flex-start;
 }
+
+/* Declarative settings (Obsidian 1.13+). The callout row is rendered into a
+   standard setting item's control column, which lays out as a row by default;
+   the preview and its inputs need to stack across the full width instead. */
+.setting-item.lc-setting {
+  display: block;
+  border-top: none;
+}
+
+.setting-item.lc-setting .setting-item-info {
+  margin-right: 0;
+  margin-bottom: 6px;
+}
+
+.setting-item.lc-setting .setting-item-control {
+  display: block;
+  width: 100%;
+}
+
+/* Inside a modal there is no .vertical-tab-content to position against, so
+   give the icon picker a positioning context that both the button and the menu
+   share -- otherwise the two are measured against different ancestors. */
+.modal .lc-input-container {
+  position: relative;
+}
+
+.lc-error {
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  min-height: 1.5em;
+  margin: 6px 0;
+}
