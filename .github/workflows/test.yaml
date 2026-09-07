@@ -62,7 +62,7 @@ jobs:
           OBSIDIAN_PASSWORD: ${{ secrets.OBSIDIAN_PASSWORD }}
 
       - name: Cache Obsidian
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .obsidian-cache
           key: obsidian-cache-${{ hashFiles('obsidian-versions-lock.txt') }}
@@ -97,7 +97,7 @@ jobs:
       # changes how callouts look is visible without reproducing it locally.
       - name: Upload renderings
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: renderings
           path: test/screenshots/
