@@ -1,8 +1,8 @@
 import { EditorView } from '@codemirror/view';
 import escapeStringRegexp from 'escape-string-regexp';
-import { MarkdownView, Plugin, debounce } from 'obsidian';
+import { Editor, EditorChange, MarkdownView, Plugin, debounce } from 'obsidian';
 
-import { removeCalloutChanges } from './commands';
+import { cycleCalloutChanges, removeCalloutChanges } from './commands';
 import { loadCustomIcons, unloadCustomIcons } from './customIcons';
 import { calloutExtension, calloutsConfigField, setConfig } from './extension';
 import { legacySettingsExist, readLegacySettings } from './import';
@@ -11,7 +11,7 @@ import {
   Callout,
   CalloutConfig,
   ListCalloutsSettings,
-  mergeCallouts,
+  defaultCallouts,
 } from './settings';
 import { ListCalloutSettingTab } from './settingsTab';
 
@@ -52,10 +52,23 @@ export default class ListCalloutsPlugin extends Plugin {
       id: 'remove-callout',
       name: 'Remove callout',
       editorCallback: (editor) => {
-        const changes = removeCalloutChanges(editor, this.buildEditorConfig());
-        // One transaction, so a single undo puts every line back.
-        if (changes.length) editor.transaction({ changes });
+        this.applyChanges(
+          editor,
+          removeCalloutChanges(editor, this.buildEditorConfig())
+        );
       },
+    });
+
+    this.addCommand({
+      id: 'next-callout',
+      name: 'Next callout',
+      editorCallback: (editor) => this.cycleCallout(editor, 1),
+    });
+
+    this.addCommand({
+      id: 'previous-callout',
+      name: 'Previous callout',
+      editorCallback: (editor) => this.cycleCallout(editor, -1),
     });
 
     this.registerEditorExtension([
@@ -88,6 +101,23 @@ export default class ListCalloutsPlugin extends Plugin {
     }
   }
 
+  /** One transaction, so a single undo puts every changed line back. */
+  private applyChanges(editor: Editor, changes: EditorChange[]) {
+    if (changes.length) editor.transaction({ changes });
+  }
+
+  private cycleCallout(editor: Editor, direction: 1 | -1) {
+    this.applyChanges(
+      editor,
+      cycleCalloutChanges(
+        editor,
+        this.buildEditorConfig(),
+        this.settings,
+        direction
+      )
+    );
+  }
+
   emitSettingsUpdate = debounce(() => this.dispatchUpdate(), 2000, true);
 
   dispatchUpdate() {
@@ -112,6 +142,11 @@ export default class ListCalloutsPlugin extends Plugin {
     }, {});
   }
 
+  /**
+   * The callout characters as a regex alternation, or '' when there are none
+   * left -- every callout can be deleted, and an empty alternation would match
+   * the empty string on every list item.
+   */
   private charPattern(): string {
     return this.settings
       .map((callout) => escapeStringRegexp(callout.char))
@@ -119,18 +154,24 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   buildEditorConfig(): CalloutConfig {
+    const chars = this.charPattern();
+
     return {
       callouts: this.calloutsByChar(),
-      re: new RegExp(
-        `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${this.charPattern()}) `
-      ),
+      re: chars
+        ? new RegExp(
+            `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
+          )
+        : null,
     };
   }
 
   buildPostProcessorConfig() {
+    const chars = this.charPattern();
+
     this.postProcessorConfig = {
       callouts: this.calloutsByChar(),
-      re: new RegExp(`^(${this.charPattern()}) `),
+      re: chars ? new RegExp(`^(${chars}) `) : null,
     };
   }
 
@@ -142,14 +183,25 @@ export default class ListCalloutsPlugin extends Plugin {
   async importLegacySettings(): Promise<number> {
     const legacy = await readLegacySettings(this.app);
 
-    this.settings = mergeCallouts(legacy);
+    this.settings = legacy;
     await this.saveSettings();
 
     return legacy.length;
   }
 
+  /** Put the built-in callouts back, discarding everything currently stored. */
+  async resetSettings(): Promise<void> {
+    this.settings = defaultCallouts();
+    await this.saveSettings();
+  }
+
   async loadSettings() {
-    this.settings = mergeCallouts((await this.loadData()) as Callout[]);
+    const stored = (await this.loadData()) as Callout[] | null;
+
+    // A vault that has never saved settings gets the built-ins seeded. One
+    // that has is taken at its word, empty included -- reconstructing the
+    // built-ins here is what used to make deleting them impossible.
+    this.settings = Array.isArray(stored) ? stored : defaultCallouts();
   }
 
   async saveSettings() {

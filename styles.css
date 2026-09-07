@@ -302,11 +302,34 @@ settings:
 }
 
 .setting-item.lc-setting .setting-item-control {
-  display: block;
+  /* A wrapping row rather than `display: block`. The list API appends its
+     delete and drag-handle buttons into this same container, after the rows we
+     render, and under `block` each of them became a full-width box on a line
+     of its own instead of sitting inline. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   width: 100%;
   /* The control column right-aligns its contents by default, which would
      push the callout preview and its inputs to the right edge. */
   text-align: left;
+}
+
+/* The preview takes a row to itself, and the inputs then grow to fill the next
+   one -- which leaves the delete and drag buttons at its right edge, where the
+   rest of Obsidian's list rows put them. Written in terms of how much each
+   part may grow rather than by naming the buttons, so however many affordances
+   the list adds, they all land on the input row. */
+.setting-item.lc-setting .lc-callout-container {
+  flex: 1 0 100%;
+}
+
+.setting-item.lc-setting .lc-input-container {
+  flex: 1 1 auto;
+}
+
+.setting-item.lc-setting .setting-item-control > .extra-setting-button {
+  flex: 0 0 auto;
 }
 
 /* Inside a modal there is no .vertical-tab-content to position against, so

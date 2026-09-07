@@ -1,4 +1,5 @@
 import {
+  App,
   ButtonComponent,
   ColorComponent,
   Modal,
@@ -16,7 +17,7 @@ import {
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
-import { CUSTOM_CALLOUT_OFFSET, Callout } from './settings';
+import { Callout } from './settings';
 
 /**
  * `setWarning()` was deprecated in favour of `setDestructive()` in Obsidian
@@ -64,7 +65,7 @@ export function buildSettingCallout(root: HTMLElement, callout: Callout) {
           });
           mockListLine.createSpan({
             cls: 'cm-list-1',
-            text: ' Sed eu nisl rhoncus, consectetur mi quis, scelerisque enim.',
+            text: ' Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
           });
         }
       );
@@ -272,24 +273,22 @@ export function buildCalloutRow(
     });
 
     // Color selection.
-    if (callout.custom) {
-      const [r, g, b] = callout.color
-        .split(',')
-        .map((v) => parseInt(v.trim(), 10));
+    const [r, g, b] = callout.color
+      .split(',')
+      .map((v) => parseInt(v.trim(), 10));
 
-      const color = new ColorComponent(inputContainer)
-        .setValueRgb({ r, g, b })
-        .onChange(() => {
-          const { r, g, b } = color.getValueRgb();
-          plugin.settings[index].color = `${r}, ${g}, ${b}`;
+    const color = new ColorComponent(inputContainer)
+      .setValueRgb({ r, g, b })
+      .onChange(() => {
+        const { r, g, b } = color.getValueRgb();
+        plugin.settings[index].color = `${r}, ${g}, ${b}`;
 
-          void plugin.saveSettings();
-          redrawPreview();
-        });
-    }
+        void plugin.saveSettings();
+        redrawPreview();
+      });
 
     // Delete button, for the pre-1.13 fallback only.
-    if (callout.custom && onDelete) {
+    if (onDelete) {
       const rightAlign = inputContainer.createDiv({
         cls: 'lc-input-right-align',
       });
@@ -398,6 +397,49 @@ export class NewCalloutModal extends Modal {
   }
 }
 
+const RESET_DESC =
+  'Replace your callouts with the seven built-in ones. Callouts you have added, and any changes to the built-in ones, are permanently lost.';
+
+/**
+ * Resetting throws away every callout the user has configured, so confirm
+ * first and say plainly that it does not come back.
+ */
+export class ConfirmResetModal extends Modal {
+  constructor(
+    app: App,
+    private onConfirm: () => void
+  ) {
+    super(app);
+  }
+
+  onOpen(): void {
+    // Modal.setTitle() postdates our minAppVersion; titleEl does not.
+    this.titleEl.setText('Reset to defaults');
+
+    this.contentEl.createEl('p', {
+      text: `${RESET_DESC} This is permanent and can't be undone.`,
+    });
+
+    new Setting(this.contentEl)
+      .addButton((btn) =>
+        btn.setButtonText('Cancel').onClick(() => this.close())
+      )
+      .addButton((btn) =>
+        btn
+          .setButtonText('Reset')
+          .then(styleDestructive)
+          .onClick(() => {
+            this.close();
+            this.onConfirm();
+          })
+      );
+  }
+
+  onClose(): void {
+    this.contentEl.empty();
+  }
+}
+
 export class ListCalloutSettingTab extends PluginSettingTab {
   plugin: ListCalloutsPlugin;
 
@@ -440,9 +482,14 @@ export class ListCalloutSettingTab extends PluginSettingTab {
 
   private reorderCallout(oldIndex: number, newIndex: number): void {
     const settings = this.plugin.settings;
-    const [moved] = settings.splice(CUSTOM_CALLOUT_OFFSET + oldIndex, 1);
-    settings.splice(CUSTOM_CALLOUT_OFFSET + newIndex, 0, moved);
+    const [moved] = settings.splice(oldIndex, 1);
+    settings.splice(newIndex, 0, moved);
     void this.plugin.saveSettings();
+    this.refresh();
+  }
+
+  private async runReset(): Promise<void> {
+    await this.plugin.resetSettings();
     this.refresh();
   }
 
@@ -510,23 +557,16 @@ export class ListCalloutSettingTab extends PluginSettingTab {
         desc: this.styleSettingsDesc(),
       },
       {
-        type: 'group',
-        heading: 'Built-in callouts',
-        items: settings
-          .slice(0, CUSTOM_CALLOUT_OFFSET)
-          .map((callout, i) => this.calloutDefinition(callout, i)),
-      },
-      {
+        // One list rather than a built-in group and a custom one: every
+        // callout can now be deleted and reordered, and the order is what the
+        // next/previous commands step through, so a custom callout has to be
+        // able to sit between two built-ins.
         type: 'list',
-        heading: 'Custom callouts',
-        emptyState: 'No custom callouts yet.',
-        items: settings
-          .slice(CUSTOM_CALLOUT_OFFSET)
-          .map((callout, i) =>
-            this.calloutDefinition(callout, CUSTOM_CALLOUT_OFFSET + i)
-          ),
-        onDelete: (index: number) =>
-          this.deleteCallout(CUSTOM_CALLOUT_OFFSET + index),
+        heading: 'Callouts',
+        emptyState:
+          'No callouts. Reset to defaults to bring the built-in ones back.',
+        items: settings.map((callout, i) => this.calloutDefinition(callout, i)),
+        onDelete: (index: number) => this.deleteCallout(index),
         onReorder: (oldIndex: number, newIndex: number) =>
           this.reorderCallout(oldIndex, newIndex),
         addItem: {
@@ -536,6 +576,15 @@ export class ListCalloutSettingTab extends PluginSettingTab {
               this.addCallout(callout)
             ).open();
           },
+        },
+      },
+      {
+        name: 'Reset to defaults',
+        desc: RESET_DESC,
+        action: () => {
+          new ConfirmResetModal(this.plugin.app, () => {
+            void this.runReset();
+          }).open();
         },
       }
     );
@@ -591,6 +640,20 @@ export class ListCalloutSettingTab extends PluginSettingTab {
             new NewCalloutModal(this.plugin, (callout) =>
               this.addCallout(callout)
             ).open();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName('Reset to defaults')
+      .setDesc(RESET_DESC)
+      .addButton((btn) =>
+        btn
+          .setButtonText('Reset')
+          .then(styleDestructive)
+          .onClick(() => {
+            new ConfirmResetModal(this.plugin.app, () => {
+              void this.runReset();
+            }).open();
           })
       );
   }

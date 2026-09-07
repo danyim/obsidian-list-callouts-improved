@@ -2,12 +2,23 @@ export interface Callout {
   char: string;
   color: string;
   icon?: string;
+  /**
+   * Marked the user-created callouts back when the built-in seven were fixed
+   * and had to be told apart from them. Callouts are one reorderable list now
+   * and nothing branches on this, but it is still written and preserved so a
+   * `data.json` stays readable by List Callouts, which we can import from.
+   */
   custom?: boolean;
 }
 
 export interface CalloutConfig {
   callouts: Record<string, Callout>;
-  re: RegExp;
+  /**
+   * Null when no callouts are configured. Every callout can be deleted, so
+   * that is a reachable state, and an empty character class would compile to a
+   * pattern that matches every list item.
+   */
+  re: RegExp | null;
 }
 
 export type ListCalloutsSettings = Callout[];
@@ -44,27 +55,12 @@ export const DEFAULT_SETTINGS: ListCalloutsSettings = [
 ];
 
 /**
- * Reconcile stored callouts with the built-in defaults. Built-ins are matched
- * by position so a stored tweak keeps overriding the same default, and
- * user-created callouts are appended after them.
+ * A fresh copy of the built-in callouts, for seeding a vault that has never
+ * saved settings and for "Reset to defaults".
  *
- * Shared by initial load and by importing from List Callouts, which stores the
- * same shape.
+ * Copied rather than handed out directly: the settings tab edits callouts in
+ * place, and DEFAULT_SETTINGS is also what a later reset restores.
  */
-export function mergeCallouts(loaded?: Callout[] | null): ListCalloutsSettings {
-  const customCallouts = loaded?.filter((callout) => callout.custom === true);
-  const modifiedBuiltins = loaded?.filter((callout) => callout.custom !== true);
-
-  const merged = DEFAULT_SETTINGS.map((builtin, i) =>
-    Object.assign({}, builtin, modifiedBuiltins ? modifiedBuiltins[i] : {})
-  );
-
-  if (customCallouts) {
-    merged.push(...customCallouts);
-  }
-
-  return merged;
+export function defaultCallouts(): ListCalloutsSettings {
+  return DEFAULT_SETTINGS.map((callout) => ({ ...callout }));
 }
-
-/** Index in `settings` at which user-created callouts begin. */
-export const CUSTOM_CALLOUT_OFFSET = DEFAULT_SETTINGS.length;
