@@ -29,6 +29,15 @@ knows about, so it stays current as Obsidian adds icons:
 
 The padding of the callouts can be adjusted using the Style Settings plugin.
 
+## Removing a callout
+
+The **Callout Bullets: Remove callout** command strips the callout character from
+the line the cursor is on, leaving the list item behind. It takes a hotkey like any
+other command, from Settings → Hotkeys.
+
+With text selected it clears every line the selection touches, skipping any that
+aren't callouts, and one undo puts them all back.
+
 ## Custom icons
 
 Any SVG in your vault's `.obsidian/icons` folder is registered as an icon and appears
