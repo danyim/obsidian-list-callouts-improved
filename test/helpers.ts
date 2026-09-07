@@ -416,3 +416,64 @@ export async function reloadPlugin(): Promise<void> {
     await plugins.enablePlugin('callout-bullets');
   });
 }
+
+/** Full text of the active markdown editor. */
+export function editorText(): Promise<string> {
+  return browser.executeObsidian(({ app, obsidian }) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    return view.editor.getValue();
+  });
+}
+
+/** Replace the active editor's contents, as a per-test fixture. */
+export async function setEditorText(text: string): Promise<void> {
+  await browser.executeObsidian(({ app, obsidian }, value) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    view.editor.setValue(value);
+  }, text);
+}
+
+/** Put a bare cursor in the active editor. */
+export async function placeCursor(line: number, ch = 0): Promise<void> {
+  await browser.executeObsidian(
+    ({ app, obsidian }, pos) => {
+      const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+      view.editor.setCursor(pos);
+    },
+    { line, ch }
+  );
+}
+
+/**
+ * Select from the start of `from` to the end of `to`. Used to check that the
+ * command acts on every line a selection touches, not just the anchor.
+ */
+export async function selectLines(from: number, to: number): Promise<void> {
+  await browser.executeObsidian(
+    ({ app, obsidian }, range) => {
+      const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+      view.editor.setSelection(
+        { line: range.from, ch: 0 },
+        { line: range.to, ch: view.editor.getLine(range.to).length }
+      );
+    },
+    { from, to }
+  );
+}
+
+/** Cursor position in the active editor, as `[line, ch]`. */
+export function cursorPosition(): Promise<[number, number]> {
+  return browser.executeObsidian(({ app, obsidian }) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    const cursor = view.editor.getCursor();
+    return [cursor.line, cursor.ch] as [number, number];
+  });
+}
+
+/** Undo once in the active editor. */
+export async function undo(): Promise<void> {
+  await browser.executeObsidian(({ app, obsidian }) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    view.editor.undo();
+  });
+}

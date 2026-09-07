@@ -2,6 +2,7 @@ import { EditorView } from '@codemirror/view';
 import escapeStringRegexp from 'escape-string-regexp';
 import { MarkdownView, Plugin, debounce } from 'obsidian';
 
+import { removeCalloutChanges } from './commands';
 import { loadCustomIcons, unloadCustomIcons } from './customIcons';
 import { calloutExtension, calloutsConfigField, setConfig } from './extension';
 import { legacySettingsExist, readLegacySettings } from './import';
@@ -46,6 +47,16 @@ export default class ListCalloutsPlugin extends Plugin {
       buildPostProcessor(() => this.postProcessorConfig),
       10000
     );
+
+    this.addCommand({
+      id: 'remove-callout',
+      name: 'Remove callout',
+      editorCallback: (editor) => {
+        const changes = removeCalloutChanges(editor, this.buildEditorConfig());
+        // One transaction, so a single undo puts every line back.
+        if (changes.length) editor.transaction({ changes });
+      },
+    });
 
     this.registerEditorExtension([
       calloutsConfigField.init(() => {
