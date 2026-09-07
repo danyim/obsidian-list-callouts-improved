@@ -27,6 +27,19 @@ Characters, icons and colours are all configurable, and you can add your own cal
 
 The padding of the callouts can be adjusted using the Style Settings plugin.
 
+## Custom icons
+
+Any SVG in your vault's `.obsidian/icons` folder is registered as an icon and appears
+in the picker alongside the ones Obsidian ships. A file named `My Fancy Mark.svg`
+becomes the icon `my-fancy-mark`.
+
+That is the same folder [Iconize](https://github.com/FlorianWoelki/obsidian-iconize)
+uses, so a vault already keeping icons there needs no changes.
+
+Icons are read when the plugin loads, so restart Obsidian or toggle the plugin after
+adding files. A name that an Obsidian icon already uses is skipped rather than
+replacing it, and a file that is not usable SVG is skipped with a note in the console.
+
 ## Coming from List Callouts
 
 Because this fork uses a new plugin id, Obsidian treats it as a separate plugin and

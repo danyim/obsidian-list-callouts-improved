@@ -2,6 +2,7 @@ import { EditorView } from '@codemirror/view';
 import escapeStringRegexp from 'escape-string-regexp';
 import { MarkdownView, Plugin, debounce } from 'obsidian';
 
+import { loadCustomIcons, unloadCustomIcons } from './customIcons';
 import { calloutExtension, calloutsConfigField, setConfig } from './extension';
 import { legacySettingsExist, readLegacySettings } from './import';
 import { buildPostProcessor } from './postProcessor';
@@ -27,11 +28,16 @@ export default class ListCalloutsPlugin extends Plugin {
   /** The settings tab, kept so structural changes can ask it to re-read. */
   settingTab: ListCalloutSettingTab;
 
+  /** Icon ids registered from the vault's icon folder, to unregister on unload. */
+  customIconIds: string[] = [];
+
   async onload() {
     await this.loadSettings();
     this.buildPostProcessorConfig();
 
     this.legacyDataAvailable = await legacySettingsExist(this.app);
+
+    await this.registerCustomIcons();
 
     this.settingTab = new ListCalloutSettingTab(this);
     this.addSettingTab(this.settingTab);
@@ -49,6 +55,26 @@ export default class ListCalloutsPlugin extends Plugin {
     ]);
 
     this.app.workspace.trigger('parse-style-settings');
+  }
+
+  onunload() {
+    // These are registered globally, so hand them back when the plugin goes.
+    unloadCustomIcons(this.customIconIds);
+    this.customIconIds = [];
+  }
+
+  /**
+   * Register the vault's own SVG icons so they show up in the icon picker
+   * alongside the ones Obsidian ships.
+   */
+  async registerCustomIcons(): Promise<void> {
+    const { registered, skipped } = await loadCustomIcons(this.app);
+
+    this.customIconIds = registered;
+
+    for (const { file, reason } of skipped) {
+      console.warn(`Callout Bullets: skipped custom icon ${file}: ${reason}`);
+    }
   }
 
   emitSettingsUpdate = debounce(() => this.dispatchUpdate(), 2000, true);
