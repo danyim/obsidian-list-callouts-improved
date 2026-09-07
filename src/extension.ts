@@ -145,10 +145,25 @@ export function buildCalloutDecos(view: EditorView, state: EditorState) {
   const builder = new RangeSetBuilder<Decoration>();
   const { doc } = state;
 
+  // Visible ranges can start partway through a line, so consecutive ranges can
+  // both land on the same one. RangeSetBuilder requires positions in
+  // increasing order and throws otherwise, and CodeMirror answers a throwing
+  // view plugin by dropping its decorations entirely, so a repeated line takes
+  // every callout off the screen rather than duplicating one.
+  let lastLine = 0;
+
   for (const { from, to } of view.visibleRanges) {
     let line = doc.lineAt(from);
 
     for (;;) {
+      if (line.number <= lastLine) {
+        if (line.to >= to || line.number >= doc.lines) break;
+        line = doc.line(line.number + 1);
+        continue;
+      }
+
+      lastLine = line.number;
+
       const match = line.text.match(config.re);
       const callout = match ? config.callouts[match[2]] : null;
 
