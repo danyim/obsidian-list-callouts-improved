@@ -3,7 +3,18 @@ import { before, describe, it } from 'mocha';
 
 import { openNote } from '../helpers';
 
-const DEEP_LINE = 13000;
+/**
+ * Line numbers of every callout in the fixture, filled in once the document
+ * exists. Jump targets are picked from these rather than from round numbers:
+ * a small viewport landing in a stretch of prose sees no callouts at all, and
+ * an assertion about a viewport with nothing in it proves nothing.
+ */
+let calloutLines: number[] = [];
+
+/** A callout line a given fraction of the way through the document. */
+function calloutLineAt(fraction: number): number {
+  return calloutLines[Math.floor((calloutLines.length - 1) * fraction)];
+}
 
 /**
  * Lines on screen that should end up decorated: ones matching the plugin's own
@@ -60,21 +71,23 @@ async function jumpToLine(line: number): Promise<void> {
  * than the one being rendered.
  */
 async function waitForDecorated(where: string): Promise<void> {
-  let last = '';
+  let last = 'never sampled';
 
-  await browser.waitUntil(
-    async () => {
-      const expected = await expectedInViewport();
-      const rendered = await renderedInViewport();
-      last = `expected at least ${expected}, saw ${rendered}`;
-      return expected > 0 && rendered >= expected;
-    },
-    {
-      timeout: 15000,
-      interval: 250,
-      timeoutMsg: `callouts missing ${where}: ${last}`,
-    }
-  );
+  try {
+    await browser.waitUntil(
+      async () => {
+        const expected = await expectedInViewport();
+        const rendered = await renderedInViewport();
+        last = `expected at least ${expected}, saw ${rendered}`;
+        return expected > 0 && rendered >= expected;
+      },
+      { timeout: 15000, interval: 250 }
+    );
+  } catch {
+    // Built here rather than passed as timeoutMsg, which is evaluated before
+    // the first poll and would always report the starting value.
+    throw new Error(`callouts missing ${where}: ${last}`);
+  }
 }
 
 describe('A large document', function () {
@@ -119,6 +132,23 @@ describe('A large document', function () {
 
     await openNote('Large.md');
     await browser.$('.lc-list-callout').waitForExist({ timeout: 30000 });
+
+    calloutLines = await browser.executeObsidian(({ app, obsidian }) => {
+      const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+      const cm = (view.editor as any).cm;
+      const re = (app as any).plugins.plugins[
+        'callout-bullets'
+      ].buildEditorConfig().re;
+
+      const found: number[] = [];
+
+      for (let i = 1; i <= cm.state.doc.lines; i++) {
+        const text = cm.state.doc.line(i).text;
+        if (re.test(text) && !text.includes('inside code')) found.push(i);
+      }
+
+      return found;
+    });
   });
 
   it('is long enough to outrun the parser', async function () {
@@ -127,7 +157,9 @@ describe('A large document', function () {
       return (view.editor as any).cm.state.doc.lines as number;
     });
 
-    expect(lines).toBeGreaterThan(DEEP_LINE);
+    expect(lines).toBeGreaterThan(13000);
+    expect(calloutLines.length).toBeGreaterThan(100);
+    expect(calloutLineAt(0.95)).toBeGreaterThan(12000);
   });
 
   it('decorates callouts at the top', async function () {
@@ -156,12 +188,14 @@ describe('A large document', function () {
   // next rebuild drops it. Showing a callout slightly too eagerly beats showing
   // none at all.
   it('decorates callouts far past the parsed region', async function () {
-    await jumpToLine(DEEP_LINE);
-    await waitForDecorated(`near line ${DEEP_LINE}`);
+    const line = calloutLineAt(0.95);
+    await jumpToLine(line);
+    await waitForDecorated(`near line ${line}`);
   });
 
   it('keeps decorating as the viewport moves around', async function () {
-    for (const line of [6500, 200, 11000, 3000]) {
+    for (const fraction of [0.5, 0.02, 0.85, 0.25]) {
+      const line = calloutLineAt(fraction);
       await jumpToLine(line);
       await waitForDecorated(`near line ${line}`);
     }
