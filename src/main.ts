@@ -1,10 +1,16 @@
+import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import escapeStringRegexp from 'escape-string-regexp';
 import { Editor, EditorChange, MarkdownView, Plugin, debounce } from 'obsidian';
 
 import { cycleCalloutChanges, removeCalloutChanges } from './commands';
 import { loadCustomIcons, unloadCustomIcons } from './customIcons';
-import { calloutExtension, calloutsConfigField, setConfig } from './extension';
+import {
+  buildCalloutDecos,
+  calloutExtension,
+  calloutsConfigField,
+  setConfig,
+} from './extension';
 import { legacySettingsExist, readLegacySettings } from './import';
 import { buildPostProcessor } from './postProcessor';
 import {
@@ -79,6 +85,20 @@ export default class ListCalloutsPlugin extends Plugin {
     ]);
 
     this.app.workspace.trigger('parse-style-settings');
+  }
+
+  /**
+   * Build the callout decorations for a given set of visible ranges.
+   *
+   * A seam for the tests. Two consecutive visible ranges landing on the same
+   * line is something a real viewport produces only occasionally, depending on
+   * what is on screen, and there is no way to arrange it through the editor on
+   * demand. Getting it wrong takes every callout off the screen rather than
+   * failing loudly, so it is worth being able to hand the builder those ranges
+   * directly.
+   */
+  buildDecorations(view: EditorView, state: EditorState) {
+    return buildCalloutDecos(view, state);
   }
 
   onunload() {
