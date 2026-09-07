@@ -1,0 +1,104 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Test
+
+on:
+  push:
+    branches: ['main']
+  # Any target branch, not just main, so a pull request stacked on another
+  # branch still gets checked.
+  pull_request:
+  # Triggered manually and by check_for_new_obsidian.yaml
+  workflow_dispatch:
+
+# actions/checkout needs this. On a private repository a token without it gets
+# "Repository not found" rather than a permission error, because GitHub will
+# not confirm that the repository exists.
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check-types
+
+  test:
+    runs-on: ubuntu-latest
+    name: e2e
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build
+
+      # Resolve the Obsidian versions under test and use them as the cache key.
+      # wdio.conf.mts prints them when CI is set.
+      - name: Get Obsidian cache key
+        run: |
+          npx tsx wdio.conf.mts | grep 'obsidian-cache-key:' > obsidian-versions-lock.txt
+          # Drop the cache wdio.conf.mts just created so it doesn't clash with restore
+          rm -rf .obsidian-cache
+        env:
+          # Beta versions need an Obsidian Insiders account. Add OBSIDIAN_EMAIL
+          # and OBSIDIAN_PASSWORD as repository secrets (with 2FA disabled) to
+          # test against them. Fork PRs don't get secrets, and the config falls
+          # back to non-beta versions when they're absent.
+          OBSIDIAN_EMAIL: ${{ secrets.OBSIDIAN_EMAIL }}
+          OBSIDIAN_PASSWORD: ${{ secrets.OBSIDIAN_PASSWORD }}
+
+      - name: Cache Obsidian
+        uses: actions/cache@v4
+        with:
+          path: .obsidian-cache
+          key: obsidian-cache-${{ hashFiles('obsidian-versions-lock.txt') }}
+
+      # Obsidian is an Electron app, so Linux runners need a virtual display.
+      # herbstluftwm is a window manager -- some Obsidian behaviour (window
+      # sizing, focus) misbehaves under a bare Xvfb without one.
+      - name: Set up virtual graphics
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/*.list
+          echo "set man-db/auto-update false" | sudo debconf-communicate
+          sudo dpkg-reconfigure man-db
+
+          sudo apt-get update -q
+          sudo apt-get install -q herbstluftwm dzen2 x11-xserver-utils
+
+          export DISPLAY=:99
+          echo "DISPLAY=$DISPLAY" >> "$GITHUB_ENV"
+          Xvfb $DISPLAY -screen 0 1280x1024x24 +extension GLX -noreset &
+          sleep 1
+          herbstluftwm &
+          sleep 1
+
+      - name: Run e2e tests
+        run: npm run test:e2e
+        env:
+          WDIO_MAX_INSTANCES: 2 # GitHub runners are 2-core
+          OBSIDIAN_EMAIL: ${{ secrets.OBSIDIAN_EMAIL }}
+          OBSIDIAN_PASSWORD: ${{ secrets.OBSIDIAN_PASSWORD }}
+
+      # One rendering per Obsidian version and platform, so a version bump that
+      # changes how callouts look is visible without reproducing it locally.
+      - name: Upload renderings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderings
+          path: test/screenshots/
+          if-no-files-found: warn
