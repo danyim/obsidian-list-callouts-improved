@@ -408,6 +408,94 @@ export async function clickIconInMenu(id: string): Promise<void> {
   if (!clicked) throw new Error(`Icon "${id}" not in the picker`);
 }
 
+/**
+ * Delete the plugin's own `data.json`, so the next load sees a vault that has
+ * never saved settings. That is the one case in which the built-in callouts
+ * are seeded, and it has to be told apart from a saved-but-empty list.
+ */
+export async function clearPluginData(): Promise<void> {
+  await browser.executeObsidian(async ({ app }) => {
+    const file = `${app.vault.configDir}/plugins/callout-bullets/data.json`;
+    if (await app.vault.adapter.exists(file)) {
+      await app.vault.adapter.remove(file);
+    }
+  });
+}
+
+/**
+ * Click the control of a named row in the plugin's settings tab.
+ *
+ * The declarative path renders an `action` definition and the pre-1.13
+ * fallback renders a labelled button, and the two put different things in the
+ * row, so take whichever button is there and fall back to the row itself.
+ */
+export async function clickSettingByName(name: string): Promise<void> {
+  const clicked = await browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        (el.querySelector('.setting-item-name')?.textContent ?? '').trim() ===
+        wanted
+    );
+    if (!row) return false;
+
+    const control = row.querySelector<HTMLElement>('button, .clickable-icon');
+    (control ?? row).click();
+    return true;
+  }, name);
+
+  if (!clicked) throw new Error(`No settings row named "${name}"`);
+}
+
+/** Run the reset the way the settings button does. */
+export async function runReset(): Promise<void> {
+  await browser.executeObsidian(async ({ app }) => {
+    const p = (app as any).plugins.plugins['callout-bullets'];
+    await p.resetSettings();
+  });
+}
+
+/** The callout characters the editor is currently configured to match. */
+export function editorCalloutChars(): Promise<string[]> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['callout-bullets'];
+    return Object.keys(p.buildEditorConfig().callouts);
+  });
+}
+
+/**
+ * Whether both rendering patterns are null, which is how "no configured
+ * callouts" is represented -- an empty alternation would match every list item
+ * instead of none.
+ */
+export function calloutPatternsAreNull(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['callout-bullets'];
+    p.buildPostProcessorConfig();
+    return (
+      p.buildEditorConfig().re === null && p.postProcessorConfig.re === null
+    );
+  });
+}
+
+/** Drive the settings tab's reorder handler, as a drag in the list would. */
+export async function reorderCallout(
+  oldIndex: number,
+  newIndex: number
+): Promise<void> {
+  await browser.executeObsidian(
+    ({ app }, move) => {
+      const p = (app as any).plugins.plugins['callout-bullets'];
+      p.settingTab.reorderCallout(move.oldIndex, move.newIndex);
+    },
+    { oldIndex, newIndex }
+  );
+}
+
 /** Reload the plugin so persisted settings are read back from disk. */
 export async function reloadPlugin(): Promise<void> {
   await browser.executeObsidian(async ({ app }) => {

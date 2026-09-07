@@ -80,6 +80,10 @@ export function buildPostProcessor(
   return async (el, ctx) => {
     const config = getConfig();
 
+    // No callouts configured, so nothing can match. Bailing here also avoids
+    // awaiting the pending post-processors below for no reason.
+    if (!config.re) return;
+
     // `promises` is internal: it lets a post-processor wait for the ones
     // registered before it (embeds, for instance) to finish rendering.
     const pending = (ctx as { promises?: Promise<unknown>[] }).promises;

@@ -3,12 +3,16 @@ import { afterEach, before, beforeEach, describe, it } from 'mocha';
 
 import { DEFAULT_SETTINGS } from '../../src/settings';
 import {
+  calloutPatternsAreNull,
   calloutPreviewCount,
+  clearPluginData,
   clickAddCallout,
   clickIconInMenu,
   clickModalButton,
+  clickSettingByName,
   closeSettings,
   dismissModal,
+  editorCalloutChars,
   getSettings,
   iconMenuCount,
   iconMenuGeometry,
@@ -17,8 +21,11 @@ import {
   openIconMenuInModal,
   openPluginSettings,
   reloadPlugin,
+  reorderCallout,
+  runReset,
   searchIconMenu,
   setSettings,
+  settingsText,
   typeInModal,
   waitForModal,
 } from '../helpers';
@@ -164,19 +171,11 @@ describe('Editing callouts', function () {
       { char: '(', color: '9, 9, 9', custom: true },
     ]);
 
-    let chars = await browser.executeObsidian(({ app }) => {
-      const p = (app as any).plugins.plugins['callout-bullets'];
-      return Object.keys(p.buildEditorConfig().callouts);
-    });
-    expect(chars).toContain('(');
+    expect(await editorCalloutChars()).toContain('(');
 
     await setSettings((await getSettings()).filter((c) => c.char !== '('));
 
-    chars = await browser.executeObsidian(({ app }) => {
-      const p = (app as any).plugins.plugins['callout-bullets'];
-      return Object.keys(p.buildEditorConfig().callouts);
-    });
-    expect(chars).not.toContain('(');
+    expect(await editorCalloutChars()).not.toContain('(');
   });
 
   it('shows every configured callout in the settings tab', async function () {
@@ -188,5 +187,193 @@ describe('Editing callouts', function () {
     await openPluginSettings();
     expect(await calloutPreviewCount()).toBe(BUILT_IN_COUNT + 1);
     await closeSettings();
+  });
+});
+
+describe('Deleting built-in callouts', function () {
+  before(async function () {
+    await browser.reloadObsidian({ vault: 'test/vaults/callouts' });
+  });
+
+  beforeEach(async function () {
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+  });
+
+  // The regression this feature turns on: the built-ins used to be rebuilt
+  // from DEFAULT_SETTINGS on every load, so a deleted one came straight back.
+  it('keeps a deleted built-in deleted across a plugin reload', async function () {
+    await setSettings((await getSettings()).filter((c) => c.char !== '&'));
+
+    await reloadPlugin();
+
+    const settings = await getSettings();
+    expect(settings).toHaveLength(BUILT_IN_COUNT - 1);
+    expect(settings.map((c) => c.char)).not.toContain('&');
+  });
+
+  it('drops a deleted built-in from the editor config', async function () {
+    await setSettings((await getSettings()).filter((c) => c.char !== '&'));
+
+    expect(await editorCalloutChars()).not.toContain('&');
+  });
+
+  it('keeps an emptied callout list across a plugin reload', async function () {
+    await setSettings([]);
+
+    await reloadPlugin();
+
+    expect(await getSettings()).toHaveLength(0);
+  });
+
+  // An empty alternation would compile to a pattern matching every list item,
+  // so both renderers get a null pattern instead.
+  it('matches nothing when every callout has been deleted', async function () {
+    await setSettings([]);
+
+    expect(await calloutPatternsAreNull()).toBe(true);
+  });
+
+  it('seeds the built-ins in a vault that has never saved settings', async function () {
+    await clearPluginData();
+
+    await reloadPlugin();
+
+    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+describe('Resetting to defaults', function () {
+  before(async function () {
+    await browser.reloadObsidian({ vault: 'test/vaults/callouts' });
+  });
+
+  it('restores the built-ins after they have been deleted', async function () {
+    await setSettings([]);
+
+    await runReset();
+
+    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('discards custom callouts and edits to the built-in ones', async function () {
+    const edited = DEFAULT_SETTINGS.map((c) => ({ ...c }));
+    edited[0].color = '7, 7, 7';
+    edited[1].icon = 'lucide-star';
+    await setSettings([
+      ...edited,
+      { char: '(', color: '9, 9, 9', custom: true },
+    ]);
+
+    await runReset();
+
+    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('survives a plugin reload', async function () {
+    await setSettings([]);
+    await runReset();
+
+    await reloadPlugin();
+
+    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('offers the reset in the settings tab', async function () {
+    await openPluginSettings();
+
+    expect(await settingsText()).toContain('Reset to defaults');
+
+    await closeSettings();
+  });
+
+  it('resets from the settings tab once the warning is confirmed', async function () {
+    await setSettings([{ char: '(', color: '9, 9, 9', custom: true }]);
+    await openPluginSettings();
+
+    await clickSettingByName('Reset to defaults');
+    await waitForModal('Reset to defaults');
+    expect(await modalText()).toContain("can't be undone");
+
+    await clickModalButton('Reset');
+
+    await browser.waitUntil(
+      async () => (await getSettings()).length === BUILT_IN_COUNT,
+      {
+        timeout: 5000,
+        interval: 150,
+        timeoutMsg: 'the reset did not take effect',
+      }
+    );
+    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+
+    await closeSettings();
+  });
+
+  it('leaves the callouts alone when the warning is cancelled', async function () {
+    const only = [{ char: '(', color: '9, 9, 9', custom: true }];
+    await setSettings(only);
+    await openPluginSettings();
+
+    await clickSettingByName('Reset to defaults');
+    await waitForModal('Reset to defaults');
+    await dismissModal();
+
+    expect(await getSettings()).toEqual(only);
+
+    await closeSettings();
+  });
+});
+
+describe('Reordering callouts', function () {
+  before(async function () {
+    await browser.reloadObsidian({ vault: 'test/vaults/callouts' });
+  });
+
+  beforeEach(async function () {
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+    // The handler re-reads the tab after moving, which only means anything
+    // while the tab is open -- which is the only way a drag can happen.
+    await openPluginSettings();
+  });
+
+  afterEach(async function () {
+    await closeSettings();
+  });
+
+  it('moves a callout down the list', async function () {
+    await reorderCallout(0, 2);
+
+    const chars = (await getSettings()).map((c) => c.char);
+    expect(chars.slice(0, 3)).toEqual(['?', '!', '&']);
+  });
+
+  it('moves a callout up the list', async function () {
+    await reorderCallout(2, 0);
+
+    const chars = (await getSettings()).map((c) => c.char);
+    expect(chars.slice(0, 3)).toEqual(['!', '&', '?']);
+  });
+
+  // Built-ins and custom callouts share one list now, so a custom one can be
+  // dragged in between two built-ins.
+  it('interleaves a custom callout with the built-in ones', async function () {
+    await setSettings([
+      ...DEFAULT_SETTINGS.map((c) => ({ ...c })),
+      { char: '(', color: '9, 9, 9', custom: true },
+    ]);
+
+    await reorderCallout(BUILT_IN_COUNT, 1);
+
+    const chars = (await getSettings()).map((c) => c.char);
+    expect(chars.slice(0, 3)).toEqual(['&', '(', '?']);
+  });
+
+  it('persists the new order across a plugin reload', async function () {
+    await reorderCallout(0, 2);
+
+    await reloadPlugin();
+
+    const chars = (await getSettings()).map((c) => c.char);
+    expect(chars.slice(0, 3)).toEqual(['?', '!', '&']);
   });
 });

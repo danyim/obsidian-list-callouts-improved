@@ -29,14 +29,35 @@ knows about, so it stays current as Obsidian adds icons:
 
 The padding of the callouts can be adjusted using the Style Settings plugin.
 
-## Removing a callout
+## Managing callouts
 
-The **Callout Bullets: Remove callout** command strips the callout character from
-the line the cursor is on, leaving the list item behind. It takes a hotkey like any
-other command, from Settings → Hotkeys.
+Callouts are one list. A new vault starts with the seven shown above, and from there
+any of them can be edited, reordered by dragging, or deleted — the built-in ones
+included. Nothing is fixed, so a vault can end up with a completely different set, or
+with none at all.
 
-With text selected it clears every line the selection touches, skipping any that
-aren't callouts, and one undo puts them all back.
+**Reset to defaults**, at the bottom of the settings tab, puts the original seven
+back. It replaces everything currently configured, so callouts you have added and
+edits to the built-in ones are lost; it asks for confirmation first, and the change
+can't be undone.
+
+The order is worth caring about, because it's the order the cycling commands below
+step through.
+
+## Commands
+
+Each of these takes a hotkey like any other command, from Settings → Hotkeys. All
+three act on every line a selection touches — skipping lines that aren't list items —
+and one undo puts them all back.
+
+**Callout Bullets: Next callout** and **Previous callout** step the line through the
+callout list, in the order the settings tab shows. A plain list item is part of that
+cycle rather than only its starting point: stepping off either end leaves a plain list
+item, so tapping past the callout you wanted comes back round instead of stranding the
+line, and the two directions are exact inverses.
+
+**Callout Bullets: Remove callout** strips the callout character from the line the
+cursor is on, leaving the list item behind.
 
 ## Custom icons
 
