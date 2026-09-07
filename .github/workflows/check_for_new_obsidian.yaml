@@ -18,6 +18,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
+      # Reads this workflow's own past runs and dispatches test.yaml.
       actions: write
     steps:
       - name: Check if there's a new Obsidian version

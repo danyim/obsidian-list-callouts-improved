@@ -4,12 +4,17 @@ name: Test
 on:
   push:
     branches: ['main']
+  # Any target branch, not just main, so a pull request stacked on another
+  # branch still gets checked.
   pull_request:
-    branches: ['main']
   # Triggered manually and by check_for_new_obsidian.yaml
   workflow_dispatch:
 
-permissions: {}
+# actions/checkout needs this. On a private repository a token without it gets
+# "Repository not found" rather than a permission error, because GitHub will
+# not confirm that the repository exists.
+permissions:
+  contents: read
 
 jobs:
   lint:

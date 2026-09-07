@@ -5,6 +5,11 @@ on:
     tags:
       - '*'
 
+# gh release create needs write access to contents. Spelled out rather than
+# left to the repository default, which may be read-only.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
