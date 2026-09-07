@@ -1,6 +1,11 @@
-import { ensureSyntaxTree, tokenClassNodeProp } from '@codemirror/language';
+import {
+  syntaxTree,
+  syntaxTreeAvailable,
+  tokenClassNodeProp,
+} from '@codemirror/language';
 import {
   EditorState,
+  Line,
   RangeSetBuilder,
   StateEffect,
   StateField,
@@ -90,61 +95,93 @@ export const calloutsConfigField = StateField.define<CalloutConfig>({
   },
 });
 
+/**
+ * Whether a line whose text already matched the callout pattern is really a
+ * list item, rather than something that merely looks like one inside a fenced
+ * code block.
+ *
+ * When the parser has not reached this line the answer is taken on trust. The
+ * pattern is anchored to a list marker at the start of the line, so a false
+ * positive needs a code block containing list-shaped text, and the next update
+ * after the parser catches up corrects it. Waiting for the parser instead
+ * means rendering nothing at all, which is what happens when a large document
+ * is scrolled past the parsed region.
+ */
+function isListLine(state: EditorState, line: Line): boolean {
+  if (!syntaxTreeAvailable(state, line.to)) return true;
+
+  let isList = false;
+
+  syntaxTree(state).iterate({
+    from: line.from,
+    to: line.to,
+    enter(node): false | void {
+      if (isList) return false;
+
+      const prop = node.type.prop(tokenClassNodeProp);
+
+      if (prop && /formatting-list/.test(prop)) {
+        isList = true;
+        return false;
+      }
+    },
+  });
+
+  return isList;
+}
+
+/**
+ * Build the callout decorations for everything on screen.
+ *
+ * Walks the visible lines and tests each against the callout pattern, rather
+ * than walking every syntax node in the viewport. The viewport holds a few
+ * dozen lines whatever the document's size, and only the handful that match
+ * are looked up in the syntax tree.
+ */
 export function buildCalloutDecos(view: EditorView, state: EditorState) {
   const config = state.field(calloutsConfigField);
   if (!config?.re || !view.visibleRanges.length) return Decoration.none;
 
   const builder = new RangeSetBuilder<Decoration>();
-  const lastRange = view.visibleRanges[view.visibleRanges.length - 1];
-  const tree = ensureSyntaxTree(state, lastRange.to, 50);
   const { doc } = state;
 
-  let lastEnd = -1;
-
   for (const { from, to } of view.visibleRanges) {
-    tree.iterate({
-      from,
-      to,
-      enter({ type, from, to }): false | void {
-        if (from <= lastEnd) return;
+    let line = doc.lineAt(from);
 
-        const prop = type.prop(tokenClassNodeProp);
-        if (prop && /formatting-list/.test(prop)) {
-          const { from: lineFrom, to, text } = doc.lineAt(from);
-          const match = text.match(config.re);
-          const callout = match ? config.callouts[match[2]] : null;
+    for (;;) {
+      const match = line.text.match(config.re);
+      const callout = match ? config.callouts[match[2]] : null;
 
-          lastEnd = to;
+      if (callout && isListLine(state, line)) {
+        const labelPos = line.from + match[1].length;
 
-          if (callout) {
-            const labelPos = lineFrom + match[1].length;
+        // Set the line class and callout color
+        builder.add(
+          line.from,
+          line.from,
+          calloutDecoration(callout.char, callout.color)
+        );
 
-            // Set the line class and callout color
-            builder.add(
-              lineFrom,
-              lineFrom,
-              calloutDecoration(callout.char, callout.color)
-            );
+        // Add the callout background element
+        builder.add(
+          line.from,
+          line.from,
+          Decoration.widget({ widget: new CalloutBackground(), side: -1 })
+        );
 
-            // Add the callout background element
-            builder.add(
-              lineFrom,
-              lineFrom,
-              Decoration.widget({ widget: new CalloutBackground(), side: -1 })
-            );
+        // Decorate the callout marker
+        builder.add(
+          labelPos,
+          labelPos + callout.char.length,
+          Decoration.replace({
+            widget: new CalloutMarker(callout.char, callout.icon),
+          })
+        );
+      }
 
-            // Decorate the callout marker
-            builder.add(
-              labelPos,
-              labelPos + callout.char.length,
-              Decoration.replace({
-                widget: new CalloutMarker(callout.char, callout.icon),
-              })
-            );
-          }
-        }
-      },
-    });
+      if (line.to >= to || line.number >= doc.lines) break;
+      line = doc.line(line.number + 1);
+    }
   }
 
   return builder.finish();
@@ -162,6 +199,10 @@ export const calloutExtension = ViewPlugin.fromClass(
       if (
         update.docChanged ||
         update.viewportChanged ||
+        // The parser runs in the background, so a line can be unparsed when it
+        // is first drawn. Rebuilding as the tree advances is what lets those
+        // lines pick up their decorations without an edit.
+        syntaxTree(update.state) !== syntaxTree(update.startState) ||
         update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(setConfig))
         )
