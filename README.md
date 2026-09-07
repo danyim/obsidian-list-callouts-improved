@@ -15,15 +15,17 @@ Create callouts in lists in Obsidian.
 
 Typing a configurable character at the beginning of a list item will turn the item into a callout:
 
-![A note with each built-in callout character applied to a list item, shown in light and dark mode](screenshots/01.png)
+![A note with each built-in callout character applied to a list item, shown in light and dark mode](screenshots/callout-characters.png)
 
 The characters can also be replaced with icons:
 
-![The same note with each callout character replaced by an icon, shown in light and dark mode](screenshots/02.png)
+![The same note with each callout character replaced by an icon, shown in light and dark mode](screenshots/callout-icons.png)
 
-Characters, icons and colours are all configurable, and you can add your own callouts:
+Characters, icons and colours are all configurable, and you can add your own callouts.
+**Set icon** opens a searchable picker of every icon the running copy of Obsidian
+knows about, so it stays current as Obsidian adds icons:
 
-![The plugin settings tab, showing a preview and controls for each callout, in light and dark mode](screenshots/03.png)
+![The plugin settings tab with the icon picker open, in light and dark mode](screenshots/settings-icon-picker.png)
 
 The padding of the callouts can be adjusted using the Style Settings plugin.
 
