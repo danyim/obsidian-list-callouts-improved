@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/danyim/callout-bullets#readme
+    about: Setup, custom icons, and migrating from List Callouts are covered in the README.
+  - name: Original plugin (obsidian-list-callouts)
+    url: https://github.com/mgmeyers/obsidian-list-callouts/issues
+    about: If you're running the original List Callouts plugin rather than this fork, report it there.

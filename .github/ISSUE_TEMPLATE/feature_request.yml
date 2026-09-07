@@ -1,0 +1,50 @@
+name: Feature request
+description: Suggest something Callout Bullets should be able to do
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Callout Bullets aims to stay a small plugin that does one thing: turn list
+        items into callouts. Suggestions that fit that shape are the easiest to land.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before requesting
+      options:
+        - label: I searched the existing issues and didn't find this one.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: |
+        Describe the problem rather than the solution first — it often turns out
+        there's already a way to do it, or a simpler one nobody had thought of.
+      placeholder: I keep a reading list where each item is a callout, and I want …
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: The change as you picture it — a setting, a command, a rendering change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: |
+        Including workarounds you're using today, or other plugins that do part of this.
+
+  - type: checkboxes
+    id: contributing
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd be willing to open a pull request for this.
