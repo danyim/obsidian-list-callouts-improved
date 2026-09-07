@@ -23,6 +23,10 @@ data.json
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
 
+# Worktrees Claude Code creates inside the repo. Only the generated worktrees,
+# so a deliberate .claude/settings.json can still be committed.
+.claude/worktrees/
+
 # e2e testing
 .obsidian-cache
 test/screenshots
