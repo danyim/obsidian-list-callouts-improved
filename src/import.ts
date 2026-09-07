@@ -88,7 +88,10 @@ export async function readLegacySettings(app: App): Promise<Callout[]> {
  * Importing replaces the current callouts outright, so confirm first.
  */
 export class ConfirmImportModal extends Modal {
-  constructor(app: App, private onConfirm: () => void) {
+  constructor(
+    app: App,
+    private onConfirm: () => void
+  ) {
     super(app);
   }
 

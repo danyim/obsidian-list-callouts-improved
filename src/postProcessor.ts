@@ -4,8 +4,11 @@ import { CalloutConfig } from './settings';
 
 function getFirstTextNode(li: HTMLElement) {
   for (const node of Array.from(li.childNodes)) {
-    if (node.nodeType === document.ELEMENT_NODE && (node as HTMLElement).classList.contains('tasks-list-text')) {
-      const descriptionNode = (node as HTMLElement).firstElementChild
+    if (
+      node.nodeType === document.ELEMENT_NODE &&
+      (node as HTMLElement).classList.contains('tasks-list-text')
+    ) {
+      const descriptionNode = (node as HTMLElement).firstElementChild;
       if (descriptionNode?.classList.contains('task-description')) {
         const textNode = descriptionNode.firstElementChild?.firstChild;
         if (textNode.nodeType === document.TEXT_NODE) {

@@ -100,7 +100,10 @@ function attachIconMenu(
 
     const calcMenuPos = () => {
       let pos = `top: ${
-        btnEl.offsetTop + btnEl.offsetHeight + 2 - (scrollParent?.scrollTop ?? 0)
+        btnEl.offsetTop +
+        btnEl.offsetHeight +
+        2 -
+        (scrollParent?.scrollTop ?? 0)
       }px;`;
       if (Platform.isMobile) {
         pos += ` right: ${
@@ -380,7 +383,9 @@ export class NewCalloutModal extends Modal {
       const conflict = this.plugin.settings.some((c) => c.char === value);
 
       errorEl.setText(
-        value && conflict ? `"${value}" is already used by another callout.` : ''
+        value && conflict
+          ? `"${value}" is already used by another callout.`
+          : ''
       );
       submit.setDisabled(!value || conflict);
     };
