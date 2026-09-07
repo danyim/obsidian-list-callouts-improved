@@ -219,9 +219,16 @@ async function settingsPane(): Promise<string> {
  * On Obsidian 1.13 desktop the settings tab opens in its own window, so the
  * screenshot has to be taken after switching to that window handle.
  */
-async function captureSettings(name: string): Promise<void> {
-  await fs.mkdir(OUT_DIR, { recursive: true });
-
+/**
+ * Open the plugin settings and switch to whichever window they render in.
+ *
+ * On Obsidian 1.13 desktop the settings tab opens in its own window, so
+ * anything that looks at its DOM has to run against that window handle.
+ */
+async function enterSettingsWindow(): Promise<{
+  pane: string;
+  original: string;
+}> {
   // The note captures use a larger font so the text reads well when scaled
   // down; the settings tab looks oversized at that size, so put it back.
   await browser.executeObsidian(({ app }) => {
@@ -262,17 +269,58 @@ async function captureSettings(name: string): Promise<void> {
     el.style.setProperty('padding', '16px', 'important');
   }, pane);
 
+  return { pane, original };
+}
+
+/** Capture one element in both colour schemes and write the composite. */
+async function captureBothSchemes(
+  pane: string,
+  name: string,
+  label: string,
+  original: string
+): Promise<void> {
   await setColorScheme(false);
-  const light = await shotElement(pane, 'settings-light');
+  const light = await shotElement(pane, `${label}-light`);
 
   await setColorScheme(true);
-  const dark = await shotElement(pane, 'settings-dark');
+  const dark = await shotElement(pane, `${label}-dark`);
 
   await setColorScheme(false);
 
   // Compose back in the main window, where the Obsidian globals live.
   await browser.switchToWindow(original);
   await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
+}
+
+/**
+ * Capture the settings tab with the icon picker open. This stands in for a
+ * plain shot of the settings: it shows the same rows plus the thing the rows
+ * lead to, which a picture explains better than a sentence does.
+ */
+async function captureIconPicker(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+
+  const opened = await browser.execute(() => {
+    const button = Array.from(document.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Set icon'
+    );
+    if (!button) return false;
+    button.click();
+    return true;
+  });
+
+  if (!opened) {
+    await browser.switchToWindow(original);
+    throw new Error('No "Set icon" button in the settings tab');
+  }
+
+  await browser
+    .$('.lc-menu .lc-menu-icons .clickable-icon')
+    .waitForExist({ timeout: 10000 });
+
+  await captureBothSchemes(pane, name, 'picker', original);
 }
 
 describe('README screenshots', function () {
@@ -313,16 +361,16 @@ describe('README screenshots', function () {
 
   it('captures the character rendering', async function () {
     await setSettings(callouts(false));
-    await captureEditor('01.png');
+    await captureEditor('callout-characters.png');
   });
 
   it('captures the icon rendering', async function () {
     await setSettings(callouts(true));
-    await captureEditor('02.png');
+    await captureEditor('callout-icons.png');
   });
 
-  it('captures the settings tab', async function () {
+  it('captures the settings tab with the icon picker open', async function () {
     await setSettings(callouts(false));
-    await captureSettings('03.png');
+    await captureIconPicker('settings-icon-picker.png');
   });
 });
