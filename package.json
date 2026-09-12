@@ -1,6 +1,6 @@
 {
   "name": "obsidian-list-callouts-improved",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Create simple callouts in lists.",
   "main": "main.js",
   "scripts": {
@@ -66,9 +66,13 @@
     "tabWidth": 2,
     "trailingComma": "es5",
     "useTabs": false,
-    "importOrder": ["^[./]"],
+    "importOrder": [
+      "^[./]"
+    ],
     "importOrderSeparation": true,
     "importOrderSortSpecifiers": true,
-    "plugins": ["@trivago/prettier-plugin-sort-imports"]
+    "plugins": [
+      "@trivago/prettier-plugin-sort-imports"
+    ]
   }
 }
