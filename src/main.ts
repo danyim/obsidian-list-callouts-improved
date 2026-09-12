@@ -148,7 +148,7 @@ export default class ListCalloutsPlugin extends Plugin {
     this.app.workspace.getLeavesOfType('markdown').forEach((leaf) => {
       const view = leaf.view as MarkdownView;
       // `cm` is the underlying CodeMirror instance; not part of the public API.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- untyped access to a private field
       const cm = (view.editor as any).cm as EditorView;
 
       cm?.dispatch({
