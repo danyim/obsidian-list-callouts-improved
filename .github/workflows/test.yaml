@@ -47,11 +47,11 @@ jobs:
       - run: npm run build
 
       # Resolve the Obsidian versions under test and use them as the cache key.
-      # wdio.conf.mts prints them when CI is set.
+      # config/wdio.conf.mts prints them when CI is set.
       - name: Get Obsidian cache key
         run: |
-          npx tsx wdio.conf.mts | grep 'obsidian-cache-key:' > obsidian-versions-lock.txt
-          # Drop the cache wdio.conf.mts just created so it doesn't clash with restore
+          npx tsx config/wdio.conf.mts | grep 'obsidian-cache-key:' > obsidian-versions-lock.txt
+          # Drop the cache config/wdio.conf.mts just created so it doesn't clash with restore
           rm -rf .obsidian-cache
         env:
           # Beta versions need an Obsidian Insiders account. Add OBSIDIAN_EMAIL
