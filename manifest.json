@@ -2,9 +2,9 @@
 	"id": "list-callouts-improved",
 	"name": "List Callouts Improved",
 	"version": "1.5.1",
-	"minAppVersion": "1.1.1",
+	"minAppVersion": "1.13.0",
 	"description": "Create simple callouts in lists.",
 	"author": "danyim",
-	"authorUrl": "https://github.com/danyim/obsidian-list-callouts-improved",
+	"authorUrl": "https://github.com/danyim",
 	"isDesktopOnly": false
 }

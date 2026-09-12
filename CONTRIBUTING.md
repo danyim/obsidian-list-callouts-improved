@@ -9,8 +9,7 @@ Open an issue and the form will ask for what's needed. The two things worth
 knowing up front:
 
 - **Include the Obsidian version and the plugin version.** The plugin supports
-  Obsidian back to 1.1.1, and 1.13 changed the settings API, so behaviour can
-  genuinely differ between versions.
+  Obsidian back to 1.13.0, so behaviour can genuinely differ between versions.
 - **Check which plugin you're running.** List Callouts, Improved is a fork of
   [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts).
   The two can be installed side by side and don't share state, so a bug in the
@@ -45,7 +44,7 @@ Everything lives in `src/`:
 | --- | --- |
 | `main.ts` | Plugin entry point: settings, the editor extension, the post processor, and the commands are all wired up here. |
 | `settings.ts` | The settings shape, the defaults, and `buildEditorConfig`, which compiles the callout characters into the regex both renderers use. |
-| `settingsTab.ts` | The settings UI. Implements both the imperative `display()` path (Obsidian < 1.13) and `getSettingDefinitions()` (1.13+). |
+| `settingsTab.ts` | The settings UI, implemented via `getSettingDefinitions()`. |
 | `extension.ts` | CodeMirror 6 extension — the live preview / source mode rendering. |
 | `postProcessor.ts` | The markdown post processor — reading mode rendering. |
 | `commands.ts` | Editor commands: *Remove callout*, *Next callout*, *Previous callout*. |
@@ -82,7 +81,7 @@ The suite is end-to-end: it drives real copies of Obsidian via
 which downloads and sandboxes them itself.
 
 ```bash
-npm test                                  # 1.1.8 and latest, desktop and mobile UI
+npm test                                  # 1.13.4 and latest, desktop and mobile UI
 OBSIDIAN_VERSIONS="latest/latest" npm test  # faster while iterating
 xvfb-run -a npm test                      # Linux needs a display
 ```
@@ -92,9 +91,9 @@ The first run downloads Obsidian, so give it a minute. Specs live in
 should come with a spec; a bug fix should come with one that fails without the
 fix.
 
-Both Obsidian versions are covered deliberately — 1.1.8 exercises the old
-settings API and `latest` exercises the new one. If a change touches
-`settingsTab.ts`, run against both before opening the PR.
+Both Obsidian versions are covered deliberately — 1.13.4 confirms the floor
+still works and `latest` catches regressions against current Obsidian. If a
+change touches `settingsTab.ts`, run against both before opening the PR.
 
 Each run writes renderings into `test/screenshots/`, which CI uploads as
 artifacts. The README's images are separate and come from `npm run screenshots`;

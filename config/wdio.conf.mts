@@ -5,12 +5,11 @@ import { obsidianBetaAvailable, parseObsidianVersions } from 'wdio-obsidian-serv
 // wdio-obsidian-service downloads Obsidian versions into this directory.
 const cacheDir = path.resolve('.obsidian-cache');
 
-// Our minAppVersion is 1.1.1, but Obsidian 1.1.1 through 1.1.7 were
-// insiders-only releases with no public installer, so wdio's "earliest" can't
-// be downloaded without Catalyst credentials. 1.1.8 is the oldest public build
-// at or above our floor. It predates 1.13, so it exercises the imperative
-// display() path, while "latest" exercises getSettingDefinitions().
-const OLDEST_PUBLIC_VERSION = '1.1.8';
+// Our minAppVersion is 1.13.0, but 1.13.0 through 1.13.3 were insiders-only
+// releases with no public installer, so wdio's "earliest" can't be downloaded
+// without Catalyst credentials. 1.13.4 is the oldest public build at or above
+// our floor.
+const OLDEST_PUBLIC_VERSION = '1.13.4';
 
 let defaultVersions = `${OLDEST_PUBLIC_VERSION}/latest latest/latest`;
 if (await obsidianBetaAvailable({ cacheDir })) {

@@ -7,7 +7,7 @@ Fixes #
 ## How it was tested
 
 <!-- Delete what doesn't apply. Note the Obsidian versions you ran against if it
-     wasn't the default 1.1.8 + latest. -->
+     wasn't the default 1.13.4 + latest. -->
 
 - [ ] `npm run lint` and `npm run check-types` pass
 - [ ] `npm test` passes (on Linux: `xvfb-run -a npm test`)

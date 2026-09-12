@@ -19,16 +19,6 @@ import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
 import { Callout } from './settings';
 
-/**
- * `setWarning()` was deprecated in favour of `setDestructive()` in Obsidian
- * 1.13. We still support older versions, so pick whichever exists.
- */
-function styleDestructive(btn: ButtonComponent): ButtonComponent {
-  return typeof btn.setDestructive === 'function'
-    ? btn.setDestructive()
-    : btn.setWarning();
-}
-
 // Build a static CM6 list line with callout markup applied
 export function buildSettingCallout(root: HTMLElement, callout: Callout) {
   root.empty();
@@ -148,7 +138,7 @@ function attachIconMenu(
             },
           },
           (input) => {
-            activeWindow.setTimeout(() => {
+            window.setTimeout(() => {
               input.focus();
             });
             const handler = debounce(
@@ -204,19 +194,14 @@ function attachIconMenu(
 }
 
 /**
- * Fill `containerEl` with one callout's preview and controls.
- *
- * Shared by both settings paths: the declarative definitions render it into a
- * Setting's control element, and the pre-1.13 `display()` fallback renders it
- * into a plain container. `onDelete` is only supplied by the fallback, since
- * the declarative list draws its own delete affordance.
+ * Fill `containerEl` with one callout's preview and controls, rendered into
+ * the control element of a declarative `list` setting definition.
  */
 export function buildCalloutRow(
   containerEl: HTMLElement,
   plugin: ListCalloutsPlugin,
   index: number,
-  callout: Callout,
-  onDelete?: (index: number) => void
+  callout: Callout
 ) {
   const calloutContainer = containerEl.createDiv({
     cls: 'lc-callout-container',
@@ -285,17 +270,6 @@ export function buildCalloutRow(
         void plugin.saveSettings();
         redrawPreview();
       });
-
-    // Delete button, for the pre-1.13 fallback only.
-    if (onDelete) {
-      const rightAlign = inputContainer.createDiv({
-        cls: 'lc-input-right-align',
-      });
-      new ButtonComponent(rightAlign)
-        .setButtonText('Delete')
-        .then(styleDestructive)
-        .onClick(() => onDelete(index));
-    }
   });
 }
 
@@ -386,11 +360,7 @@ export class NewCalloutModal extends Modal {
           : ''
       );
 
-      // setDisabled() postdates our minAppVersion; the error text above is
-      // still there to catch it on older versions.
-      if (typeof submit.setDisabled === 'function') {
-        submit.setDisabled(!value || conflict);
-      }
+      submit.setDisabled(!value || conflict);
     };
 
     redraw();
@@ -431,7 +401,7 @@ export class ConfirmResetModal extends Modal {
       .addButton((btn) =>
         btn
           .setButtonText('Reset')
-          .then(styleDestructive)
+          .setDestructive()
           .onClick(() => {
             this.close();
             this.onConfirm();
@@ -504,16 +474,12 @@ export class ListCalloutSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Re-read the settings into the tab. Obsidian 1.13 caches the definitions
-   * returned by getSettingDefinitions(), so anything that changes the callouts
-   * structurally has to ask for a refresh; `update()` only exists on 1.13+.
+   * Re-read the settings into the tab. Obsidian caches the definitions
+   * returned by getSettingDefinitions(), so anything that changes the
+   * callouts structurally has to ask for a refresh.
    */
   refresh(): void {
-    if (typeof this.update === 'function') {
-      this.update();
-    } else {
-      this.display();
-    }
+    this.update();
   }
 
   private calloutDefinition(
@@ -530,10 +496,6 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     };
   }
 
-  /**
-   * Declarative settings, used by Obsidian 1.13 and later. Returning a
-   * non-empty array here means `display()` is not called.
-   */
   getSettingDefinitions(): SettingDefinitionItem[] {
     const settings = this.plugin.settings;
     const definitions: SettingDefinitionItem[] = [];
@@ -593,71 +555,5 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     );
 
     return definitions;
-  }
-
-  /**
-   * Imperative fallback for Obsidian versions older than 1.13, which have no
-   * declarative settings API.
-   */
-  display(): void {
-    const { containerEl } = this;
-
-    containerEl.empty();
-
-    if (this.plugin.legacyDataAvailable) {
-      new Setting(containerEl)
-        .setName(`Import from ${LEGACY_PLUGIN_NAME}`)
-        .setDesc(
-          `Settings from ${LEGACY_PLUGIN_NAME}, the plugin this one was forked from, were found in this vault. Importing replaces your current callouts.`
-        )
-        .addButton((btn) =>
-          btn
-            .setButtonText('Import')
-            .setCta()
-            .onClick(() => {
-              new ConfirmImportModal(this.plugin.app, () => {
-                void this.runImport();
-              }).open();
-            })
-        );
-    }
-
-    new Setting(containerEl).setDesc(this.styleSettingsDesc());
-
-    this.plugin.settings.forEach((callout, index) => {
-      containerEl.createDiv({ cls: 'lc-setting' }, (el) => {
-        buildCalloutRow(el, this.plugin, index, callout, (indexToDelete) =>
-          this.deleteCallout(indexToDelete)
-        );
-      });
-    });
-
-    new Setting(containerEl)
-      .setName('Add callout')
-      .setDesc('Create an additional list callout style.')
-      .addButton((btn) =>
-        btn
-          .setButtonText('Add')
-          .setCta()
-          .onClick(() => {
-            new NewCalloutModal(this.plugin, (callout) =>
-              this.addCallout(callout)
-            ).open();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName('Reset to defaults')
-      .setDesc(RESET_DESC)
-      .addButton((btn) =>
-        btn
-          .setButtonText('Reset')
-          .then(styleDestructive)
-          .onClick(() => {
-            new ConfirmResetModal(this.plugin.app, () => {
-              void this.runReset();
-            }).open();
-          })
-      );
   }
 }
