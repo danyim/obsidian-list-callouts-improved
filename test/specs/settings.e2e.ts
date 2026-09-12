@@ -165,7 +165,7 @@ describe('Editing callouts', function () {
     ]);
 
     let chars = await browser.executeObsidian(({ app }) => {
-      const p = (app as any).plugins.plugins['improved-list-callouts'];
+      const p = (app as any).plugins.plugins['list-callouts-improved'];
       return Object.keys(p.buildEditorConfig().callouts);
     });
     expect(chars).toContain('(');
@@ -173,7 +173,7 @@ describe('Editing callouts', function () {
     await setSettings((await getSettings()).filter((c) => c.char !== '('));
 
     chars = await browser.executeObsidian(({ app }) => {
-      const p = (app as any).plugins.plugins['improved-list-callouts'];
+      const p = (app as any).plugins.plugins['list-callouts-improved'];
       return Object.keys(p.buildEditorConfig().callouts);
     });
     expect(chars).not.toContain('(');
