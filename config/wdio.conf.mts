@@ -31,7 +31,7 @@ export const config: WebdriverIO.Config = {
   runner: 'local',
   framework: 'mocha',
 
-  specs: ['./test/specs/**/*.e2e.ts'],
+  specs: ['../test/specs/**/*.e2e.ts'],
 
   maxInstances: Number(env.WDIO_MAX_INSTANCES || 4),
 
@@ -42,8 +42,8 @@ export const config: WebdriverIO.Config = {
         'wdio:obsidianOptions': {
           appVersion,
           installerVersion,
-          plugins: ['.'],
-          vault: 'test/vaults/callouts',
+          plugins: ['..'],
+          vault: '../test/vaults/callouts',
         },
       })
     ),
@@ -56,8 +56,8 @@ export const config: WebdriverIO.Config = {
           appVersion,
           installerVersion,
           emulateMobile: true,
-          plugins: ['.'],
-          vault: 'test/vaults/callouts',
+          plugins: ['..'],
+          vault: '../test/vaults/callouts',
         },
         'goog:chromeOptions': {
           mobileEmulation: {

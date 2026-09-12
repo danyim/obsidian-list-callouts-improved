@@ -4,19 +4,18 @@
   "description": "Create simple callouts in lists.",
   "main": "main.js",
   "scripts": {
-    "dev": "node esbuild.config.mjs",
-    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "dev": "node config/esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node config/esbuild.config.mjs production",
     "check-types": "tsc --noEmit",
     "icons": "node scripts/make-icon-list.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prettier": "prettier --write \"./src/**/*.{ts,tsx}\"",
+    "prettier": "prettier --ignore-path config/.prettierignore --write \"./src/**/*.{ts,tsx}\"",
     "clean": "npm run prettier && npm run lint:fix",
     "test": "npm run test:e2e",
-    "test:e2e": "wdio run ./wdio.conf.mts",
-    "screenshots": "wdio run ./wdio.screenshots.mts",
-    "rlnotes": "git log $(git describe --tags --abbrev=0)..HEAD --oneline > release-notes.md && git add release-notes.md",
-    "bump": "node scripts/version-bump.mjs && git add package.json manifest.json versions.json && npm run rlnotes",
+    "test:e2e": "scripts/xvfb-wm.sh wdio run ./config/wdio.conf.mts",
+    "screenshots": "scripts/xvfb-wm.sh wdio run ./config/wdio.screenshots.mts",
+    "bump": "node scripts/version-bump.mjs && git add package.json manifest.json versions.json",
     "release": "git commit -m $npm_package_version && git tag $npm_package_version && git push && git push --tags"
   },
   "keywords": [],
@@ -54,5 +53,25 @@
   "dependencies": {
     "escape-string-regexp": "^5.0.0",
     "fuse.js": "^6.6.2"
+  },
+  "prettier": {
+    "arrowParens": "always",
+    "bracketSpacing": true,
+    "endOfLine": "lf",
+    "htmlWhitespaceSensitivity": "css",
+    "bracketSameLine": false,
+    "jsxSingleQuote": false,
+    "printWidth": 80,
+    "proseWrap": "preserve",
+    "quoteProps": "as-needed",
+    "semi": true,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "useTabs": false,
+    "importOrder": ["^[./]"],
+    "importOrderSeparation": true,
+    "importOrderSortSpecifiers": true,
+    "plugins": ["@trivago/prettier-plugin-sort-imports"]
   }
 }

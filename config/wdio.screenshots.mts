@@ -20,7 +20,7 @@ export const config: WebdriverIO.Config = {
   runner: 'local',
   framework: 'mocha',
 
-  specs: ['./test/capture/**/*.capture.ts'],
+  specs: ['../test/capture/**/*.capture.ts'],
 
   maxInstances: 1,
 
@@ -30,8 +30,8 @@ export const config: WebdriverIO.Config = {
       'wdio:obsidianOptions': {
         appVersion,
         installerVersion,
-        plugins: ['.'],
-        vault: 'test/vaults/readme',
+        plugins: ['..'],
+        vault: '../test/vaults/readme',
       },
     })
   ),
