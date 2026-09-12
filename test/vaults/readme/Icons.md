@@ -1,0 +1,4 @@
+- & Obsidian is a naturally occurring volcanic glass
+- ? Obsidian is produced from felsic lava
+- ! These flows have a high content of silica
+- ~ The high viscosity inhibits diffusion of atoms through the lava
