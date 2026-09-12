@@ -5,7 +5,6 @@ import {
   calloutPreviewCount,
   closeSettings,
   getSettings,
-  hasDeclarativeSettings,
   legacyDataAvailable,
   openPluginSettings,
   runImport,
@@ -138,17 +137,11 @@ describe('A vault with no List Callouts data', function () {
     await closeSettings();
   });
 
-  it('renders the callout list on whichever settings path applies', async function () {
+  it('renders the callout list under a list heading', async function () {
     await openPluginSettings();
 
-    // Both paths draw one preview per configured callout.
     expect(await calloutPreviewCount()).toBeGreaterThanOrEqual(7);
-
-    // The declarative path additionally puts them under a list heading; the
-    // pre-1.13 fallback lays them out flat.
-    if (await hasDeclarativeSettings()) {
-      expect(await settingsText()).toContain('Callouts');
-    }
+    expect(await settingsText()).toContain('Callouts');
 
     await closeSettings();
   });

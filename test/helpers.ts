@@ -68,8 +68,7 @@ export async function writeLegacyData(contents: string): Promise<void> {
  * Open the plugin's settings tab and wait for it to actually render.
  *
  * Waiting on one of our own elements rather than an Obsidian selector keeps
- * this working across the desktop and mobile settings layouts, which differ,
- * and across both the declarative and imperative settings paths.
+ * this working across the desktop and mobile settings layouts, which differ.
  */
 export async function openPluginSettings(): Promise<void> {
   await browser.executeObsidian(({ app }) => {
@@ -121,18 +120,6 @@ export function isMobile(): Promise<boolean> {
 }
 
 /**
- * Whether this Obsidian renders settings from `getSettingDefinitions()`. The
- * plugin keeps an imperative `display()` for anything older, and the two draw
- * different DOM, so tests that touch settings need to know which is in play.
- */
-export async function hasDeclarativeSettings(): Promise<boolean> {
-  return browser.executeObsidian(({ obsidian }) => {
-    const proto = (obsidian.PluginSettingTab as any).prototype;
-    return typeof proto.getSettingDefinitions === 'function';
-  });
-}
-
-/**
  * Capture a rendering of the current screen, tagged with the Obsidian version
  * and platform so a run across the version matrix leaves one file per
  * combination rather than overwriting a single image.
@@ -163,23 +150,18 @@ export async function setSettings(callouts: Callout[]): Promise<void> {
 }
 
 /**
- * Click the "add callout" affordance. Obsidian 1.13 renders it as a `+` button
- * in the list header; the pre-1.13 fallback renders a labelled button. Match
- * both rather than branching on version.
+ * Click the "add callout" affordance: a `+` button in the list header on
+ * desktop, or a tappable add row on mobile. Match both rather than branching
+ * on platform.
  */
 export async function clickAddCallout(): Promise<void> {
   const clicked = await browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
     if (!root) return false;
 
-    // Three shapes: a '+' icon in the list header (1.13 desktop), a tappable
-    // add row (1.13 mobile), and a labelled button (pre-1.13).
     const target =
       root.querySelector<HTMLElement>('[aria-label="Add callout"]') ??
-      root.querySelector<HTMLElement>('.mod-add-item') ??
-      Array.from(root.querySelectorAll<HTMLElement>('button')).find(
-        (b) => (b.textContent ?? '').trim() === 'Add'
-      );
+      root.querySelector<HTMLElement>('.mod-add-item');
 
     if (!target) return false;
     target.click();
@@ -425,9 +407,8 @@ export async function clearPluginData(): Promise<void> {
 /**
  * Click the control of a named row in the plugin's settings tab.
  *
- * The declarative path renders an `action` definition and the pre-1.13
- * fallback renders a labelled button, and the two put different things in the
- * row, so take whichever button is there and fall back to the row itself.
+ * `action` definitions render as a clickable icon rather than a button, so
+ * take whichever control is there and fall back to the row itself.
  */
 export async function clickSettingByName(name: string): Promise<void> {
   const clicked = await browser.executeObsidian(({ app }, wanted) => {

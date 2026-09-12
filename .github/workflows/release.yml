@@ -5,10 +5,13 @@ on:
     tags:
       - '*'
 
-# gh release create needs write access to contents. Spelled out rather than
-# left to the repository default, which may be read-only.
+# gh release create needs write access to contents, spelled out rather than
+# left to the repository default, which may be read-only. attest-build-provenance
+# needs id-token (to mint the signing identity) and attestations (to publish it).
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -27,6 +30,11 @@ jobs:
         run: |
           npm ci
           npm run build
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: 'main.js, styles.css'
 
       - name: Create release
         env:

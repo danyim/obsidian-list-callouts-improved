@@ -8,21 +8,21 @@ which downloads and sandboxes its own copies of the app.
 npm test
 ```
 
-By default this runs against Obsidian 1.1.8 and `latest`, on both the desktop and
+By default this runs against Obsidian 1.13.4 and `latest`, on both the desktop and
 emulated-mobile UI. Override with:
 
 ```bash
 OBSIDIAN_VERSIONS="latest/latest" npm test
 ```
 
-The two versions matter: Obsidian 1.13 replaced the imperative settings API with
-declarative setting definitions. The plugin implements both, so the older version
-exercises the `display()` fallback and `latest` exercises `getSettingDefinitions()`.
+The two versions matter: `latest` catches regressions against current Obsidian,
+while the floor build confirms the plugin still works on the oldest version it
+declares support for.
 
-1.1.8 rather than wdio's `earliest`, which resolves to the `minAppVersion` of 1.1.1:
-Obsidian 1.1.1 through 1.1.7 were insiders-only releases with no public installer, so
-downloading them needs Catalyst credentials. 1.1.8 is the oldest publicly available
-build at or above the floor.
+1.13.4 rather than wdio's `earliest`, which resolves to the `minAppVersion` of
+1.13.0: Obsidian 1.13.0 through 1.13.3 were insiders-only releases with no public
+installer, so downloading them needs Catalyst credentials. 1.13.4 is the oldest
+publicly available build at or above the floor.
 
 Each run writes a rendering of live preview and reading mode per Obsidian version and
 platform into `test/screenshots/`. CI uploads them as build artifacts, so a version bump

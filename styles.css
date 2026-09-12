@@ -246,11 +246,6 @@ settings:
   align-items: center;
 }
 
-.lc-input-right-align {
-  flex-grow: 1;
-  text-align: right;
-}
-
 .lc-menu {
   --icon-color: var(--text-normal);
 	--icon-color-hover: var(--text-normal);
