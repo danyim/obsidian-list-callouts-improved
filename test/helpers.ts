@@ -4,7 +4,7 @@ import * as path from 'path';
 
 import type { Callout } from '../src/settings';
 
-export const PLUGIN_ID = 'callout-bullets';
+export const PLUGIN_ID = 'improved-list-callouts';
 
 const SCREENSHOT_DIR = path.resolve('test/screenshots');
 
@@ -20,14 +20,14 @@ export async function openNote(pathInVault: string): Promise<void> {
 
 export function getSettings(): Promise<Callout[]> {
   return browser.executeObsidian(({ app }) => {
-    const p = (app as any).plugins.plugins['callout-bullets'];
+    const p = (app as any).plugins.plugins['improved-list-callouts'];
     return JSON.parse(JSON.stringify(p.settings));
   }) as Promise<Callout[]>;
 }
 
 export function legacyDataAvailable(): Promise<boolean> {
   return browser.executeObsidian(({ app }) => {
-    return (app as any).plugins.plugins['callout-bullets'].legacyDataAvailable;
+    return (app as any).plugins.plugins['improved-list-callouts'].legacyDataAvailable;
   }) as Promise<boolean>;
 }
 
@@ -45,7 +45,7 @@ export async function runImport(): Promise<{
 }> {
   try {
     const count = await browser.executeObsidian(async ({ app }) => {
-      const p = (app as any).plugins.plugins['callout-bullets'];
+      const p = (app as any).plugins.plugins['improved-list-callouts'];
       return (await p.importLegacySettings()) as number;
     });
     return { count };
@@ -75,7 +75,7 @@ export async function openPluginSettings(): Promise<void> {
   await browser.executeObsidian(({ app }) => {
     const setting = (app as any).setting;
     setting.open();
-    setting.openTabById('callout-bullets');
+    setting.openTabById('improved-list-callouts');
   });
 
   // Poll through executeObsidian rather than browser.$: after a
@@ -151,7 +151,7 @@ export async function captureRendering(name: string): Promise<string> {
 /** Replace the plugin's callouts outright, as a test fixture. */
 export async function setSettings(callouts: Callout[]): Promise<void> {
   await browser.executeObsidian(async ({ app }, next) => {
-    const p = (app as any).plugins.plugins['callout-bullets'];
+    const p = (app as any).plugins.plugins['improved-list-callouts'];
     p.settings = next;
     await p.saveSettings();
     p.dispatchUpdate();
@@ -500,8 +500,8 @@ export async function reorderCallout(
 export async function reloadPlugin(): Promise<void> {
   await browser.executeObsidian(async ({ app }) => {
     const plugins = (app as any).plugins;
-    await plugins.disablePlugin('callout-bullets');
-    await plugins.enablePlugin('callout-bullets');
+    await plugins.disablePlugin('improved-list-callouts');
+    await plugins.enablePlugin('improved-list-callouts');
   });
 }
 

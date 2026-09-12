@@ -26,7 +26,7 @@ function expectedInViewport(): Promise<number> {
     const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
     const cm = (view.editor as any).cm;
     const re = (app as any).plugins.plugins[
-      'callout-bullets'
+      'improved-list-callouts'
     ].buildEditorConfig().re;
 
     let count = 0;
@@ -137,7 +137,7 @@ describe('A large document', function () {
       const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
       const cm = (view.editor as any).cm;
       const re = (app as any).plugins.plugins[
-        'callout-bullets'
+        'improved-list-callouts'
       ].buildEditorConfig().re;
 
       const found: number[] = [];

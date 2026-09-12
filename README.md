@@ -1,10 +1,10 @@
-# Callout Bullets
+# Improved List Callouts
 
 Create callouts in lists in Obsidian.
 
 > **About this fork**
 >
-> Callout Bullets is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts)
+> Improved List Callouts is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts)
 > by [@mgmeyers](https://github.com/mgmeyers), who deserves all the credit for the original
 > plugin and its design. That project has seen no releases or commits since
 > [1.2.9](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9)
@@ -50,14 +50,14 @@ Each of these takes a hotkey like any other command, from Settings → Hotkeys. 
 three act on every line a selection touches — skipping lines that aren't list items —
 and one undo puts them all back.
 
-**Callout Bullets: Next callout** and **Previous callout** step the line through the
-callout list, in the order the settings tab shows. A plain list item is part of that
+**Improved List Callouts: Next callout** and **Previous callout** step the line through
+the callout list, in the order the settings tab shows. A plain list item is part of that
 cycle rather than only its starting point: stepping off either end leaves a plain list
 item, so tapping past the callout you wanted comes back round instead of stranding the
 line, and the two directions are exact inverses.
 
-**Callout Bullets: Remove callout** strips the callout character from the line the
-cursor is on, leaving the list item behind.
+**Improved List Callouts: Remove callout** strips the callout character from the line
+the cursor is on, leaving the list item behind.
 
 ## Custom icons
 
