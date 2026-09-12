@@ -104,7 +104,9 @@ export default class ListCalloutsPlugin extends Plugin {
     this.customIconIds = registered;
 
     for (const { file, reason } of skipped) {
-      console.warn(`List Callouts, Improved: skipped custom icon ${file}: ${reason}`);
+      console.warn(
+        `List Callouts, Improved: skipped custom icon ${file}: ${reason}`
+      );
     }
   }
 
