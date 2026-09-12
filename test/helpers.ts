@@ -14,7 +14,7 @@ export async function openNote(pathInVault: string): Promise<void> {
     if (!(file instanceof obsidian.TFile)) {
       throw new Error(`No such note: ${notePath}`);
     }
-    await app.workspace.getLeaf(true).openFile(file);
+    await app.workspace.getLeaf(false).openFile(file);
   }, pathInVault);
 }
 

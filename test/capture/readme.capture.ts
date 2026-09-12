@@ -21,6 +21,9 @@ const OUT_DIR = path.resolve('screenshots');
 /** Gutter between the two halves of a composite, in pixels. */
 const GAP = 20;
 
+/** Breathing room added around the captured editor content, in pixels. */
+const EDITOR_PADDING = 20;
+
 /** Height in pixels from a PNG's IHDR chunk. */
 async function pngHeight(file: string): Promise<number> {
   const buf = await fs.readFile(file);
@@ -114,40 +117,47 @@ async function sideBySide(light: string, dark: string): Promise<Buffer> {
 
 /** Prepare the editor for capture and report where the note ends. */
 async function prepareEditor(hideTitle = false): Promise<number> {
-  return browser.executeObsidian((_obsidian, shouldHideTitle: boolean) => {
-    // Drop the caret: in live preview the line holding it renders as raw
-    // markdown, which would show the callout character unstyled.
-    (document.activeElement as HTMLElement)?.blur();
-    window.getSelection()?.removeAllRanges();
+  return browser.executeObsidian(
+    (_obsidian, shouldHideTitle: boolean, padding: number) => {
+      // Drop the caret: in live preview the line holding it renders as raw
+      // markdown, which would show the callout character unstyled.
+      (document.activeElement as HTMLElement)?.blur();
+      window.getSelection()?.removeAllRanges();
 
-    const sizer = document.querySelector<HTMLElement>(
-      '.markdown-source-view .cm-sizer'
-    );
-    if (!sizer) return -1;
+      const sizer = document.querySelector<HTMLElement>(
+        '.markdown-source-view .cm-sizer'
+      );
+      if (!sizer) return -1;
 
-    // Some captures crop tightly to a couple of list items, and the note's
-    // filename sitting above them would be a distraction.
-    if (shouldHideTitle) {
-      document
-        .querySelector<HTMLElement>('.markdown-source-view .inline-title')
-        ?.style.setProperty('display', 'none');
-    }
+      // Some captures crop tightly to a couple of list items, and the note's
+      // filename sitting above them would be a distraction.
+      if (shouldHideTitle) {
+        document
+          .querySelector<HTMLElement>('.markdown-source-view .inline-title')
+          ?.style.setProperty('display', 'none');
+      }
 
-    // Breathing room, so the callout backgrounds do not sit flush against the
-    // edge of the image.
-    sizer.style.setProperty('padding', '20px', 'important');
+      // Breathing room, so the callout backgrounds do not sit flush against
+      // the edge of the image.
+      sizer.style.setProperty('padding', `${padding}px`, 'important');
 
-    // Where the note actually ends, measured from the top of the captured
-    // element. CodeMirror keeps the sizer at least as tall as the scroller, so
-    // this is what decides whether the whole note made it into the image.
-    const lines = document.querySelectorAll('.markdown-source-view .cm-line');
-    const last = lines[lines.length - 1];
-    if (!last) return -1;
+      // Where the note actually ends, measured from the top of the captured
+      // element. CodeMirror keeps the sizer at least as tall as the
+      // scroller, so this is what decides whether the whole note made it
+      // into the image.
+      const lines = document.querySelectorAll(
+        '.markdown-source-view .cm-line'
+      );
+      const last = lines[lines.length - 1];
+      if (!last) return -1;
 
-    return Math.ceil(
-      last.getBoundingClientRect().bottom - sizer.getBoundingClientRect().top
-    );
-  }, hideTitle);
+      return Math.ceil(
+        last.getBoundingClientRect().bottom - sizer.getBoundingClientRect().top
+      );
+    },
+    hideTitle,
+    EDITOR_PADDING
+  );
 }
 
 /**
@@ -171,21 +181,66 @@ async function shotElement(selector: string, label: string): Promise<string> {
   }
 }
 
+/**
+ * Base64 of the whole current viewport.
+ *
+ * Used instead of `shotElement` when the thing to capture -- a fixed-position
+ * overlay like the icon picker -- can extend past the box of any element
+ * that would sensibly anchor a crop, since an element screenshot clips there.
+ */
+async function shotViewport(label: string): Promise<string> {
+  const tmp = path.join(OUT_DIR, `.tmp-${label}.png`);
+  await browser.saveScreenshot(tmp);
+
+  try {
+    return (await fs.readFile(tmp)).toString('base64');
+  } finally {
+    await fs.rm(tmp, { force: true });
+  }
+}
+
 const EDITOR_SELECTOR = '.markdown-source-view .cm-sizer';
 
-async function captureEditor(name: string, hideTitle = false): Promise<void> {
+/**
+ * Capture the editor, optionally cropped to the note's own content height.
+ *
+ * The sizer CodeMirror measures against is never shorter than the scroller,
+ * so a short note (a handful of lines) otherwise screenshots as mostly blank
+ * space below the last line. `cropToContent` trims that away, leaving
+ * `contentBottom` plus the same breathing room the top padding already adds.
+ */
+async function captureEditor(
+  name: string,
+  hideTitle = false,
+  cropToContent = false
+): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
   await browser.$('.lc-list-callout').waitForExist({ timeout: 10000 });
 
   const contentBottom = await prepareEditor(hideTitle);
 
   await setColorScheme(false);
-  const light = await shotElement(EDITOR_SELECTOR, 'light');
+  let light = await shotElement(EDITOR_SELECTOR, 'light');
 
   await setColorScheme(true);
-  const dark = await shotElement(EDITOR_SELECTOR, 'dark');
+  let dark = await shotElement(EDITOR_SELECTOR, 'dark');
 
   await setColorScheme(false);
+
+  if (cropToContent && contentBottom > 0) {
+    const width = await browser.execute(() => {
+      const sizer = document.querySelector<HTMLElement>(
+        '.markdown-source-view .cm-sizer'
+      );
+      return sizer ? Math.ceil(sizer.getBoundingClientRect().width) : 0;
+    });
+
+    if (width > 0) {
+      const rect = { x: 0, y: 0, width, height: contentBottom + EDITOR_PADDING };
+      light = await cropToRect(light, rect);
+      dark = await cropToRect(dark, rect);
+    }
+  }
 
   const file = path.join(OUT_DIR, name);
   await fs.writeFile(file, await sideBySide(light, dark));
@@ -290,8 +345,8 @@ interface CropRect {
 
 /** Crop a base64-encoded PNG down to `rect`, returning base64 PNG data. */
 async function cropToRect(data: string, rect: CropRect): Promise<string> {
-  return browser.executeObsidian(
-    async (_obsidian, data: string, r: CropRect) => {
+  return browser.execute(
+    async (data: string, r: CropRect) => {
       const img = await new Promise<HTMLImageElement>((resolve, reject) => {
         const image = new Image();
         image.onload = () => resolve(image);
@@ -299,12 +354,18 @@ async function cropToRect(data: string, rect: CropRect): Promise<string> {
         image.src = `data:image/png;base64,${data}`;
       });
 
+      // A requested rect taller or wider than the source (e.g. a content
+      // height measured before the crop) would otherwise draw past the
+      // image's edge, leaving blank canvas rather than failing loudly.
+      const width = Math.max(1, Math.min(r.width, img.width - r.x));
+      const height = Math.max(1, Math.min(r.height, img.height - r.y));
+
       const canvas = document.createElement('canvas');
-      canvas.width = r.width;
-      canvas.height = r.height;
+      canvas.width = width;
+      canvas.height = height;
 
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, r.x, r.y, r.width, r.height, 0, 0, r.width, r.height);
+      ctx.drawImage(img, r.x, r.y, width, height, 0, 0, width, height);
 
       return canvas.toDataURL('image/png').split(',')[1];
     },
@@ -314,69 +375,64 @@ async function cropToRect(data: string, rect: CropRect): Promise<string> {
 }
 
 /**
- * Bounding box, relative to `pane`'s own top-left corner, that covers the
- * first callout row and whatever icon-picker menu is currently open on it.
- * Clamped to the pane's own box, since a screenshot of `pane` cannot contain
- * pixels outside it.
+ * Bounding box, in viewport pixels, that covers the first callout row and
+ * whatever icon-picker menu is currently open on it.
+ *
+ * The menu is an absolutely positioned overlay that can extend past the
+ * settings pane's own box, and an element screenshot of the pane clips
+ * there -- so this is measured against the viewport instead, to line up
+ * with a full-viewport capture.
  */
-async function iconPickerCropRect(pane: string): Promise<CropRect> {
-  return browser.executeObsidian((_obsidian, paneSelector: string) => {
-    const paneEl = document.querySelector<HTMLElement>(paneSelector);
+async function iconPickerCropRect(): Promise<CropRect> {
+  return browser.execute(() => {
     const row = document.querySelector<HTMLElement>('.lc-setting');
     const menu = document.querySelector<HTMLElement>('.lc-menu');
 
-    if (!paneEl || !row || !menu) {
+    if (!row || !menu) {
       throw new Error(
         'Could not find the callout row and its open icon picker'
       );
     }
 
     const PAD = 16;
-    const paneRect = paneEl.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
     const menuRect = menu.getBoundingClientRect();
 
-    const left = Math.max(
-      Math.min(rowRect.left, menuRect.left) - PAD,
-      paneRect.left
-    );
-    const top = Math.max(
-      Math.min(rowRect.top, menuRect.top) - PAD,
-      paneRect.top
-    );
+    const left = Math.max(Math.min(rowRect.left, menuRect.left) - PAD, 0);
+    const top = Math.max(Math.min(rowRect.top, menuRect.top) - PAD, 0);
     const right = Math.min(
       Math.max(rowRect.right, menuRect.right) + PAD,
-      paneRect.right
+      window.innerWidth
     );
     const bottom = Math.min(
       Math.max(rowRect.bottom, menuRect.bottom) + PAD,
-      paneRect.bottom
+      window.innerHeight
     );
 
     return {
-      x: left - paneRect.left,
-      y: top - paneRect.top,
+      x: left,
+      y: top,
       width: right - left,
       height: bottom - top,
     };
-  }, pane);
+  });
 }
 
-/** Capture one element in both colour schemes and write the composite. */
+/** Capture the whole viewport in both colour schemes, cropped to `crop`. */
 async function captureBothSchemes(
-  pane: string,
   name: string,
   label: string,
   original: string,
-  crop?: CropRect
+  crop: CropRect
 ): Promise<void> {
   await setColorScheme(false);
-  let light = await shotElement(pane, `${label}-light`);
-  if (crop) light = await cropToRect(light, crop);
+  const light = await cropToRect(
+    await shotViewport(`${label}-light`),
+    crop
+  );
 
   await setColorScheme(true);
-  let dark = await shotElement(pane, `${label}-dark`);
-  if (crop) dark = await cropToRect(dark, crop);
+  const dark = await cropToRect(await shotViewport(`${label}-dark`), crop);
 
   await setColorScheme(false);
 
@@ -393,13 +449,22 @@ async function captureBothSchemes(
 async function captureIconPicker(name: string): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
-  const { pane, original } = await enterSettingsWindow();
+  const { original } = await enterSettingsWindow();
 
   const opened = await browser.execute(() => {
     const button = Array.from(document.querySelectorAll('button')).find(
       (b) => (b.textContent ?? '').trim() === 'Set icon'
     );
     if (!button) return false;
+
+    // The popout settings window is short enough that the menu, anchored to
+    // the button, can run past the top or bottom edge if the button sits too
+    // close to either. Centering it first gives the menu room to open fully
+    // on screen in whichever direction it picks -- has to happen before the
+    // click, since the menu computes its position from the button's rect at
+    // open time.
+    button.scrollIntoView({ block: 'center' });
+
     button.click();
     return true;
   });
@@ -413,9 +478,9 @@ async function captureIconPicker(name: string): Promise<void> {
     .$('.lc-menu .lc-menu-icons .clickable-icon')
     .waitForExist({ timeout: 10000 });
 
-  const crop = await iconPickerCropRect(pane);
+  const crop = await iconPickerCropRect();
 
-  await captureBothSchemes(pane, name, 'picker', original, crop);
+  await captureBothSchemes(name, 'picker', original, crop);
 }
 
 describe('README screenshots', function () {
@@ -460,11 +525,12 @@ describe('README screenshots', function () {
   });
 
   it('captures the icon rendering', async function () {
-    // A handful of lines with the note title hidden, so the crop stays
-    // focused on the icons rather than the whole worked example.
+    // A handful of lines with the note title hidden and the shot cropped to
+    // their height, so the focus stays on the icons rather than the whole
+    // worked example or a mostly blank frame below it.
     await openNote('Icons.md');
     await setSettings(callouts(true));
-    await captureEditor('callout-icons.png', true);
+    await captureEditor('callout-icons.png', true, true);
   });
 
   it('captures the settings tab with the icon picker open', async function () {
