@@ -25,8 +25,7 @@ import { CUSTOM_CALLOUT_OFFSET, Callout } from './settings';
 function styleDestructive(btn: ButtonComponent): ButtonComponent {
   return typeof btn.setDestructive === 'function'
     ? btn.setDestructive()
-    : // eslint-disable-next-line @typescript-eslint/no-deprecated -- pre-1.13 fallback
-      btn.setWarning();
+    : btn.setWarning();
 }
 
 // Build a static CM6 list line with callout markup applied
@@ -387,7 +386,12 @@ export class NewCalloutModal extends Modal {
           ? `"${value}" is already used by another callout.`
           : ''
       );
-      submit.setDisabled(!value || conflict);
+
+      // setDisabled() postdates our minAppVersion; the error text above is
+      // still there to catch it on older versions.
+      if (typeof submit.setDisabled === 'function') {
+        submit.setDisabled(!value || conflict);
+      }
     };
 
     redraw();
@@ -461,7 +465,6 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     if (typeof this.update === 'function') {
       this.update();
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- pre-1.13 fallback
       this.display();
     }
   }
