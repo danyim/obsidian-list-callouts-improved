@@ -11,7 +11,7 @@ import {
   undo,
 } from '../helpers';
 
-const REMOVE_COMMAND = 'improved-list-callouts:remove-callout';
+const REMOVE_COMMAND = 'list-callouts-improved:remove-callout';
 
 // One line per shape the editor regex recognises, plus a plain item the
 // command must not touch. Line numbers are referenced directly by the tests,

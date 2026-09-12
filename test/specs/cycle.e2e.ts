@@ -13,8 +13,8 @@ import {
   undo,
 } from '../helpers';
 
-const NEXT = 'callout-bullets:next-callout';
-const PREVIOUS = 'callout-bullets:previous-callout';
+const NEXT = 'list-callouts-improved:next-callout';
+const PREVIOUS = 'list-callouts-improved:previous-callout';
 
 /** The built-in order the cycle steps through: & ? ! ~ @ $ % */
 const CHARS = DEFAULT_SETTINGS.map((c) => c.char);

@@ -1,9 +1,11 @@
-# Improved List Callouts
+# List Callouts, Improved
 
 Create customized callouts in any list in Obsidian.
 
 > [!NOTE]
-> **About this fork:** Improved List Callouts is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers), who deserves all the credit for the original plugin and its design. That project has unfortunaetly seen no releases or commits since [1.2.9](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) (September 2024) and appears to be abandoned, with issues and pull requests going unanswered.
+> **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design. 
+>
+> That project has unfortunately seen no releases or commits since **September 2024** ([1.2.9](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9)) and appears to be abandoned, with issues and pull requests going unanswered.
 >
 > This fork picks up maintenance so the plugin keeps working with current versions of Obsidian. It remains licensed under the GPL-3.0, same as the original.
 
