@@ -32,9 +32,7 @@ A scheduled workflow re-runs the suite whenever a new Obsidian version ships. To
 Obsidian beta builds, add `OBSIDIAN_EMAIL` and `OBSIDIAN_PASSWORD` repository secrets for
 an Insiders account with 2FA disabled.
 
-On Linux, Obsidian needs a display; CI uses Xvfb with a window manager, and locally you
-can do the same:
-
-```bash
-xvfb-run -a npm test
-```
+On Linux, Obsidian needs a display. `npm test` handles this itself: `scripts/xvfb-wm.sh`
+starts Xvfb with a window manager (matching CI's "Set up virtual graphics" step) whenever
+`DISPLAY` isn't already set, then runs the suite under it. Nothing extra to run -- just
+`npm test`.

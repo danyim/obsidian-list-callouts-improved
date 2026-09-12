@@ -10,7 +10,8 @@ npm run lint
 `npm run screenshots` regenerates the images above from a real Obsidian render, so
 the README always shows what the current code actually produces. Each image is a
 composite of the same view in light and dark mode. It writes into `screenshots/`,
-needs a display like the tests do, and renders in Inter:
+needs a display like the tests do (see [TESTING.md](TESTING.md) -- on Linux this is
+handled automatically), and renders in Inter:
 
 ```bash
 sudo apt-get install fonts-inter
