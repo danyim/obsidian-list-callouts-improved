@@ -19,7 +19,7 @@ function buildFor(
     ({ app, obsidian }, offsets, want) => {
       const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
       const cm = (view.editor as any).cm;
-      const plugin = (app as any).plugins.plugins['callout-bullets'];
+      const plugin = (app as any).plugins.plugins['list-callouts-improved'];
       const re = plugin.buildEditorConfig().re;
 
       let target = null;
@@ -67,7 +67,7 @@ describe('Building decorations for visible ranges', function () {
       const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
       const cm = (view.editor as any).cm;
       const re = (app as any).plugins.plugins[
-        'callout-bullets'
+        'list-callouts-improved'
       ].buildEditorConfig().re;
 
       for (let i = 1; i <= cm.state.doc.lines; i++) {

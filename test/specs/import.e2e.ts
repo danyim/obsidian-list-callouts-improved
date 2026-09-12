@@ -79,7 +79,7 @@ describe('Importing from List Callouts', function () {
     await runImport();
 
     const chars = await browser.executeObsidian(({ app }) => {
-      const p = (app as any).plugins.plugins['callout-bullets'];
+      const p = (app as any).plugins.plugins['list-callouts-improved'];
       return Object.keys(p.buildEditorConfig().callouts);
     });
 

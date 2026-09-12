@@ -32,8 +32,38 @@ export default tseslint.config(
   },
   {
     // Build scripts and the wdio config live outside tsconfig's include.
+    // disableTypeChecked only knows about typescript-eslint's own rules, so
+    // obsidianmd's typed rules (every rule in its dist/lib/rules that calls
+    // getParserServices) need turning off here too.
     files: ['**/*.mjs', '**/*.mts'],
     extends: [tseslint.configs.disableTypeChecked],
+    rules: {
+      'obsidianmd/no-plugin-as-component': 'off',
+      'obsidianmd/no-view-references-in-plugin': 'off',
+      'obsidianmd/no-unsupported-api': 'off',
+      'obsidianmd/prefer-create-el': 'off',
+      'obsidianmd/prefer-file-manager-trash-file': 'off',
+      'obsidianmd/prefer-instanceof': 'off',
+      // These build/test-tooling scripts run under Node, not inside
+      // Obsidian's mobile-compatible sandbox, and logging to the console is
+      // exactly the point of some of them (e.g. npm run icons).
+      'obsidianmd/no-nodejs-modules': 'off',
+      'obsidianmd/rule-custom-message': 'off',
+    },
+  },
+  {
+    // Feature-detects across the Obsidian versions this plugin supports,
+    // calling the older/deprecated API only in the fallback branch. The
+    // static checks below can't see the runtime guard, so they read this as
+    // unconditional use of an unsupported or deprecated API.
+    files: ['src/settingsTab.ts'],
+    rules: {
+      'obsidianmd/no-unsupported-api': 'off',
+      '@typescript-eslint/no-deprecated': 'off',
+      // The icon picker can render in a popout window (see docs/TESTING.md);
+      // activeWindow, not window, is the correct timer source there.
+      'obsidianmd/prefer-window-timers': 'off',
+    },
   },
   {
     // TypeScript already resolves globals; core no-undef doesn't know about
@@ -58,10 +88,16 @@ export default tseslint.config(
       // Test helpers run in the Node-side wdio runner, not inside Obsidian,
       // so the mobile-compatibility ban on Node builtins doesn't apply.
       'import/no-nodejs-modules': 'off',
+      'obsidianmd/no-nodejs-modules': 'off',
       // The screenshot capture deliberately restyles the editor to frame the
       // image. That is not shipped plugin code, so the theming rule that
       // pushes style changes into CSS classes does not apply.
       'obsidianmd/no-static-styles-assignment': 'off',
+      // Same reasoning for createEl(): the canvas compositing in the capture
+      // script and the throwaway nodes in customIcons.e2e.ts build DOM
+      // outside the plugin's own render tree, so Obsidian's element-creation
+      // helper doesn't apply.
+      'obsidianmd/prefer-create-el': 'off',
     },
   },
   {

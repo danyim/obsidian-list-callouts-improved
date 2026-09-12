@@ -6,7 +6,7 @@ import { getSettings, openNote, setSettings } from '../helpers';
 /** Ids registered by the plugin from the vault's icon folder. */
 function customIconIds(): Promise<string[]> {
   return browser.executeObsidian(({ app }) => {
-    return (app as any).plugins.plugins['callout-bullets'].customIconIds;
+    return (app as any).plugins.plugins['list-callouts-improved'].customIconIds;
   }) as Promise<string[]>;
 }
 

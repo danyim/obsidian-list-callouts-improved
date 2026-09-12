@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for wanting to help. Callout Bullets is a small plugin with a small
-surface area, so most contributions are small too — and that's the intent.
+Thanks for wanting to help. List Callouts, Improved is a small plugin with a
+small surface area, so most contributions are small too — and that's the intent.
 
 ## Reporting a bug or asking for a feature
 
@@ -11,7 +11,7 @@ knowing up front:
 - **Include the Obsidian version and the plugin version.** The plugin supports
   Obsidian back to 1.1.1, and 1.13 changed the settings API, so behaviour can
   genuinely differ between versions.
-- **Check which plugin you're running.** Callout Bullets is a fork of
+- **Check which plugin you're running.** List Callouts, Improved is a fork of
   [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts).
   The two can be installed side by side and don't share state, so a bug in the
   original belongs in [its tracker](https://github.com/mgmeyers/obsidian-list-callouts/issues).
@@ -24,14 +24,14 @@ writing the code. It's a cheaper place to disagree than a pull request.
 You need Node 24 — that's what CI runs — and npm.
 
 ```bash
-git clone https://github.com/danyim/callout-bullets
-cd callout-bullets
+git clone https://github.com/danyim/obsidian-list-callouts-improved
+cd obsidian-list-callouts-improved
 npm install
 npm run dev     # rebuild main.js on change
 ```
 
 To try it in a real vault, symlink or copy the repository into
-`<vault>/.obsidian/plugins/callout-bullets` and enable it. It needs
+`<vault>/.obsidian/plugins/list-callouts-improved` and enable it. It needs
 `main.js`, `manifest.json` and `styles.css` present, which `npm run dev`
 takes care of. Obsidian doesn't pick up a rebuilt `main.js` on its own; use
 the [Hot Reload](https://github.com/pjeby/hot-reload) plugin, or toggle the
@@ -48,7 +48,7 @@ Everything lives in `src/`:
 | `settingsTab.ts` | The settings UI. Implements both the imperative `display()` path (Obsidian < 1.13) and `getSettingDefinitions()` (1.13+). |
 | `extension.ts` | CodeMirror 6 extension — the live preview / source mode rendering. |
 | `postProcessor.ts` | The markdown post processor — reading mode rendering. |
-| `commands.ts` | Editor commands, currently *Remove callout*. |
+| `commands.ts` | Editor commands: *Remove callout*, *Next callout*, *Previous callout*. |
 | `customIcons.ts` | Reads SVGs out of the vault's `.obsidian/icons` folder and registers them with Obsidian. |
 | `iconSearch.ts` | Fuzzy search behind the icon picker. |
 | `iconAliases.ts` | **Generated** by `npm run icons` from `lucide-static`. Don't edit it by hand. |
@@ -118,14 +118,14 @@ Review is usually quick. If a PR goes quiet, a nudge on the thread is fine.
 ## Releases
 
 For maintainers. `npm run bump` updates `package.json`, `manifest.json` and
-`versions.json`, and regenerates `release-notes.md` from the commits since the
-last tag. `npm run release` commits, tags and pushes, which triggers the release
-workflow.
+`versions.json`. `npm run release` commits, tags and pushes, which triggers the
+release workflow -- it builds the plugin and creates the GitHub release, with
+notes generated from the commits since the last tag.
 
 `minAppVersion` in `manifest.json` is the floor the tests are pinned against, so
-raising it means updating `wdio.conf.mts` too.
+raising it means updating `config/wdio.conf.mts` too.
 
 ## Licence
 
-Callout Bullets is GPL-3.0-or-later, inherited from the plugin it was forked
-from. By contributing you agree your contribution is licensed the same way.
+List Callouts, Improved is GPL-3.0-or-later, inherited from the plugin it was
+forked from. By contributing you agree your contribution is licensed the same way.
