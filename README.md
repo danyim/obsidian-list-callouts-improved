@@ -5,11 +5,11 @@ Create customized callouts in any list in Obsidian.
 > [!NOTE]
 > **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design. 
 >
-> That project has unfortunately seen no releases or commits since **September 2024** ([1.2.9](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9)) and appears to be abandoned, with issues and pull requests going unanswered.
+> That project has unfortunately seen no releases or commits since [**September 2024**](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) and appears to be abandoned, with issues and pull requests going unanswered.
 >
-> This fork picks up maintenance so the plugin keeps working with current versions of Obsidian. It remains licensed under the GPL-3.0, same as the original.
+> This fork picks up maintenance so the plugin keeps working with current versions of Obsidian. Just like the original, it remains licensed under GPL-3.0.
 
-Typing a configurable character at the beginning of a list item will turn the item into a callout:
+Typing a configurable character at the beginning of a list item will turn the item into a highlighted callout:
 
 ![A note with each built-in callout character applied to a list item, shown in light and dark mode](screenshots/callout-characters.png)
 
@@ -51,7 +51,7 @@ and one undo puts them all back.
 
 ## Custom icons
 
-Any SVG in your vault's `.obsidian/icons` folder is registered as an icon and appears in the picker alongside the ones Obsidian ships. A file named `My Fancy Mark.svg` becomes the icon `my-fancy-mark`.
+Any SVG in your vault's `.obsidian/icons` folder is registered as an icon and appears in the picker alongside the ones Obsidian ships. A file named `My Fancy Icon.svg` takes the icon name `my-fancy-icon`.
 
 That is the same folder [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) uses, so a vault already keeping icons there needs no changes.
 
@@ -61,13 +61,13 @@ Icons are read when the plugin loads, so restart Obsidian or toggle the plugin a
 
 Because this fork uses a new plugin id, Obsidian treats it as a separate plugin and your existing List Callouts settings won't carry over on their own.
 
-If the original plugin's settings are still in your vault, the settings tab offers an **Import from List Callouts** button that copies them across, recoloured built-ins and custom callouts alike. Importing replaces the current callouts, so it asks for confirmation first. The button only appears when there's something to import.
+If the original plugin's settings are still in your vault, the settings tab offers an **Import from List Callouts** button that copies them across, recolored built-ins and custom callouts alike. Importing replaces the current callouts, so it asks for confirmation first. The button only appears when there's something to import.
 
-You can leave the original plugin installed; the two don't share any state.
+Once migrated, you should disable or delete the other plugin.
 
 ## Development
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for building the plugin and [TESTING.md](TESTING.md) for running the test suite.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for building the plugin and [docs/TESTING.md](docs/TESTING.md) for running the test suite.
 
 ## License
 
