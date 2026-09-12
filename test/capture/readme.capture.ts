@@ -113,8 +113,8 @@ async function sideBySide(light: string, dark: string): Promise<Buffer> {
 }
 
 /** Prepare the editor for capture and report where the note ends. */
-async function prepareEditor(): Promise<number> {
-  return browser.executeObsidian(() => {
+async function prepareEditor(hideTitle = false): Promise<number> {
+  return browser.executeObsidian((_obsidian, shouldHideTitle: boolean) => {
     // Drop the caret: in live preview the line holding it renders as raw
     // markdown, which would show the callout character unstyled.
     (document.activeElement as HTMLElement)?.blur();
@@ -124,6 +124,14 @@ async function prepareEditor(): Promise<number> {
       '.markdown-source-view .cm-sizer'
     );
     if (!sizer) return -1;
+
+    // Some captures crop tightly to a couple of list items, and the note's
+    // filename sitting above them would be a distraction.
+    if (shouldHideTitle) {
+      document
+        .querySelector<HTMLElement>('.markdown-source-view .inline-title')
+        ?.style.setProperty('display', 'none');
+    }
 
     // Breathing room, so the callout backgrounds do not sit flush against the
     // edge of the image.
@@ -139,7 +147,7 @@ async function prepareEditor(): Promise<number> {
     return Math.ceil(
       last.getBoundingClientRect().bottom - sizer.getBoundingClientRect().top
     );
-  });
+  }, hideTitle);
 }
 
 /**
@@ -165,11 +173,11 @@ async function shotElement(selector: string, label: string): Promise<string> {
 
 const EDITOR_SELECTOR = '.markdown-source-view .cm-sizer';
 
-async function captureEditor(name: string): Promise<void> {
+async function captureEditor(name: string, hideTitle = false): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
   await browser.$('.lc-list-callout').waitForExist({ timeout: 10000 });
 
-  const contentBottom = await prepareEditor();
+  const contentBottom = await prepareEditor(hideTitle);
 
   await setColorScheme(false);
   const light = await shotElement(EDITOR_SELECTOR, 'light');
@@ -272,18 +280,103 @@ async function enterSettingsWindow(): Promise<{
   return { pane, original };
 }
 
+/** A pixel rect, relative to a capture's own top-left corner. */
+interface CropRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Crop a base64-encoded PNG down to `rect`, returning base64 PNG data. */
+async function cropToRect(data: string, rect: CropRect): Promise<string> {
+  return browser.executeObsidian(
+    async (_obsidian, data: string, r: CropRect) => {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('could not decode a capture'));
+        image.src = `data:image/png;base64,${data}`;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = r.width;
+      canvas.height = r.height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, r.x, r.y, r.width, r.height, 0, 0, r.width, r.height);
+
+      return canvas.toDataURL('image/png').split(',')[1];
+    },
+    data,
+    rect
+  );
+}
+
+/**
+ * Bounding box, relative to `pane`'s own top-left corner, that covers the
+ * first callout row and whatever icon-picker menu is currently open on it.
+ * Clamped to the pane's own box, since a screenshot of `pane` cannot contain
+ * pixels outside it.
+ */
+async function iconPickerCropRect(pane: string): Promise<CropRect> {
+  return browser.executeObsidian((_obsidian, paneSelector: string) => {
+    const paneEl = document.querySelector<HTMLElement>(paneSelector);
+    const row = document.querySelector<HTMLElement>('.lc-setting');
+    const menu = document.querySelector<HTMLElement>('.lc-menu');
+
+    if (!paneEl || !row || !menu) {
+      throw new Error(
+        'Could not find the callout row and its open icon picker'
+      );
+    }
+
+    const PAD = 16;
+    const paneRect = paneEl.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+
+    const left = Math.max(
+      Math.min(rowRect.left, menuRect.left) - PAD,
+      paneRect.left
+    );
+    const top = Math.max(
+      Math.min(rowRect.top, menuRect.top) - PAD,
+      paneRect.top
+    );
+    const right = Math.min(
+      Math.max(rowRect.right, menuRect.right) + PAD,
+      paneRect.right
+    );
+    const bottom = Math.min(
+      Math.max(rowRect.bottom, menuRect.bottom) + PAD,
+      paneRect.bottom
+    );
+
+    return {
+      x: left - paneRect.left,
+      y: top - paneRect.top,
+      width: right - left,
+      height: bottom - top,
+    };
+  }, pane);
+}
+
 /** Capture one element in both colour schemes and write the composite. */
 async function captureBothSchemes(
   pane: string,
   name: string,
   label: string,
-  original: string
+  original: string,
+  crop?: CropRect
 ): Promise<void> {
   await setColorScheme(false);
-  const light = await shotElement(pane, `${label}-light`);
+  let light = await shotElement(pane, `${label}-light`);
+  if (crop) light = await cropToRect(light, crop);
 
   await setColorScheme(true);
-  const dark = await shotElement(pane, `${label}-dark`);
+  let dark = await shotElement(pane, `${label}-dark`);
+  if (crop) dark = await cropToRect(dark, crop);
 
   await setColorScheme(false);
 
@@ -320,7 +413,9 @@ async function captureIconPicker(name: string): Promise<void> {
     .$('.lc-menu .lc-menu-icons .clickable-icon')
     .waitForExist({ timeout: 10000 });
 
-  await captureBothSchemes(pane, name, 'picker', original);
+  const crop = await iconPickerCropRect(pane);
+
+  await captureBothSchemes(pane, name, 'picker', original, crop);
 }
 
 describe('README screenshots', function () {
@@ -365,8 +460,11 @@ describe('README screenshots', function () {
   });
 
   it('captures the icon rendering', async function () {
+    // A handful of lines with the note title hidden, so the crop stays
+    // focused on the icons rather than the whole worked example.
+    await openNote('Icons.md');
     await setSettings(callouts(true));
-    await captureEditor('callout-icons.png');
+    await captureEditor('callout-icons.png', true);
   });
 
   it('captures the settings tab with the icon picker open', async function () {
