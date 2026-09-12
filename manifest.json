@@ -1,10 +1,10 @@
 {
-	"id": "callout-bullets",
-	"name": "Callout Bullets",
+	"id": "improved-list-callouts",
+	"name": "Improved List Callouts",
 	"version": "1.2.9",
 	"minAppVersion": "1.1.1",
 	"description": "Create simple callouts in lists.",
 	"author": "danyim",
-	"authorUrl": "https://github.com/danyim/callout-bullets",
+	"authorUrl": "https://github.com/danyim/obsidian-improved-list-callouts",
 	"isDesktopOnly": false
 }

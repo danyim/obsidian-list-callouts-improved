@@ -1,10 +1,10 @@
-# Callout Bullets
+# Improved List Callouts
 
 Create callouts in lists in Obsidian.
 
 > **About this fork**
 >
-> Callout Bullets is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts)
+> Improved List Callouts is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts)
 > by [@mgmeyers](https://github.com/mgmeyers), who deserves all the credit for the original
 > plugin and its design. That project has seen no releases or commits since
 > [1.2.9](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9)
@@ -31,7 +31,7 @@ The padding of the callouts can be adjusted using the Style Settings plugin.
 
 ## Removing a callout
 
-The **Callout Bullets: Remove callout** command strips the callout character from
+The **Improved List Callouts: Remove callout** command strips the callout character from
 the line the cursor is on, leaving the list item behind. It takes a hotkey like any
 other command, from Settings → Hotkeys.
 

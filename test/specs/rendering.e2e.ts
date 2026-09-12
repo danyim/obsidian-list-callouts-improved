@@ -129,7 +129,7 @@ describe('Custom callout characters', function () {
 
   it('builds a usable editor config for it', async function () {
     const ok = await browser.executeObsidian(({ app }) => {
-      const p = (app as any).plugins.plugins['callout-bullets'];
+      const p = (app as any).plugins.plugins['improved-list-callouts'];
       const config = p.buildEditorConfig();
       return config.re.test('- ( something');
     });

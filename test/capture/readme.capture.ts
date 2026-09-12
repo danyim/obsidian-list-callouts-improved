@@ -338,7 +338,7 @@ describe('README screenshots', function () {
       app.workspace.trigger('css-change');
     });
 
-    await openNote('Callout Bullets.md');
+    await openNote('Improved List Callouts.md');
 
     // The vault asks for Inter so the images do not depend on whatever the
     // capturing machine happens to default to. Fail loudly rather than
