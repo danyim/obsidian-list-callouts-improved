@@ -313,13 +313,17 @@ async function editorComposite(
  *
  * For a picture of the same note under two settings -- the highlights with
  * characters and then with icons -- so the two renderings sit together in one
- * image rather than as two that differ only in their markers. The gap takes
- * the light and dark backgrounds of the halves above it, so the seam between
- * the two schemes runs straight through.
+ * image rather than as two that differ only in their markers. Each capture
+ * carries its own breathing room top and bottom, which would double up where
+ * they meet, so `trim` shaves that many pixels off the top of the lower one.
  */
-async function stacked(top: Buffer, bottom: Buffer): Promise<Buffer> {
+async function stacked(
+  top: Buffer,
+  bottom: Buffer,
+  trim = 0
+): Promise<Buffer> {
   const encoded = await browser.executeObsidian(
-    async (_obsidian, topData: string, bottomData: string, gap: number) => {
+    async (_obsidian, topData: string, bottomData: string, trim: number) => {
       const load = (data: string) =>
         new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new Image();
@@ -332,38 +336,27 @@ async function stacked(top: Buffer, bottom: Buffer): Promise<Buffer> {
 
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(a.width, b.width);
-      canvas.height = a.height + gap + b.height;
+      canvas.height = a.height + b.height - trim;
 
       const ctx = canvas.getContext('2d');
       ctx.drawImage(a, 0, 0);
-      ctx.drawImage(b, 0, a.height + gap);
-
-      // Each composite is a light half and a dark half of equal width, so
-      // the gap is painted from the bottom edge of the top image: its left
-      // corner color across the left half, its right corner color across
-      // the rest.
-      const cornerColor = (img: HTMLImageElement, x: number, y: number) => {
-        const probe = document.createElement('canvas');
-        probe.width = 1;
-        probe.height = 1;
-        probe.getContext('2d').drawImage(img, x, y, 1, 1, 0, 0, 1, 1);
-        const [r, g, bl] = probe.getContext('2d').getImageData(0, 0, 1, 1).data;
-        return `rgb(${r}, ${g}, ${bl})`;
-      };
-
-      const mid = Math.floor(canvas.width / 2);
-
-      ctx.fillStyle = cornerColor(a, 0, a.height - 1);
-      ctx.fillRect(0, a.height, mid, gap);
-
-      ctx.fillStyle = cornerColor(a, a.width - 1, a.height - 1);
-      ctx.fillRect(mid, a.height, canvas.width - mid, gap);
+      ctx.drawImage(
+        b,
+        0,
+        trim,
+        b.width,
+        b.height - trim,
+        0,
+        a.height,
+        b.width,
+        b.height - trim
+      );
 
       return canvas.toDataURL('image/png').split(',')[1];
     },
     top.toString('base64'),
     bottom.toString('base64'),
-    GAP
+    trim
   );
 
   return Buffer.from(encoded, 'base64');
@@ -1385,7 +1378,10 @@ describe('README screenshots', function () {
 
     await fs.writeFile(
       path.join(OUT_DIR, 'highlights.png'),
-      await stacked(characters, icons)
+      // Both captures' facing padding, so the second heading follows the
+      // first paragraph about as closely as a heading follows a paragraph
+      // in a note.
+      await stacked(characters, icons, EDITOR_PADDING * 2)
     );
   });
 
