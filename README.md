@@ -27,9 +27,9 @@ Callout padding and background intensity can be adjusted with the Style Settings
 
 ## Highlights
 
-The same callout triggers work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout trigger and a space `==* Highlighted text==`, and it takes that callout's color and icon:
+The same callout triggers work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout trigger and a space `==* Highlighted text==`, and it takes that callout's color, led by the character, or by the icon if one is set:
 
-![A paragraph with several inline highlights, each in a different callout color and led by that callout's icon, shown in light and dark mode](screenshots/highlights.png)
+![A paragraph with several inline highlights, each in a different callout color, rendered twice: led by the callout characters above, and by the callouts' icons below, each shown in light and dark mode](screenshots/highlights.png)
 
 A highlight that runs across a line break is colored as one in both the editor and reading view, including a list item's continuation line. Highlights inside callout blocks and tables work too:
 

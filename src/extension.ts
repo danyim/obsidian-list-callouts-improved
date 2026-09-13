@@ -62,7 +62,12 @@ export class CalloutBackground extends WidgetType {
     const rect = range.getClientRects()[0];
     if (!rect) return null;
 
-    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.left };
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      left: rect.left,
+      right: rect.left,
+    };
   }
 
   eq(): boolean {
@@ -104,19 +109,30 @@ export class CalloutMarker extends WidgetType {
 }
 
 export class HighlightMarker extends WidgetType {
-  constructor(readonly icon: string) {
+  constructor(
+    readonly char: string,
+    readonly icon?: string
+  ) {
     super();
   }
 
   toDOM() {
     return createSpan(
-      { cls: 'lc-highlight-marker', attr: { 'aria-hidden': 'true' } },
-      (s) => setIcon(s, this.icon)
+      {
+        text: this.char,
+        cls: 'lc-highlight-marker',
+        attr: { 'aria-hidden': 'true' },
+      },
+      (s) => {
+        if (this.icon) {
+          setIcon(s, this.icon);
+        }
+      }
     );
   }
 
   eq(widget: HighlightMarker): boolean {
-    return widget.icon === this.icon;
+    return widget.char === this.char && widget.icon === this.icon;
   }
 }
 
@@ -244,10 +260,10 @@ function highlightEndAfter(state: EditorState, pos: number): number | null {
 
 /**
  * Decorate one highlight callout: a mark over the content plus, in Live
- * Preview, a replacement hiding the character and the space -- or showing the
- * icon in their place. The replacement is dropped while the selection touches
- * the highlight, so the raw `==& ` is there to edit, which is what Obsidian
- * does with `==`.
+ * Preview, a replacement showing the marker -- the character, or the icon
+ * when one is set -- in place of the raw character and space. The
+ * replacement is dropped while the selection touches the highlight, so the
+ * raw `==& ` is there to edit, which is what Obsidian does with `==`.
  */
 function addHighlightDeco(
   builder: RangeSetBuilder<Decoration>,
@@ -261,9 +277,8 @@ function addHighlightDeco(
   if (stats) stats.highlights++;
 
   // Added before the replacement: both start at contentFrom, and the mark's
-  // inclusiveStart makes it sort first, which is what nests the replacement
-  // -- the icon widget, when there is one -- inside the mark's span rather
-  // than putting it before as a sibling.
+  // inclusiveStart makes it sort first, which is what nests the marker widget
+  // inside the mark's span rather than putting it before as a sibling.
   builder.add(contentFrom, contentTo, highlightDecoration(callout));
 
   const livePreview = state.field(editorLivePreviewField, false) ?? false;
@@ -272,9 +287,9 @@ function addHighlightDeco(
     builder.add(
       contentFrom,
       markerTo,
-      Decoration.replace(
-        callout.icon ? { widget: new HighlightMarker(callout.icon) } : {}
-      )
+      Decoration.replace({
+        widget: new HighlightMarker(callout.char, callout.icon),
+      })
     );
   }
 }
@@ -488,9 +503,7 @@ function alignCalloutBackgrounds(view: EditorView) {
             (line.getBoundingClientRect().left + nestingIndent)
           : 0;
 
-        return [
-          { el, indent: Math.max(0, nestingIndent + glyphInset / 2) },
-        ];
+        return [{ el, indent: Math.max(0, nestingIndent + glyphInset / 2) }];
       });
     },
     write(results) {

@@ -860,7 +860,10 @@ export interface RenderedHighlight {
   /** The callout character, or null for a highlight the plugin left alone. */
   char: string | null;
   color: string;
+  /** The highlighted text, without the marker. */
   text: string;
+  /** The marker's text -- the character when no icon is set -- or null. */
+  marker: string | null;
   hasIcon: boolean;
 }
 
@@ -871,12 +874,19 @@ export function readingHighlights(): Promise<RenderedHighlight[]> {
       app.workspace.containerEl.querySelectorAll<HTMLElement>(
         '.markdown-reading-view mark'
       )
-    ).map((el) => ({
-      char: el.getAttribute('data-callout'),
-      color: el.style.getPropertyValue('--lc-callout-color'),
-      text: el.textContent ?? '',
-      hasIcon: !!el.querySelector('.lc-highlight-marker svg'),
-    }));
+    ).map((el) => {
+      const marker = el.querySelector('.lc-highlight-marker');
+      return {
+        char: el.getAttribute('data-callout'),
+        color: el.style.getPropertyValue('--lc-callout-color'),
+        text: Array.from(el.childNodes)
+          .filter((n) => n !== marker)
+          .map((n) => n.textContent ?? '')
+          .join(''),
+        marker: marker ? (marker.textContent ?? '') : null,
+        hasIcon: !!marker?.querySelector('svg'),
+      };
+    });
   });
 }
 
@@ -895,12 +905,19 @@ export function editorHighlights(): Promise<RenderedHighlight[]> {
       app.workspace.containerEl.querySelectorAll<HTMLElement>(
         '.markdown-source-view .lc-highlight-callout'
       )
-    ).map((el) => ({
-      char: el.getAttribute('data-callout'),
-      color: el.style.getPropertyValue('--lc-callout-color'),
-      text: el.textContent ?? '',
-      hasIcon: !!el.querySelector('.lc-highlight-marker svg'),
-    }));
+    ).map((el) => {
+      const marker = el.querySelector('.lc-highlight-marker');
+      return {
+        char: el.getAttribute('data-callout'),
+        color: el.style.getPropertyValue('--lc-callout-color'),
+        text: Array.from(el.childNodes)
+          .filter((n) => n !== marker)
+          .map((n) => n.textContent ?? '')
+          .join(''),
+        marker: marker ? (marker.textContent ?? '') : null,
+        hasIcon: !!marker?.querySelector('svg'),
+      };
+    });
   });
 }
 
