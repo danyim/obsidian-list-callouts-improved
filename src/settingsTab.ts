@@ -2,6 +2,7 @@ import {
   App,
   ButtonComponent,
   ColorComponent,
+  ExtraButtonComponent,
   Modal,
   Notice,
   Platform,
@@ -582,34 +583,42 @@ export class ListCalloutSettingTab extends PluginSettingTab {
         ],
       },
       {
+        // The list below can hold only its rows, so the aside about the
+        // callouts' padding, intensity and unsafe characters lives in a group
+        // of its own that carries the heading -- and the add button, which
+        // would otherwise sit on an empty header row of the headingless list.
+        type: 'group',
+        heading: 'Callouts',
+        extraButtons: [
+          (btn: ExtraButtonComponent) =>
+            btn
+              .setIcon('plus')
+              .setTooltip('Add callout')
+              .onClick(() => {
+                new NewCalloutModal(this.plugin, (callout) =>
+                  this.addCallout(callout)
+                ).open();
+              }),
+        ],
+        items: [
+          {
+            name: 'Style settings',
+            desc: this.styleSettingsDesc(),
+          },
+        ],
+      },
+      {
         // One list rather than a built-in group and a custom one: every
         // callout can now be deleted and reordered, and the order is what the
         // next/previous commands step through, so a custom callout has to be
         // able to sit between two built-ins.
         type: 'list',
-        heading: 'Callouts',
         emptyState:
           'No callouts. Reset to defaults to bring the built-in ones back.',
         items: settings.map((callout, i) => this.calloutDefinition(callout, i)),
         onDelete: (index: number) => this.deleteCallout(index),
         onReorder: (oldIndex: number, newIndex: number) =>
           this.reorderCallout(oldIndex, newIndex),
-        addItem: {
-          name: 'Add callout',
-          action: () => {
-            new NewCalloutModal(this.plugin, (callout) =>
-              this.addCallout(callout)
-            ).open();
-          },
-        },
-      },
-      // Below the list rather than at the top of the tab: the padding and
-      // intensity it points to, and the characters it warns about, are the
-      // callouts' concern. A list definition holds only its rows, so this is
-      // the nearest an aside can sit to them.
-      {
-        name: 'Style settings',
-        desc: this.styleSettingsDesc(),
       },
       {
         name: 'Reset to defaults',
