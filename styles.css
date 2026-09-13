@@ -249,15 +249,38 @@ settings:
   padding-bottom: 200px;
 }
 
+/* Obsidian's own list-reorder drag clones whichever row is being dragged --
+   .lc-setting and all -- into a new, otherwise-empty parent for the ghost
+   overlay that follows the pointer. Two things about the row's own styling
+   don't carry over correctly there:
+
+   1. The 200px padding-bottom above, meant to give the real list's actual
+      last row breathing room at the foot of a scrolled pane, applies to
+      this clone too: it's the *only* child of that new parent, so it's
+      also :last-child, regardless of where the row it was cloned from sat.
+   2. A normal row has no horizontal padding of its own (padding: 15px 0)
+      because it doesn't need any -- it sits directly against the settings
+      pane's own padded content edge. This clone instead renders as a
+      visually boxed "card" (background, border, shadow, all Obsidian's
+      own), positioned outside that pane entirely, so its content now
+      touches the card's own edges with nothing to separate them.
+
+   Obsidian also stamps a fixed inline `height` (border-box) onto this same
+   clone, sized from the original row's own height -- measured before this
+   rule's padding is taken into account. Left alone, that pins the box to
+   its pre-drag height and any padding added here just eats into the
+   control row instead of growing the card, so extra bottom padding never
+   becomes visible. `!important` is the only way to win against an inline
+   style from a stylesheet rule; `auto` then lets the box size itself to
+   its own content and padding, the same as an ordinary (undragged) row. */
+.lc-setting.mod-dragged-item {
+  padding: 15px 15px 1.5rem;
+  height: auto !important;
+}
+
 .lc-setting .lc-list-bg {
   background-color: transparent;
   z-index: 0;
-}
-
-.lc-setting input,
-.lc-setting .lc-input-container > button,
-.lc-setting .lc-input-container > select {
-  margin-right: 10px;
 }
 
 .lc-setting input {
@@ -281,11 +304,21 @@ settings:
 }
 
 /* Wraps: with the marker color controls there are up to six inputs, more
-   than a mobile settings row is wide. */
+   than a mobile settings row is wide. column-gap replaces what used to be
+   two selectors scoped to .lc-setting instead (input margin-right, and
+   margin-right on > button specifically) -- scoped that way, this same
+   markup inside NewCalloutModal, outside .lc-setting entirely, rendered its
+   input, "Set icon" button and color swatch flush against each other with
+   no spacing at all. A flex gap here applies uniformly regardless of
+   container context or child element type, including the marker-color
+   controls' own <select>. row-gap is separate and smaller: it only ever
+   shows once wrapped, between rows of controls rather than between
+   controls sitting side by side. */
 .lc-input-container {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  column-gap: 10px;
   row-gap: 6px;
 }
 
