@@ -36,6 +36,21 @@ takes care of. Obsidian doesn't pick up a rebuilt `main.js` on its own; use
 the [Hot Reload](https://github.com/pjeby/hot-reload) plugin, or toggle the
 plugin off and on.
 
+If the vault already has the released plugin installed, `npm run swap` swaps
+it for the local build and back without disturbing its settings:
+
+```bash
+npm run build
+npm run swap -- --local     # install the local build (rerun after each rebuild)
+npm run swap -- --release   # put the release back
+npm run swap                # toggle, after asking which way
+```
+
+The first run asks where the vault is and caches the answer in
+`.swap-installed-plugin.json` (gitignored); `--configure` asks again. While
+the local build is installed the release files sit in a `.backup/` folder
+inside the plugin directory, and `--release` moves them back and removes it.
+
 ## How the code is laid out
 
 Everything lives in `src/`:

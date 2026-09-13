@@ -34,3 +34,6 @@ obsidian-versions-lock.txt
 
 # Obsidian Insiders credentials for beta testing
 .env
+
+# Vault path cached by scripts/swap-installed-plugin.mjs
+.swap-installed-plugin.json
