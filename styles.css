@@ -117,30 +117,28 @@ settings:
   --lc-highlight-opacity-dark: 0.15;
 }
 
-/* `left: 0` plus the inherited padding below is deliberate, not an
-   oversight: CodeMirror sets that padding per line to the exact rendered
-   width of that line's own list marker -- bullet, checkbox or number alike
-   -- so `background-clip: content-box` excludes precisely the marker's own
-   footprint from the paint, whatever it is. A fixed pixel offset here
-   instead (as this used to read, via --lc-bg-left and its checkbox
-   variants) sits behind a *specific* marker width correctly, but every
-   other line's own inherited padding is added on top of that same fixed
-   number rather than measured from it -- so a marker wider than the one the
-   constant was tuned against (mgmeyers/obsidian-list-callouts#91: a numbered
-   list's marker widens past a single digit, e.g. "10." over "1.") is left
-   with a growing strip of its own left edge outside the highlight. There is
-   no fixed constant that cancels a per-line dynamic value for every line;
-   zero offset is the only one that does not grow or shrink with it. */
+/* `left: 0` reaches the line's own edge, covering the list marker itself --
+   bullet, checkbox or number alike -- rather than excluding it. An earlier
+   version of this rule instead clipped to content-box with padding inherited
+   from the line, which CodeMirror sets per line to that line's own marker
+   width, to exclude exactly the marker from the paint; the fixed pixel
+   offset that went with it (--lc-bg-left and its checkbox variants) canceled
+   that padding correctly for one specific marker width, but every other
+   line's own inherited padding was added on top of that same fixed number
+   rather than measured from it, so a marker wider than the one the constant
+   was tuned against (mgmeyers/obsidian-list-callouts#91: a numbered list's
+   marker widens past a single digit, e.g. "10." over "1.") was left with a
+   growing, uncovered strip along its own left edge. Covering the marker
+   outright sidesteps that per-line arithmetic entirely -- there's no marker
+   width left to measure or cancel. */
 .lc-list-bg {
   background-color: var(--background-primary);
-  background-clip: content-box;
   position: absolute;
   top: calc(-1 * var(--lc-bg-top));
   right: calc(-1 * var(--lc-bg-right));
   bottom: calc(-1 * var(--lc-bg-bottom));
   left: 0;
   display: block;
-  padding: inherit;
   z-index: -1;
   pointer-events: none;
 }

@@ -12,7 +12,8 @@ import { captureRendering, openNote } from '../helpers';
  * -- every item from 1 through 11 is a callout -- so the captured rendering
  * can be inspected for the misalignment. The leading bullet item matches the
  * reporter's own screenshot, which included one line as a reference for what
- * the padding around the list marker should look like.
+ * the padding around the list marker should look like. The trailing task
+ * items cover the checkbox marker too, which has its own, wider indent.
  */
 describe('Callout background in a numbered list', function () {
   before(async function () {
@@ -24,8 +25,8 @@ describe('Callout background in a numbered list', function () {
           { length: 11 },
           (_, i) => `${i + 1}. ! Item number ${i + 1}`
         ),
-        '- [ ] Test',
-        '- [x] Test',
+        '- [ ] ! Test',
+        '- [x] ! Test',
       ];
       await app.vault.create('NumberedCallouts.md', `${lines.join('\n')}\n`);
     });
@@ -38,7 +39,7 @@ describe('Callout background in a numbered list', function () {
         .length;
     });
 
-    expect(count).toBe(12);
+    expect(count).toBe(14);
   });
 
   it('captures the rendering for visual inspection', async function () {
