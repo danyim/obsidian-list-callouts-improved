@@ -483,6 +483,68 @@ export async function openIconMenuInModal(): Promise<void> {
   });
 }
 
+/**
+ * Scroll the plugin's settings tab down to its last callout row, open the
+ * icon picker there, and report where the picker landed relative to its
+ * button and whether the button is still in the tab's view afterwards.
+ *
+ * The last row, scrolled down to, is the case that exposes a picker
+ * positioned against the wrong ancestor: a menu placed a screen above its
+ * button pulls the tab back up to it when its search box takes focus, and
+ * the button goes off screen.
+ *
+ * Whether the button stayed in view is what is reported, rather than the
+ * scroll position itself: on 1.13 desktop the tab is a popout window, and a
+ * tiling window manager (the test display's, for one) keeps resizing it as
+ * other windows come and go, which reflows the tab and moves its scroll
+ * position on its own by a few pixels. So does the picker's own focus in a
+ * window too short for it to fit under its button. Neither takes the button
+ * off screen; the bug did.
+ */
+export async function openIconMenuInTab(): Promise<{
+  scrollBefore: number;
+  buttonInView: boolean;
+  gapBelowButton: number;
+  leftOffset: number;
+  rightOffset: number;
+}> {
+  return await browser.executeObsidian(async ({ app }) => {
+    const root = (app as any).setting.activeTab.containerEl as HTMLElement;
+    const tab = root.closest<HTMLElement>('.vertical-tab-content');
+    const win = root.ownerDocument.defaultView ?? window;
+
+    const buttons = Array.from(root.querySelectorAll('button')).filter((b) =>
+      /set icon/i.test(b.textContent ?? '')
+    );
+    const btn = buttons[buttons.length - 1];
+
+    // Into view, as a user would have it, rather than to the very end of
+    // the tab: the last row carries a deep bottom padding, and in a short
+    // window the end of the tab leaves the button itself above the viewport.
+    btn.scrollIntoView({ block: 'center' });
+    await new Promise((r) => win.setTimeout(r, 50));
+    const scrollBefore = tab.scrollTop;
+
+    btn.click();
+    // Past the picker's own deferred focus() and listener setup.
+    await new Promise((r) => win.setTimeout(r, 300));
+
+    const menu = root.querySelector<HTMLElement>('.lc-menu');
+    if (!menu) throw new Error('icon picker did not open');
+    const m = menu.getBoundingClientRect();
+    const b = btn.getBoundingClientRect();
+    const t = tab.getBoundingClientRect();
+
+    return {
+      scrollBefore,
+      buttonInView: b.top >= t.top && b.bottom <= t.bottom,
+      gapBelowButton: m.top - b.bottom,
+      leftOffset: m.left - b.left,
+      rightOffset: m.right - b.right,
+    };
+  });
+}
+
 /** Number of icons currently listed in the open icon picker. */
 export function iconMenuCount(): Promise<number> {
   return browser.executeObsidian(({ app }) => {
