@@ -82,7 +82,7 @@ export const calloutDecoration = (char: string, color: string) =>
 
 export const calloutsConfigField = StateField.define<CalloutConfig>({
   create() {
-    return { callouts: {}, re: null };
+    return { callouts: {}, re: null, highlightRe: null };
   },
   update(state, tr) {
     for (const e of tr.effects) {

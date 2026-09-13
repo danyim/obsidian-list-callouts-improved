@@ -1,7 +1,7 @@
 import { browser, expect } from '@wdio/globals';
 import { afterEach, before, beforeEach, describe, it } from 'mocha';
 
-import { DEFAULT_SETTINGS } from '../../src/settings';
+import { DEFAULT_HIGHLIGHT_SETTINGS, DEFAULT_SETTINGS } from '../../src/settings';
 import {
   calloutPatternsAreNull,
   calloutPreviewCount,
@@ -13,7 +13,10 @@ import {
   closeSettings,
   dismissModal,
   editorCalloutChars,
+  editorHighlightPattern,
+  getHighlights,
   getSettings,
+  highlightPatternsAreNull,
   iconMenuCount,
   iconMenuGeometry,
   modalSubmitDisabled,
@@ -24,10 +27,12 @@ import {
   reorderCallout,
   runReset,
   searchIconMenu,
+  setHighlights,
   setSettings,
   settingsText,
   typeInModal,
   waitForModal,
+  writePluginData,
 } from '../helpers';
 
 const BUILT_IN_COUNT = 7;
@@ -375,5 +380,80 @@ describe('Reordering callouts', function () {
 
     const chars = (await getSettings()).map((c) => c.char);
     expect(chars.slice(0, 3)).toEqual(['?', '!', '&']);
+  });
+});
+
+describe('Highlight settings', function () {
+  before(async function () {
+    await browser.reloadObsidian({ vault: 'test/vaults/callouts' });
+  });
+
+  beforeEach(async function () {
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+    await setHighlights({ ...DEFAULT_HIGHLIGHT_SETTINGS });
+  });
+
+  it('defaults to enabled with a required space', async function () {
+    expect(await getHighlights()).toEqual({
+      enabled: true,
+      requireSpace: true,
+    });
+  });
+
+  it('persists both toggles across a plugin reload', async function () {
+    await setHighlights({ enabled: false, requireSpace: false });
+
+    await reloadPlugin();
+
+    expect(await getHighlights()).toEqual({
+      enabled: false,
+      requireSpace: false,
+    });
+  });
+
+  // data.json used to hold the callout array on its own. A vault upgraded
+  // from that version keeps its callouts and gets the highlight defaults.
+  it('reads a data.json written before highlights existed', async function () {
+    const legacy = [{ char: '(', color: '9, 9, 9', custom: true }];
+    await writePluginData(JSON.stringify(legacy));
+
+    await reloadPlugin();
+
+    expect(await getSettings()).toEqual(legacy);
+    expect(await getHighlights()).toEqual(DEFAULT_HIGHLIGHT_SETTINGS);
+  });
+
+  it('keeps the callouts when the old shape is saved in the new one', async function () {
+    await writePluginData(JSON.stringify(DEFAULT_SETTINGS));
+    await reloadPlugin();
+
+    await setHighlights({ requireSpace: false });
+    await reloadPlugin();
+
+    expect(await getSettings()).toEqual(DEFAULT_SETTINGS);
+    expect(await getHighlights()).toEqual({
+      enabled: true,
+      requireSpace: false,
+    });
+  });
+
+  it('builds no highlight pattern when disabled', async function () {
+    await setHighlights({ enabled: false });
+
+    expect(await highlightPatternsAreNull()).toBe(true);
+  });
+
+  it('builds no highlight pattern when every callout has been deleted', async function () {
+    await setSettings([]);
+
+    expect(await highlightPatternsAreNull()).toBe(true);
+  });
+
+  it('makes the space optional when the setting is off', async function () {
+    expect(await editorHighlightPattern()).toContain(') (');
+
+    await setHighlights({ requireSpace: false });
+
+    expect(await editorHighlightPattern()).toContain(') ?(');
   });
 });

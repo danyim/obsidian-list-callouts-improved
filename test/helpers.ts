@@ -2,7 +2,7 @@ import { browser } from '@wdio/globals';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-import type { Callout } from '../src/settings';
+import type { Callout, HighlightSettings } from '../src/settings';
 
 export const PLUGIN_ID = 'list-callouts-improved';
 
@@ -544,5 +544,56 @@ export async function undo(): Promise<void> {
   await browser.executeObsidian(({ app, obsidian }) => {
     const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
     view.editor.undo();
+  });
+}
+
+export function getHighlights(): Promise<HighlightSettings> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return JSON.parse(JSON.stringify(p.highlights));
+  }) as Promise<HighlightSettings>;
+}
+
+/** Change some or all of the highlight settings, as the toggles would. */
+export async function setHighlights(
+  patch: Partial<HighlightSettings>
+): Promise<void> {
+  await browser.executeObsidian(async ({ app }, next) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.highlights = { ...p.highlights, ...next };
+    await p.saveSettings();
+    p.dispatchUpdate();
+    p.settingTab?.refresh?.();
+  }, patch);
+}
+
+/** Write the plugin's data.json verbatim, to stage a particular stored shape. */
+export async function writePluginData(contents: string): Promise<void> {
+  await browser.executeObsidian(async ({ app }, data) => {
+    const dir = `${app.vault.configDir}/plugins/list-callouts-improved`;
+    if (!(await app.vault.adapter.exists(dir))) {
+      await app.vault.adapter.mkdir(dir);
+    }
+    await app.vault.adapter.write(`${dir}/data.json`, data);
+  }, contents);
+}
+
+/** Whether both highlight patterns are null, i.e. highlights match nothing. */
+export function highlightPatternsAreNull(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.buildPostProcessorConfig();
+    return (
+      p.buildEditorConfig().highlightRe === null &&
+      p.postProcessorConfig.highlightRe === null
+    );
+  });
+}
+
+/** Source text of the editor's highlight pattern, or '' when there is none. */
+export function editorHighlightPattern(): Promise<string> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return (p.buildEditorConfig().highlightRe?.source ?? '') as string;
   });
 }

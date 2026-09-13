@@ -16,13 +16,17 @@ import { buildPostProcessor } from './postProcessor';
 import {
   Callout,
   CalloutConfig,
+  HighlightSettings,
   ListCalloutsSettings,
+  PluginData,
   defaultCallouts,
+  defaultHighlightSettings,
 } from './settings';
 import { ListCalloutSettingTab } from './settingsTab';
 
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
+  highlights: HighlightSettings;
   postProcessorConfig: CalloutConfig;
 
   /**
@@ -174,6 +178,22 @@ export default class ListCalloutsPlugin extends Plugin {
       .join('|');
   }
 
+  /**
+   * The highlight pattern, or null when there is nothing to match. `anchored`
+   * gives the post-processor's form, which tests the text of a <mark> the
+   * renderer has already found; the editor's form finds the whole span in a
+   * line of raw markdown.
+   */
+  private highlightPattern(chars: string, anchored: boolean): RegExp | null {
+    if (!chars || !this.highlights.enabled) return null;
+
+    const space = this.highlights.requireSpace ? ' ' : ' ?';
+
+    return anchored
+      ? new RegExp(`^(${chars})${space}`)
+      : new RegExp(`==(${chars})${space}(.*?)==`, 'g');
+  }
+
   buildEditorConfig(): CalloutConfig {
     const chars = this.charPattern();
 
@@ -184,6 +204,7 @@ export default class ListCalloutsPlugin extends Plugin {
             `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
           )
         : null,
+      highlightRe: this.highlightPattern(chars, false),
     };
   }
 
@@ -193,6 +214,7 @@ export default class ListCalloutsPlugin extends Plugin {
     this.postProcessorConfig = {
       callouts: this.calloutsByChar(),
       re: chars ? new RegExp(`^(${chars}) `) : null,
+      highlightRe: this.highlightPattern(chars, true),
     };
   }
 
@@ -217,16 +239,33 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const stored = (await this.loadData()) as Callout[] | null;
+    const stored = (await this.loadData()) as
+      Callout[] | Partial<PluginData> | null;
 
-    // A vault that has never saved settings gets the built-ins seeded. One
-    // that has is taken at its word, empty included -- reconstructing the
-    // built-ins here is what used to make deleting them impossible.
-    this.settings = Array.isArray(stored) ? stored : defaultCallouts();
+    if (Array.isArray(stored)) {
+      // Written before highlight settings existed.
+      this.settings = stored;
+      this.highlights = defaultHighlightSettings();
+    } else if (stored && Array.isArray(stored.callouts)) {
+      // A vault that has saved is taken at its word, empty included --
+      // reconstructing the built-ins here is what used to make deleting them
+      // impossible. Missing highlight keys come from a version that did not
+      // know them, so they take the defaults.
+      this.settings = stored.callouts;
+      this.highlights = { ...defaultHighlightSettings(), ...stored.highlights };
+    } else {
+      this.settings = defaultCallouts();
+      this.highlights = defaultHighlightSettings();
+    }
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    const data: PluginData = {
+      callouts: this.settings,
+      highlights: this.highlights,
+    };
+
+    await this.saveData(data);
     this.emitSettingsUpdate();
     this.buildPostProcessorConfig();
   }
