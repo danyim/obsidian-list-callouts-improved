@@ -557,6 +557,47 @@ export async function searchIconMenuFor(
   });
 }
 
+/**
+ * Move the pointer over an icon in the open picker and return the text of
+ * the tooltip that shows for it, or null if none appears within `timeout`.
+ *
+ * A real pointer move, since that is what a tooltip answers to, in whichever
+ * window the picker lives (the settings tab is a popout on 1.13 desktop).
+ * The driver is switched back afterwards so the rest of the suite is
+ * unaffected.
+ */
+export async function iconTooltip(
+  id: string,
+  timeout = 2000
+): Promise<string | null> {
+  const original = await browser.getWindowHandle();
+  const selector = `.lc-menu-icons .clickable-icon[data-icon="${id}"]`;
+
+  try {
+    for (const handle of await browser.getWindowHandles()) {
+      await browser.switchToWindow(handle);
+      const icon = browser.$(selector);
+      if (!(await icon.isExisting())) continue;
+
+      await icon.moveTo();
+
+      const tooltip = browser.$('.tooltip');
+      try {
+        // Polled tightly: the bound is on how fast the tooltip shows, so the
+        // suite's default interval would decide the answer, not the tooltip.
+        await tooltip.waitForExist({ timeout, interval: 50 });
+      } catch {
+        return null;
+      }
+      return (await tooltip.getText()).trim();
+    }
+
+    throw new Error(`Icon "${id}" not in the picker`);
+  } finally {
+    await browser.switchToWindow(original);
+  }
+}
+
 /** Click an icon in the open picker by its id. */
 export async function clickIconInMenu(id: string): Promise<void> {
   const clicked = await browser.executeObsidian(({ app }, wanted) => {
@@ -929,8 +970,7 @@ function inMarkerColorControls<T>(
   return browser.executeObsidian(
     ({ app }, i: number | null, what: string, value: string) => {
       const tab = (app as any).setting.activeTab?.containerEl as
-        | HTMLElement
-        | undefined;
+        HTMLElement | undefined;
 
       let root: Element | null = null;
       if (i === null) {
