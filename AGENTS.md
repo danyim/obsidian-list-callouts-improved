@@ -134,15 +134,17 @@ and the beta-build matrix work, is in [`docs/TESTING.md`](docs/TESTING.md).
 For maintainers, not something an agent should do unprompted:
 
 ```bash
-npm version <x.y.z> --no-git-tag-version   # bump package.json (+ lockfile)
-npm run bump                                # sync manifest.json + versions.json, git add
-npm run release                             # commit, tag, push, push --tags
+npm version <x.y.z>   # bump package.json, sync manifest.json + versions.json,
+                       # commit, tag, push branch and tag
 ```
 
-Pushing the tag triggers `.github/workflows/release.yml`, which builds the
-plugin, generates GitHub artifact attestations for `main.js` and
-`styles.css` (`actions/attest-build-provenance`), and creates the GitHub
-release with those files attached.
+The `version` and `postversion` npm lifecycle scripts (see `package.json`)
+do the syncing and pushing; `scripts/version-bump.mjs` is what actually
+writes `manifest.json`/`versions.json`. Pushing the tag triggers
+`.github/workflows/release.yml`, which builds the plugin, generates GitHub
+artifact attestations for `main.js` and `styles.css`
+(`actions/attest-build-provenance`), and creates a **draft** GitHub release
+with those files attached — a maintainer reviews and publishes it manually.
 
 ## Security, privacy, and compliance
 
