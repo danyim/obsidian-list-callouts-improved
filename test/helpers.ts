@@ -432,6 +432,29 @@ export async function clickSettingByName(name: string): Promise<void> {
   if (!clicked) throw new Error(`No settings row named "${name}"`);
 }
 
+/** Flip a toggle in the plugin's settings tab, found by its row name. */
+export async function clickToggleByName(name: string): Promise<void> {
+  const clicked = await browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        (el.querySelector('.setting-item-name')?.textContent ?? '').trim() ===
+        wanted
+    );
+
+    const toggle = row?.querySelector<HTMLElement>('.checkbox-container');
+    if (!toggle) return false;
+    toggle.click();
+    return true;
+  }, name);
+
+  if (!clicked) throw new Error(`No toggle named "${name}"`);
+}
+
 /** Run the reset the way the settings button does. */
 export async function runReset(): Promise<void> {
   await browser.executeObsidian(async ({ app }) => {

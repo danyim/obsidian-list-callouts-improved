@@ -17,7 +17,7 @@ import {
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
-import { Callout } from './settings';
+import { Callout, HighlightSettings } from './settings';
 
 // Build a static CM6 list line with callout markup applied
 export function buildSettingCallout(root: HTMLElement, callout: Callout) {
@@ -436,6 +436,43 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     });
   }
 
+  private highlightsDesc(): DocumentFragment {
+    return createFragment((f) => {
+      f.appendText(
+        'Colour inline highlights that start with a callout character. '
+      );
+      f.append(createEl('code', { text: '==& text==' }));
+      f.appendText(' becomes a highlight in the ');
+      f.append(createEl('code', { text: '&' }));
+      f.appendText(" callout's colour, with its icon in front if one is set.");
+    });
+  }
+
+  private requireSpaceDesc(): DocumentFragment {
+    return createFragment((f) => {
+      f.appendText('On, only ');
+      f.append(createEl('code', { text: '==& text==' }));
+      f.appendText(' is a callout, matching how list callouts work. Off, ');
+      f.append(createEl('code', { text: '==&text==' }));
+      f.appendText(
+        ' works too and a space after the character is optional. Turn this off for shorter markup; leave it on so highlights like '
+      );
+      f.append(createEl('code', { text: '==!important==' }));
+      f.appendText(' keep their normal look.');
+    });
+  }
+
+  // The default implementations read and write `plugin.settings[key]`, which
+  // here is the callout array; the toggles live on `plugin.highlights`.
+  getControlValue(key: string): unknown {
+    return this.plugin.highlights[key as keyof HighlightSettings];
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    this.plugin.highlights[key as keyof HighlightSettings] = value as boolean;
+    await this.plugin.saveSettings();
+  }
+
   private async runImport(): Promise<void> {
     try {
       const count = await this.plugin.importLegacySettings();
@@ -520,6 +557,26 @@ export class ListCalloutSettingTab extends PluginSettingTab {
       {
         name: 'Style settings',
         desc: this.styleSettingsDesc(),
+      },
+      {
+        type: 'group',
+        heading: 'Highlights',
+        items: [
+          {
+            name: 'Highlight callouts',
+            desc: this.highlightsDesc(),
+            control: { type: 'toggle', key: 'enabled', defaultValue: true },
+          },
+          {
+            name: 'Require a space after the character',
+            desc: this.requireSpaceDesc(),
+            control: {
+              type: 'toggle',
+              key: 'requireSpace',
+              defaultValue: true,
+            },
+          },
+        ],
       },
       {
         // One list rather than a built-in group and a custom one: every

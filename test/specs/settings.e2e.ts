@@ -10,6 +10,7 @@ import {
   clickIconInMenu,
   clickModalButton,
   clickSettingByName,
+  clickToggleByName,
   closeSettings,
   dismissModal,
   editorCalloutChars,
@@ -455,5 +456,48 @@ describe('Highlight settings', function () {
     await setHighlights({ requireSpace: false });
 
     expect(await editorHighlightPattern()).toContain(') ?(');
+  });
+});
+
+describe('Highlight settings in the tab', function () {
+  before(async function () {
+    await browser.reloadObsidian({ vault: 'test/vaults/callouts' });
+  });
+
+  beforeEach(async function () {
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+    await setHighlights({ ...DEFAULT_HIGHLIGHT_SETTINGS });
+    await openPluginSettings();
+  });
+
+  afterEach(async function () {
+    await closeSettings();
+  });
+
+  it('documents the syntax next to the toggles', async function () {
+    const text = await settingsText();
+
+    expect(text).toContain('Highlight callouts');
+    expect(text).toContain('Require a space after the character');
+    expect(text).toContain('==& text==');
+    expect(text).toContain('==&text==');
+  });
+
+  it('turns highlights off from the tab', async function () {
+    await clickToggleByName('Highlight callouts');
+
+    await browser.waitUntil(
+      async () => (await getHighlights()).enabled === false,
+      { timeout: 5000, interval: 150, timeoutMsg: 'the toggle did not save' }
+    );
+  });
+
+  it('makes the space optional from the tab', async function () {
+    await clickToggleByName('Require a space after the character');
+
+    await browser.waitUntil(
+      async () => (await getHighlights()).requireSpace === false,
+      { timeout: 5000, interval: 150, timeoutMsg: 'the toggle did not save' }
+    );
   });
 });
