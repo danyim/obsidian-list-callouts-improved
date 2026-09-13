@@ -1,6 +1,15 @@
 export interface Callout {
   char: string;
+  /** `r, g, b`, the form the stylesheet's `rgb()`/`rgba()` calls take. */
   color: string;
+  /**
+   * Same form as `color`. Absent, the marker is painted in `color`, which is
+   * what every callout starts with; set, it overrides just the marker (the
+   * character or icon) and leaves the background on `color`. Kept off the
+   * object rather than stored empty so a saved `data.json` is one the original
+   * List Callouts still reads.
+   */
+  markerColor?: string;
   icon?: string;
   /**
    * Marked the user-created callouts back when the built-in seven were fixed
@@ -9,6 +18,27 @@ export interface Callout {
    * `data.json` stays readable by List Callouts, which we can import from.
    */
   custom?: boolean;
+}
+
+/**
+ * The custom properties the stylesheet paints a callout from, as an inline
+ * style. The marker property is only written when there is an override, so
+ * the stylesheet's fallback to the callout color covers the default case.
+ */
+export function calloutColorStyle(callout: Callout): string {
+  let style = `--lc-callout-color: ${callout.color}`;
+  if (callout.markerColor) {
+    style += `; --lc-callout-marker-color: ${callout.markerColor}`;
+  }
+  return style;
+}
+
+/** `calloutColorStyle` applied to a rendered element. */
+export function applyCalloutColors(el: HTMLElement, callout: Callout): void {
+  el.style.setProperty('--lc-callout-color', callout.color);
+  if (callout.markerColor) {
+    el.style.setProperty('--lc-callout-marker-color', callout.markerColor);
+  }
 }
 
 export interface HighlightSettings {

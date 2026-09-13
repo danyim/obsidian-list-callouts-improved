@@ -21,6 +21,8 @@ Characters, icons and colors are all configurable, and you can add your own call
 
 ![The plugin settings tab with the icon picker open, in light and dark mode](screenshots/settings-icon-picker.png)
 
+A callout's color paints both its marker and its background. When the two need to differ — a background that is too faint to read the marker against, say — switch **Default marker color** to **Custom marker color** and pick one for the marker alone. The background keeps the callout's color, and the same marker color is used for that callout's highlights.
+
 The padding of the callouts and the intensity of their backgrounds can be adjusted using the Style Settings plugin.
 
 ## Highlights
