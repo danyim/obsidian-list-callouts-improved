@@ -181,18 +181,27 @@ export default class ListCalloutsPlugin extends Plugin {
 
   /**
    * The highlight pattern, or null when there is nothing to match. `anchored`
-   * gives the post-processor's form, which tests the text of a <mark> the
-   * renderer has already found; the editor's form finds the whole span in a
-   * line of raw markdown.
+   * is the post-processor's form, which tests the text of a <mark> the
+   * renderer has already found; `whole` finds a complete span in a line of
+   * raw markdown, and `opener` just the start of one, for a highlight that
+   * closes on a later line.
    */
-  private highlightPattern(chars: string, anchored: boolean): RegExp | null {
+  private highlightPattern(
+    chars: string,
+    form: 'anchored' | 'whole' | 'opener'
+  ): RegExp | null {
     if (!chars || !this.highlights.enabled) return null;
 
     const space = this.highlights.requireSpace ? ' ' : ' ?';
 
-    return anchored
-      ? new RegExp(`^(${chars})${space}`)
-      : new RegExp(`==(${chars})${space}(.*?)==`, 'g');
+    switch (form) {
+      case 'anchored':
+        return new RegExp(`^(${chars})${space}`);
+      case 'whole':
+        return new RegExp(`==(${chars})${space}(.*?)==`, 'g');
+      case 'opener':
+        return new RegExp(`==(${chars})${space}`, 'g');
+    }
   }
 
   buildEditorConfig(): CalloutConfig {
@@ -205,7 +214,8 @@ export default class ListCalloutsPlugin extends Plugin {
             `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
           )
         : null,
-      highlightRe: this.highlightPattern(chars, false),
+      highlightRe: this.highlightPattern(chars, 'whole'),
+      highlightOpenRe: this.highlightPattern(chars, 'opener'),
     };
   }
 
@@ -215,7 +225,7 @@ export default class ListCalloutsPlugin extends Plugin {
     this.postProcessorConfig = {
       callouts: this.calloutsByChar(),
       re: chars ? new RegExp(`^(${chars}) `) : null,
-      highlightRe: this.highlightPattern(chars, true),
+      highlightRe: this.highlightPattern(chars, 'anchored'),
     };
   }
 

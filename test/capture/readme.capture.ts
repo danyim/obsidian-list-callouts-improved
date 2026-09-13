@@ -718,6 +718,19 @@ describe('README screenshots', function () {
     await captureEditor('highlights.png', true, true, '.lc-highlight-callout');
   });
 
+  it('captures the multi-line highlight rendering', async function () {
+    // Obsidian pairs an opener with the next `==` wherever it falls, so a
+    // highlight can cross a line break; this shows the callout doing the same.
+    await openNote('Multi-line highlight.md');
+    await setSettings(callouts(true));
+    await captureEditor(
+      'highlight-multiline.png',
+      true,
+      true,
+      '.lc-highlight-callout'
+    );
+  });
+
   it('captures the whole settings tab', async function () {
     await setSettings(callouts(false));
     await captureSettingsPage('settings.png');

@@ -20,7 +20,7 @@ import {
 } from '@codemirror/view';
 import { editorLivePreviewField, setIcon } from 'obsidian';
 
-import { CalloutConfig } from './settings';
+import { Callout, CalloutConfig } from './settings';
 
 export const setConfig = StateEffect.define<CalloutConfig>();
 
@@ -190,12 +190,74 @@ export interface BuildStats {
 }
 
 /**
- * Add the decorations for every highlight callout on `line`.
+ * Where the highlight open at `pos` closes: the start of the next `==` token,
+ * which may sit on a later line. Null when the parser has not reached the
+ * closer, in which case a later rebuild (the tree advancing is already a
+ * trigger) will find it.
+ */
+function highlightEndAfter(state: EditorState, pos: number): number | null {
+  if (!syntaxTreeAvailable(state, pos)) return null;
+
+  const cursor = syntaxTree(state).cursorAt(pos, 1);
+
+  do {
+    if (cursor.from >= pos) {
+      const prop = cursor.type.prop(tokenClassNodeProp);
+      if (prop && /formatting-highlight/.test(prop)) return cursor.from;
+    }
+  } while (cursor.next());
+
+  return null;
+}
+
+/**
+ * Decorate one highlight callout: a mark over the content plus, in Live
+ * Preview, a replacement hiding the character and the space -- or showing the
+ * icon in their place. The replacement is dropped while the selection touches
+ * the highlight, so the raw `==& ` is there to edit, which is what Obsidian
+ * does with `==`.
+ */
+function addHighlightDeco(
+  builder: RangeSetBuilder<Decoration>,
+  state: EditorState,
+  callout: Callout,
+  contentFrom: number,
+  markerTo: number,
+  contentTo: number,
+  stats?: BuildStats
+) {
+  if (stats) stats.highlights++;
+
+  // Added before the replacement: both start at contentFrom, and the mark's
+  // inclusiveStart makes it sort first, which is what nests the replacement
+  // -- the icon widget, when there is one -- inside the mark's span rather
+  // than putting it before as a sibling.
+  builder.add(
+    contentFrom,
+    contentTo,
+    highlightDecoration(callout.char, callout.color)
+  );
+
+  const livePreview = state.field(editorLivePreviewField, false) ?? false;
+
+  if (livePreview && !selectionTouches(state, contentFrom - 2, contentTo + 2)) {
+    builder.add(
+      contentFrom,
+      markerTo,
+      Decoration.replace(
+        callout.icon ? { widget: new HighlightMarker(callout.icon) } : {}
+      )
+    );
+  }
+}
+
+/**
+ * Add the decorations for every highlight callout that opens on `line`.
  *
- * Each one is a mark over the content plus, in Live Preview, a replacement
- * hiding the character and the space -- or showing the icon in their place.
- * The replacement is dropped while the selection touches the highlight, so
- * the raw `==& ` is there to edit, which is what Obsidian does with `==`.
+ * Highlights that open and close on the line come straight from the regex. An
+ * opener the regex left over has no closer on its line, so its extent is
+ * taken from the syntax tree instead: Obsidian pairs it with the next `==`
+ * wherever that falls, and the mark simply spans the lines in between.
  */
 function addHighlightDecos(
   builder: RangeSetBuilder<Decoration>,
@@ -205,45 +267,59 @@ function addHighlightDecos(
   stats?: BuildStats
 ) {
   const re = config.highlightRe;
-  const livePreview = state.field(editorLivePreviewField, false) ?? false;
+  let searchFrom = 0;
 
   re.lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = re.exec(line.text))) {
+    searchFrom = re.lastIndex;
+
     const callout = config.callouts[match[1]];
     if (!callout) continue;
 
     const from = line.from + match.index;
-    const to = from + match[0].length;
     const contentFrom = from + 2;
-    const contentTo = to - 2;
-    const markerTo = contentTo - match[2].length;
+    const contentTo = from + match[0].length - 2;
 
     if (!isHighlightAt(state, contentFrom)) continue;
 
-    if (stats) stats.highlights++;
-
-    // Added before the replacement: both start at contentFrom, and the mark's
-    // inclusiveStart makes it sort first, which is what nests the replacement
-    // -- the icon widget, when there is one -- inside the mark's span rather
-    // than putting it before as a sibling.
-    builder.add(
+    addHighlightDeco(
+      builder,
+      state,
+      callout,
       contentFrom,
+      contentTo - match[2].length,
       contentTo,
-      highlightDecoration(callout.char, callout.color)
+      stats
     );
-
-    if (livePreview && !selectionTouches(state, from, to)) {
-      builder.add(
-        contentFrom,
-        markerTo,
-        Decoration.replace(
-          callout.icon ? { widget: new HighlightMarker(callout.icon) } : {}
-        )
-      );
-    }
   }
+
+  const open = config.highlightOpenRe;
+  if (!open) return;
+
+  open.lastIndex = searchFrom;
+  const opener = open.exec(line.text);
+  if (!opener) return;
+
+  const callout = config.callouts[opener[1]];
+  if (!callout) return;
+
+  const contentFrom = line.from + opener.index + 2;
+  if (!isHighlightAt(state, contentFrom)) return;
+
+  const contentTo = highlightEndAfter(state, contentFrom);
+  if (contentTo === null) return;
+
+  addHighlightDeco(
+    builder,
+    state,
+    callout,
+    contentFrom,
+    line.from + opener.index + opener[0].length,
+    contentTo,
+    stats
+  );
 }
 
 /**

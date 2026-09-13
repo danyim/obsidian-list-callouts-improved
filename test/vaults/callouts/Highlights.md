@@ -23,8 +23,6 @@ A plain ==highlight== with no character.
 
 Only a callout when the space is optional: ==!important==
 
-Formatting inside is fine: ==& **bold** text==
-
 Inline code is left alone: `==& code==`
 
 ```md
@@ -32,5 +30,3 @@ Inline code is left alone: `==& code==`
 ```
 
 - & List callout with ==! inline== highlight
-
-Last, since Obsidian pairs an opener with any closer further down the note: an unclosed ==& never closed

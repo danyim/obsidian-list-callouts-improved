@@ -29,6 +29,10 @@ The same characters work inside Obsidian's `==highlight==` syntax. Start a highl
 
 ![A paragraph with several inline highlights, each in a different callout color and led by that callout's icon, shown in light and dark mode](screenshots/highlights.png)
 
+A highlight that runs across a line break is colored as one, in both the editor and reading view:
+
+![A paragraph in which one highlight starts on the first line and ends on the second, colored yellow with a star icon throughout, shown in light and dark mode](screenshots/highlight-multiline.png)
+
 Highlights and list items share one set of callouts, so `==& text==` is yellow because the `&` callout is yellow. The character and the space are hidden when the note is rendered and reappear in Live Preview while the cursor is inside the highlight, the same way the `==` markers do.
 
 Two settings, under **Highlights** in the settings tab:

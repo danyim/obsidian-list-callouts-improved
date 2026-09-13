@@ -701,3 +701,23 @@ export function editorLineNumber(containing: string): Promise<number> {
       .findIndex((l) => l.includes(needle));
   }, containing);
 }
+
+/** Put the active markdown view into reading mode, if it is not already. */
+export async function ensureReadingMode(): Promise<void> {
+  await setViewMode('preview');
+}
+
+/** Put the active markdown view into the editor, if it is not already. */
+export async function ensureEditingMode(): Promise<void> {
+  await setViewMode('source');
+}
+
+async function setViewMode(mode: 'preview' | 'source'): Promise<void> {
+  const current = await browser.executeObsidian(({ app, obsidian }) => {
+    return app.workspace.getActiveViewOfType(obsidian.MarkdownView).getMode();
+  });
+
+  if (current !== mode) {
+    await browser.executeObsidianCommand('markdown:toggle-preview');
+  }
+}

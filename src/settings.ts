@@ -54,6 +54,12 @@ export interface CalloutConfig {
    * post-processor's is anchored to the start of a <mark>'s text.
    */
   highlightRe: RegExp | null;
+  /**
+   * Editor only: just the opening `==& ` of a highlight, for one whose closer
+   * sits on a later line and so is out of `highlightRe`'s reach. Global, so
+   * the search can start past the highlights the line has already matched.
+   */
+  highlightOpenRe?: RegExp | null;
 }
 
 export type ListCalloutsSettings = Callout[];
