@@ -29,12 +29,6 @@ const GAP = 20;
 /** Breathing room added around the captured editor content, in pixels. */
 const EDITOR_PADDING = 20;
 
-/** Height in pixels from a PNG's IHDR chunk. */
-async function pngHeight(file: string): Promise<number> {
-  const buf = await fs.readFile(file);
-  return buf.readUInt32BE(20);
-}
-
 /** The default palette, kept in step with DEFAULT_SETTINGS. */
 const COLORS: Record<string, string> = {
   '&': '255, 214, 0',
@@ -144,8 +138,18 @@ async function sideBySide(light: string, dark: string): Promise<Buffer> {
   return Buffer.from(encoded, 'base64');
 }
 
-/** Prepare the editor for capture and report where the note ends. */
-async function prepareEditor(hideTitle = false): Promise<number> {
+/** Where the sizer sits in the scroller, and where the note's content ends. */
+interface EditorFrame {
+  /** Sizer's box, in CSS px, relative to the scroller. */
+  left: number;
+  top: number;
+  width: number;
+  /** Bottom of the last block, in CSS px from the top of the sizer. */
+  contentBottom: number;
+}
+
+/** Prepare the editor for capture and report how to frame it. */
+async function prepareEditor(hideTitle = false): Promise<EditorFrame> {
   return browser.executeObsidian(
     (_obsidian, shouldHideTitle: boolean, padding: number) => {
       // Drop the caret: in live preview the line holding it renders as raw
@@ -153,10 +157,15 @@ async function prepareEditor(hideTitle = false): Promise<number> {
       (document.activeElement as HTMLElement)?.blur();
       window.getSelection()?.removeAllRanges();
 
+      const scroller = document.querySelector<HTMLElement>(
+        '.markdown-source-view .cm-scroller'
+      );
       const sizer = document.querySelector<HTMLElement>(
         '.markdown-source-view .cm-sizer'
       );
-      if (!sizer) return -1;
+      if (!scroller || !sizer) {
+        throw new Error('No editor on screen to capture');
+      }
 
       // Some captures crop tightly to a couple of list items, and the note's
       // filename sitting above them would be a distraction.
@@ -170,19 +179,24 @@ async function prepareEditor(hideTitle = false): Promise<number> {
       // the edge of the image.
       sizer.style.setProperty('padding', `${padding}px`, 'important');
 
-      // Where the note actually ends, measured from the top of the captured
-      // element. CodeMirror keeps the sizer at least as tall as the
-      // scroller, so this is what decides whether the whole note made it
-      // into the image.
+      scroller.scrollTop = 0;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const sizerRect = sizer.getBoundingClientRect();
+
       // The last block, not the last .cm-line: a table or callout at the end
       // of the note is a widget, not a line.
       const last = document.querySelector('.markdown-source-view .cm-content')
         ?.lastElementChild;
-      if (!last) return -1;
+      if (!last) throw new Error('The note has no content to capture');
 
-      return Math.ceil(
-        last.getBoundingClientRect().bottom - sizer.getBoundingClientRect().top
-      );
+      return {
+        left: Math.floor(sizerRect.left - scrollerRect.left),
+        top: Math.floor(sizerRect.top - scrollerRect.top),
+        width: Math.ceil(sizerRect.width),
+        contentBottom: Math.ceil(
+          last.getBoundingClientRect().bottom - sizerRect.top
+        ),
+      };
     },
     hideTitle,
     EDITOR_PADDING
@@ -228,15 +242,17 @@ async function shotViewport(label: string): Promise<string> {
   }
 }
 
-const EDITOR_SELECTOR = '.markdown-source-view .cm-sizer';
+const EDITOR_SCROLLER = '.markdown-source-view .cm-scroller';
 
 /**
  * Capture the editor, optionally cropped to the note's own content height.
  *
- * The sizer CodeMirror measures against is never shorter than the scroller,
- * so a short note (a handful of lines) otherwise screenshots as mostly blank
- * space below the last line. `cropToContent` trims that away, leaving
- * `contentBottom` plus the same breathing room the top padding already adds.
+ * The scroller is shot in scrolled slices, so a note taller than the window
+ * still comes out whole. The sizer CodeMirror measures against is never
+ * shorter than the scroller, so a short note (a handful of lines) otherwise
+ * captures as mostly blank space below the last line. `cropToContent` trims
+ * that away, leaving `contentBottom` plus the same breathing room the top
+ * padding already adds.
  */
 async function captureEditor(
   name: string,
@@ -247,43 +263,31 @@ async function captureEditor(
   await fs.mkdir(OUT_DIR, { recursive: true });
   await browser.$(readySelector).waitForExist({ timeout: 10000 });
 
-  const contentBottom = await prepareEditor(hideTitle);
+  const frame = await prepareEditor(hideTitle);
 
   await setColorScheme(false);
-  let light = await shotElement(EDITOR_SELECTOR, 'light');
+  let light = await shotScrolled(EDITOR_SCROLLER, 'light');
 
   await setColorScheme(true);
-  let dark = await shotElement(EDITOR_SELECTOR, 'dark');
+  let dark = await shotScrolled(EDITOR_SCROLLER, 'dark');
 
   await setColorScheme(false);
 
-  if (cropToContent && contentBottom > 0) {
-    const width = await browser.execute(() => {
-      const sizer = document.querySelector<HTMLElement>(
-        '.markdown-source-view .cm-sizer'
-      );
-      return sizer ? Math.ceil(sizer.getBoundingClientRect().width) : 0;
-    });
+  // Frame to the sizer -- the readable column, not the scroller's full width
+  // -- and to the content when asked. cropToRect clamps to the image, so an
+  // over-tall height keeps the whole stitched height.
+  const rect = {
+    x: frame.left,
+    y: frame.top,
+    width: frame.width,
+    height: cropToContent
+      ? frame.contentBottom + EDITOR_PADDING
+      : Number.MAX_SAFE_INTEGER,
+  };
+  light = await cropToRect(light, rect);
+  dark = await cropToRect(dark, rect);
 
-    if (width > 0) {
-      const rect = { x: 0, y: 0, width, height: contentBottom + EDITOR_PADDING };
-      light = await cropToRect(light, rect);
-      dark = await cropToRect(dark, rect);
-    }
-  }
-
-  const file = path.join(OUT_DIR, name);
-  await fs.writeFile(file, await sideBySide(light, dark));
-
-  // An element taller than the scroller is captured clipped, silently. Check
-  // the note's last line landed inside the image rather than past its edge.
-  const captured = await pngHeight(file);
-  if (contentBottom < 0 || captured < contentBottom) {
-    throw new Error(
-      `${name} was clipped: captured ${captured}px, but the note runs to ${contentBottom}px. ` +
-        'Run with a taller display.'
-    );
-  }
+  await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
 }
 
 /** The settings pane holding the plugin's own rows, without the tab sidebar. */
@@ -484,7 +488,7 @@ async function captureBothSchemes(
   await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
 }
 
-/** One viewport's worth of a scrolled pane, and the slice of it that is new. */
+/** One viewport's worth of a scrolled element, and the slice of it that is new. */
 interface PaneSlice {
   data: string;
   /** CSS width of the shot, so the slice can be scaled to the image's pixels. */
@@ -494,73 +498,114 @@ interface PaneSlice {
   height: number;
 }
 
+/** Marks the element being scrolled and shot, so each round trip finds it. */
+const SCROLLER_ATTR = 'data-lc-capture-scroller';
+
 /**
- * Shoot a scrolling pane in full, however tall its content is.
+ * Shoot scrolling content in full, however tall it is and however small the
+ * window.
  *
- * An element screenshot only ever shows the part of a scroller that is on
- * screen, and the window cannot be made taller than the display. So the pane
- * is scrolled one viewport at a time, shot at each stop, and only the strip
- * each stop newly reveals is kept -- the last stop overlaps the one before
- * it, since scrollTop clamps at the bottom.
+ * The scroll container is found from `anchor` -- the nearest ancestor that
+ * scrolls, or failing that the nearest one allowed to. An element screenshot
+ * only ever shows the part of it inside the window, so every step measures
+ * that on-screen rectangle and keeps just the strip of content it newly
+ * reveals; the last step overlaps the one before, since scrollTop clamps at
+ * the bottom. Nothing here assumes the container's box fits the window.
  */
-async function shotPaneScrolled(pane: string, label: string): Promise<string> {
-  const metrics = () =>
-    browser.execute((selector: string) => {
-      const el = document.querySelector<HTMLElement>(selector);
-      return {
-        scrollTop: el.scrollTop,
-        clientHeight: el.clientHeight,
-        scrollHeight: el.scrollHeight,
-        width: el.getBoundingClientRect().width,
-      };
-    }, pane);
+async function shotScrolled(anchor: string, label: string): Promise<string> {
+  await browser.execute(
+    (selector: string, attr: string) => {
+      const scrolls = (el: HTMLElement) =>
+        /(auto|scroll)/.test(getComputedStyle(el).overflowY);
 
-  await browser.execute((selector: string) => {
-    const el = document.querySelector<HTMLElement>(selector);
+      let found: HTMLElement | null = null;
+      for (
+        let el = document.querySelector<HTMLElement>(selector);
+        el;
+        el = el.parentElement
+      ) {
+        if (scrolls(el) && el.scrollHeight > el.clientHeight + 1) {
+          found = el;
+          break;
+        }
+        if (!found && scrolls(el)) found = el;
+      }
 
-    // Pin the pane's box inside the window. A box taller than the window
-    // keeps its bottom rows below the edge, where scrolling never brings
-    // them and an element shot never reaches, and every slice would come
-    // out shorter than the clientHeight the stepping assumes.
-    const height = window.innerHeight - el.getBoundingClientRect().top - 16;
-    el.style.setProperty('height', `${height}px`, 'important');
-    el.style.setProperty('max-height', `${height}px`, 'important');
-    el.style.setProperty('overflow-y', 'auto', 'important');
+      const scroller = found ?? document.querySelector<HTMLElement>(selector);
+      scroller.setAttribute(attr, '');
+      // The scrollbar thumb would otherwise be stitched in at a different
+      // height in every slice.
+      scroller.style.setProperty('scrollbar-width', 'none');
+    },
+    anchor,
+    SCROLLER_ATTR
+  );
 
-    // The scrollbar thumb would otherwise be stitched in at a different
-    // height in every slice.
-    el.style.setProperty('scrollbar-width', 'none');
-  }, pane);
+  const scrollerSelector = `[${SCROLLER_ATTR}]`;
+
+  const step = (top: number) =>
+    browser.execute(
+      (selector: string, scrollTo: number) => {
+        const el = document.querySelector<HTMLElement>(selector);
+        el.scrollTop = scrollTo;
+
+        const r = el.getBoundingClientRect();
+        const visTop = Math.max(r.top, 0);
+        const visBottom = Math.min(r.bottom, window.innerHeight);
+        const visLeft = Math.max(r.left, 0);
+        const visRight = Math.min(r.right, window.innerWidth);
+
+        // Rects are fractional; the screenshot and scrollHeight are not.
+        return {
+          scrollHeight: el.scrollHeight,
+          // Content offsets of the first and last rows on screen.
+          shownFrom: Math.round(el.scrollTop + (visTop - r.top)),
+          shownTo: Math.round(el.scrollTop + (visBottom - r.top)),
+          shotHeight: Math.round(visBottom - visTop),
+          shotWidth: Math.round(visRight - visLeft),
+        };
+      },
+      scrollerSelector,
+      top
+    );
 
   const slices: PaneSlice[] = [];
   let covered = 0;
 
   for (;;) {
-    await browser.execute(
-      (selector: string, top: number) => {
-        document.querySelector<HTMLElement>(selector).scrollTop = top;
-      },
-      pane,
-      covered
-    );
+    await step(covered);
     // Let the scroll and any repaint settle before measuring and shooting.
     await browser.pause(150);
+    const m = await step(covered);
 
-    const m = await metrics();
-    const data = await shotElement(pane, `${label}-${slices.length}`);
-    const y = covered - m.scrollTop;
+    if (m.shownTo <= covered) {
+      throw new Error(
+        `Could not scroll ${anchor} past ${covered}px of ${m.scrollHeight}px`
+      );
+    }
 
-    slices.push({ data, cssWidth: m.width, y, height: m.clientHeight - y });
-    covered = m.scrollTop + m.clientHeight;
+    const data = await shotElement(
+      scrollerSelector,
+      `${label}-${slices.length}`
+    );
+    const y = covered - m.shownFrom;
 
-    if (covered >= m.scrollHeight) break;
+    slices.push({ data, cssWidth: m.shotWidth, y, height: m.shotHeight - y });
+    covered = m.shownTo;
+
+    if (covered >= m.scrollHeight - 1) break;
   }
 
-  await browser.execute((selector: string) => {
-    const el = document.querySelector<HTMLElement>(selector);
-    el.scrollTop = 0;
-    el.style.removeProperty('scrollbar-width');
-  }, pane);
+  await browser.execute(
+    (selector: string, attr: string) => {
+      const el = document.querySelector<HTMLElement>(selector);
+      el.scrollTop = 0;
+      el.style.removeProperty('scrollbar-width');
+      el.removeAttribute(attr);
+    },
+    scrollerSelector,
+    SCROLLER_ATTR
+  );
 
   return stackVertically(slices);
 }
@@ -607,10 +652,10 @@ async function captureSettingsPage(name: string): Promise<void> {
   const { pane, original } = await enterSettingsWindow();
 
   await setColorScheme(false);
-  const light = await shotPaneScrolled(pane, 'settings-light');
+  const light = await shotScrolled(pane, 'settings-light');
 
   await setColorScheme(true);
-  const dark = await shotPaneScrolled(pane, 'settings-dark');
+  const dark = await shotScrolled(pane, 'settings-dark');
 
   await setColorScheme(false);
 
@@ -744,7 +789,7 @@ describe('README screenshots', function () {
 
   it('captures the character rendering', async function () {
     await setSettings(callouts(false));
-    await captureEditor('callout-characters.png');
+    await captureEditor('callout-characters.png', false, true);
   });
 
   it('captures the icon rendering', async function () {
