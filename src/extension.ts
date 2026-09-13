@@ -436,6 +436,84 @@ export function buildCalloutDecos(
   return builder.finish();
 }
 
+/**
+ * The marker glyph a list line renders as pure decoration rather than
+ * content -- a styled bullet dot or a checkbox -- as opposed to a number's
+ * own digits. Both carry a left inset from where CalloutBackground would
+ * otherwise start (Obsidian's own `padding-left` on the marker's formatting
+ * span for a bullet; a few px of the same kind for a checkbox), which
+ * `alignCalloutBackgrounds` halves rather than covers outright, matching
+ * how a bullet or checkbox reference line looked before this fix existed.
+ *
+ * A number's digits are deliberately excluded here: unlike a small bullet
+ * sitting in otherwise-empty space, a gap before a digit re-excludes part
+ * of it from the highlight, not just empty padding -- which is exactly
+ * mgmeyers/obsidian-list-callouts#91's own bug. There is also no fallback
+ * to the raw "- " text: the active (cursor-holding) line shows that
+ * unstyled, flush with the marker's own box, and covering that outright
+ * already looks right with no adjustment.
+ */
+const DECORATIVE_MARKER_GLYPH_SELECTOR = '.list-bullet, .task-list-label';
+
+/**
+ * A nested list line's own `.cm-hmd-list-indent` wraps one span per ancestor
+ * indent level -- CodeMirror renders it as a real, measurable element, unlike
+ * the marker width folded into the line's own `padding-inline-start`, which
+ * has no such breakdown between "ancestor indent" and "this item's own
+ * marker." Its right edge is exactly the boundary `CalloutBackground` needs:
+ * everything before it is indentation carried over from parent list items
+ * (excluded), everything after is this item's own marker and text
+ * (covered). A top-level line has no ancestors and so no such element,
+ * which is also the case in which the background should reach the line's
+ * own left edge, hence the 0 fallback.
+ */
+function alignCalloutBackgrounds(view: EditorView) {
+  view.requestMeasure<{ el: HTMLElement; indent: number }[]>({
+    read(view) {
+      return Array.from(
+        view.dom.querySelectorAll<HTMLElement>('.lc-list-bg')
+      ).flatMap((el) => {
+        // Always a direct child by construction -- this widget is the one
+        // inserted at line.from -- so this is parentElement in substance,
+        // just without asking getBoundingClientRect's neighbor, closest, to
+        // walk and re-match a selector for an answer already known.
+        const line = el.parentElement;
+        if (!line) return [];
+
+        const indentGuide = line.querySelector<HTMLElement>(
+          '.cm-hmd-list-indent'
+        );
+        const nestingIndent = indentGuide
+          ? indentGuide.getBoundingClientRect().right -
+            line.getBoundingClientRect().left
+          : 0;
+
+        const glyph = line.querySelector<HTMLElement>(
+          DECORATIVE_MARKER_GLYPH_SELECTOR
+        );
+        const glyphInset = glyph
+          ? glyph.getBoundingClientRect().left -
+            (line.getBoundingClientRect().left + nestingIndent)
+          : 0;
+
+        return [
+          { el, indent: Math.max(0, nestingIndent + glyphInset / 2) },
+        ];
+      });
+    },
+    write(results) {
+      for (const { el, indent } of results) {
+        // Skipped when unchanged (the common case: most updates that reach
+        // here at all still leave most on-screen lines' own nesting
+        // exactly as it was) to avoid a style write, and the recalculation
+        // it can trigger, for a value that would just be set back to itself.
+        const next = `${indent}px`;
+        if (el.style.left !== next) el.style.left = next;
+      }
+    },
+  });
+}
+
 export const calloutExtension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -443,6 +521,7 @@ export const calloutExtension = ViewPlugin.fromClass(
 
     constructor(view: EditorView) {
       this.build(view, view.state);
+      alignCalloutBackgrounds(view);
     }
 
     build(view: EditorView, state: EditorState) {
@@ -452,13 +531,19 @@ export const calloutExtension = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (
+      // The parser runs in the background, so a line can be unparsed when it
+      // is first drawn. Rebuilding as the tree advances is what lets those
+      // lines pick up their decorations without an edit -- and is also the
+      // only one of these three that can change a line's own nesting depth
+      // without docChanged or viewportChanged already having done so (a
+      // block quote or code fence resolving around an already-visible list).
+      const layoutMayHaveChanged =
         update.docChanged ||
         update.viewportChanged ||
-        // The parser runs in the background, so a line can be unparsed when it
-        // is first drawn. Rebuilding as the tree advances is what lets those
-        // lines pick up their decorations without an edit.
-        syntaxTree(update.state) !== syntaxTree(update.startState) ||
+        syntaxTree(update.state) !== syntaxTree(update.startState);
+
+      if (
+        layoutMayHaveChanged ||
         // A highlight's marker is hidden or revealed by where the caret is,
         // so caret movement matters -- but only on a screen that has one.
         (update.selectionSet && this.hasHighlights) ||
@@ -467,6 +552,16 @@ export const calloutExtension = ViewPlugin.fromClass(
         )
       ) {
         this.build(update.view, update.state);
+      }
+
+      // Nesting depth -- and so where each on-screen callout's own
+      // background should start -- only ever moves alongside the document
+      // or its viewport. A bare selection change or a setConfig effect
+      // (recoloring, say) rebuilds decorations above but never moves a
+      // marker, so re-measuring for either would just confirm nothing
+      // changed at DOM-read cost.
+      if (layoutMayHaveChanged) {
+        alignCalloutBackgrounds(update.view);
       }
     }
   },
