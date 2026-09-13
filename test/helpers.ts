@@ -597,3 +597,35 @@ export function editorHighlightPattern(): Promise<string> {
     return (p.buildEditorConfig().highlightRe?.source ?? '') as string;
   });
 }
+
+export interface RenderedHighlight {
+  /** The callout character, or null for a highlight the plugin left alone. */
+  char: string | null;
+  color: string;
+  text: string;
+  hasIcon: boolean;
+}
+
+/** Every <mark> in reading view, decorated or not. */
+export function readingHighlights(): Promise<RenderedHighlight[]> {
+  return browser.executeObsidian(({ app }) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-reading-view mark'
+      )
+    ).map((el) => ({
+      char: el.getAttribute('data-callout'),
+      color: el.style.getPropertyValue('--lc-callout-color'),
+      text: el.textContent ?? '',
+      hasIcon: !!el.querySelector('.lc-highlight-marker svg'),
+    }));
+  });
+}
+
+/** Re-run the post processors on the open note, as a settings change needs. */
+export async function rerenderReadingView(): Promise<void> {
+  await browser.executeObsidian(({ app, obsidian }) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    (view as any).previewMode.rerender(true);
+  });
+}
