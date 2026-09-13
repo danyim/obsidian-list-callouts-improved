@@ -26,12 +26,28 @@ export const setConfig = StateEffect.define<CalloutConfig>();
 
 export class CalloutBackground extends WidgetType {
   toDOM() {
-    return createSpan({
-      cls: 'lc-list-bg',
+    // The visible background is a positioned box nested a level deep, behind
+    // an anchor with no box of its own (`display: contents`). CodeMirror
+    // measures the DOM node a widget returns from toDOM() -- via
+    // getBoundingClientRect() -- when resolving a document position from
+    // screen coordinates, which End/Home and their macOS Cmd-Arrow
+    // equivalents do to find a wrapped line's visual boundary. A widget whose
+    // own box is stretched across most of the line, as the background
+    // element here is, is exactly the shape of box that measurement isn't
+    // expecting. Nesting keeps that box out of what CodeMirror sees while
+    // leaving the rendered background untouched, since a `display: contents`
+    // ancestor is transparent to both descendant positioning (an absolutely
+    // positioned child still finds the same containing block past it) and
+    // style inheritance (the child's `padding: inherit` still resolves to the
+    // line's padding, relayed through the anchor's own `padding: inherit`).
+    const anchor = createSpan({
+      cls: 'lc-list-bg-anchor',
       attr: {
         'aria-hidden': 'true',
       },
     });
+    anchor.createSpan({ cls: 'lc-list-bg' });
+    return anchor;
   }
   eq(): boolean {
     return true;
