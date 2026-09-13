@@ -241,9 +241,11 @@ settings:
 
 /* CodeMirror nests our mark and Obsidian's own highlight span inside one
    another, in an order we do not control. Paint the colour once, on ours,
-   rather than twice through a translucent background. */
-.lc-highlight-callout .cm-highlight,
-.cm-highlight:has(> .lc-highlight-callout) {
+   rather than twice through a translucent background. Obsidian's rule is
+   `.cm-s-obsidian span.cm-highlight`, so these have to be at least that
+   specific or its yellow stays underneath every highlight. */
+.cm-s-obsidian .lc-highlight-callout span.cm-highlight,
+.cm-s-obsidian span.cm-highlight:has(.lc-highlight-callout) {
   background-color: transparent;
 }
 

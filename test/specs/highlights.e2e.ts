@@ -123,6 +123,39 @@ describe('Highlight rendering in live preview', function () {
     expect(spans.find((s) => s.text === 'second')?.char).toBe('!');
   });
 
+  // CodeMirror renders one highlight as two of our spans: one around the
+  // marker widget on its own, and one around the text nested inside the span
+  // Obsidian paints its own yellow on. If that yellow is not cancelled, the
+  // text is blended over it (cyan came out green) while the marker is not, so
+  // an icon sat on a different colour from its text -- and nothing else in
+  // this file notices, because classes and attributes are all still right.
+  it('paints the callout colour and nothing else', async function () {
+    const paint = await browser.executeObsidian(({ app }) => {
+      return Array.from(
+        app.workspace.containerEl.querySelectorAll<HTMLElement>(
+          '.markdown-source-view .lc-highlight-callout[data-callout="@"]'
+        )
+      ).map((el) => {
+        const above: string[] = [];
+        for (
+          let n = el.parentElement;
+          n && !n.classList.contains('cm-line');
+          n = n.parentElement
+        ) {
+          above.push(getComputedStyle(n).backgroundColor);
+        }
+        return { own: getComputedStyle(el).backgroundColor, above };
+      });
+    });
+
+    // Marker span and text span, at least.
+    expect(paint.length).toBeGreaterThanOrEqual(2);
+    for (const { own, above } of paint) {
+      expect(own.startsWith('rgba(0, 184, 212, ')).toBe(true);
+      expect(above.every((c) => c === 'rgba(0, 0, 0, 0)')).toBe(true);
+    }
+  });
+
   it('leaves a plain highlight alone', async function () {
     const spans = await editorHighlights();
 
