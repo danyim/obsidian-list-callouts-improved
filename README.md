@@ -78,12 +78,6 @@ That is the same folder [Iconize](https://github.com/FlorianWoelki/obsidian-icon
 
 Icons are read when the plugin loads, so restart Obsidian or toggle the plugin after adding files. A name that an Obsidian icon already uses is skipped rather than replacing it, and a file that is not usable SVG is skipped with a note in the console.
 
-## Installing
-
-Search for **List Callouts, Improved** in **Settings → Community plugins** and install it from there.
-
-To install by hand instead, download `list-callouts-improved-<version>.zip` from the [latest release](https://github.com/danyim/obsidian-list-callouts-improved/releases/latest) and extract it into your vault's `.obsidian/plugins/` folder. The zip already contains the `list-callouts-improved/` folder with `main.js`, `manifest.json` and `styles.css` inside, so nothing needs renaming. Then enable the plugin under **Settings → Community plugins**.
-
 ## Coming from [List Callouts](https://github.com/mgmeyers/obsidian-list-callouts)
 
 Because this fork uses a new plugin id, Obsidian treats it as a separate plugin and your existing List Callouts settings won't carry over on their own.
