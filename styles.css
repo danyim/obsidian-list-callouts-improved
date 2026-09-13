@@ -128,15 +128,6 @@ settings:
   --lc-bg-opacity-dark: 0.15;
 }
 
-/* Generates no box of its own, so CodeMirror's widget-measurement code sees
-   an empty rect here rather than the stretched box .lc-list-bg below draws.
-   `padding: inherit` has no visual effect without a box, but is still
-   inherited by .lc-list-bg, which needs the line's real padding. */
-.lc-list-bg-anchor {
-  display: contents;
-  padding: inherit;
-}
-
 .lc-list-bg {
   background-color: var(--background-primary);
   background-clip: content-box;
@@ -151,14 +142,11 @@ settings:
   pointer-events: none;
 }
 
-.HyperMD-task-line > .lc-list-bg-anchor > .lc-list-bg {
+.HyperMD-task-line > .lc-list-bg {
   left: calc(-1 * var(--lc-bg-left-checkbox-lp));
 }
 
-.markdown-source-view:not(.is-live-preview)
-  .HyperMD-task-line
-  > .lc-list-bg-anchor
-  > .lc-list-bg {
+.markdown-source-view:not(.is-live-preview) .HyperMD-task-line > .lc-list-bg {
   left: calc(-1 * var(--lc-bg-left-checkbox));
 }
 
