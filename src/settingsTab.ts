@@ -63,6 +63,13 @@ export function buildSettingCallout(root: HTMLElement, callout: Callout) {
   );
 }
 
+/**
+ * How many icons the picker adds to its list at a time: a couple of screens,
+ * so a flick of the wheel does not run into the end, and still cheap to
+ * build.
+ */
+const ICON_PAGE_SIZE = 120;
+
 function attachIconMenu(
   btn: ButtonComponent,
   onSelect: (icon: null | string) => void
@@ -133,7 +140,62 @@ function attachIconMenu(
       btnEl.after(menuRef);
       calcMenuPos();
 
+      // Obsidian registers a couple of thousand icons and the list shows
+      // about fifty of them at a time, so an element is only built when its
+      // icon comes into view -- building an SVG for each of them up front
+      // stalled the picker for a noticeable moment every time it opened.
+      // Built elements are kept for the life of the menu so a search that
+      // brings one back does not build it twice.
       const iconEls: Record<string, HTMLDivElement> = {};
+      const iconEl = (icon: string) =>
+        (iconEls[icon] ??= createDiv(
+          {
+            cls: 'clickable-icon',
+            attr: {
+              'data-icon': icon,
+            },
+          },
+          (item) => {
+            setIcon(item, icon);
+            item.onClickEvent(() => {
+              btn.buttonEl.empty();
+              btn.setIcon(icon);
+              onSelect(icon);
+              destroyEventHandlers();
+              menuRef.detach();
+              menuRef = null;
+            });
+          }
+        ));
+
+      // The icons still to be added to the list, in display order.
+      let pending: string[] = [];
+
+      const showMore = () => {
+        pending
+          .splice(0, ICON_PAGE_SIZE)
+          .forEach((icon) => iconList.append(iconEl(icon)));
+      };
+
+      // Keep adding pages until the list can scroll, or runs out: a
+      // handful of hits from a search, or a wide list on a large screen, may
+      // not fill the box, and then there is no scroll to ask for more.
+      const fill = () => {
+        while (
+          pending.length &&
+          iconList.scrollHeight <= iconList.clientHeight
+        ) {
+          showMore();
+        }
+      };
+
+      const showIcons = (icons: string[]) => {
+        iconList.empty();
+        iconList.scrollTop = 0;
+        pending = icons.slice();
+        showMore();
+        fill();
+      };
 
       menu.createDiv('lc-menu-search', (el) => {
         el.createEl(
@@ -149,15 +211,7 @@ function attachIconMenu(
               input.focus();
             });
             const handler = debounce(
-              () => {
-                iconList.empty();
-
-                searchIcons(input.value).forEach((icon) => {
-                  if (iconEls[icon]) {
-                    iconList.append(iconEls[icon]);
-                  }
-                });
-              },
+              () => showIcons(searchIcons(input.value)),
               250,
               true
             );
@@ -166,31 +220,17 @@ function attachIconMenu(
         );
       });
 
-      const iconList = menu.createDiv('lc-menu-icons', (el) => {
-        // Menu
-        allIconIds().forEach((icon) => {
-          el.createDiv(
-            {
-              cls: 'clickable-icon',
-              attr: {
-                'data-icon': icon,
-              },
-            },
-            (item) => {
-              iconEls[icon] = item;
-              setIcon(item, icon);
-              item.onClickEvent(() => {
-                btn.buttonEl.empty();
-                btn.setIcon(icon);
-                onSelect(icon);
-                destroyEventHandlers();
-                menuRef.detach();
-                menuRef = null;
-              });
-            }
-          );
-        });
+      const iconList = menu.createDiv('lc-menu-icons');
+
+      iconList.addEventListener('scroll', () => {
+        const { scrollTop, clientHeight, scrollHeight } = iconList;
+        // Within a screen of the end: add the next page before it is reached.
+        if (scrollHeight - scrollTop - clientHeight < clientHeight) {
+          showMore();
+        }
       });
+
+      showIcons(allIconIds());
     });
 
     btnEl.win.setTimeout(() => {

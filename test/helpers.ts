@@ -27,7 +27,8 @@ export function getSettings(): Promise<Callout[]> {
 
 export function legacyDataAvailable(): Promise<boolean> {
   return browser.executeObsidian(({ app }) => {
-    return (app as any).plugins.plugins['list-callouts-improved'].legacyDataAvailable;
+    return (app as any).plugins.plugins['list-callouts-improved']
+      .legacyDataAvailable;
   }) as Promise<boolean>;
 }
 
@@ -293,8 +294,7 @@ function inTopmostModal<T>(
   return browser.executeObsidian(
     ({ app }, what: string, value: string) => {
       const root = (app as any).setting.activeTab?.containerEl as
-        | HTMLElement
-        | undefined;
+        HTMLElement | undefined;
       const docs = [root?.ownerDocument, document].filter(
         (d, i, all): d is Document => !!d && all.indexOf(d) === i
       );
@@ -321,9 +321,8 @@ function inTopmostModal<T>(
         case 'text':
           return (modal?.textContent ?? '').trim();
         case 'type': {
-          const input = modal?.querySelector<HTMLInputElement>(
-            'input[type="text"]'
-          );
+          const input =
+            modal?.querySelector<HTMLInputElement>('input[type="text"]');
           if (!input) return false;
           input.value = value;
           input.dispatchEvent(new Event('input'));
@@ -358,8 +357,7 @@ export function modalText(): Promise<string> {
 function modalWhereabouts(): Promise<string> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const doc = root?.ownerDocument;
     const count = (d: Document | undefined) =>
       d ? d.querySelectorAll('.modal-container .modal').length : -1;
@@ -437,8 +435,7 @@ export function iconMenuGeometry(): Promise<null | {
 }> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const menu = [root?.ownerDocument, document]
       .map((d) => d?.querySelector<HTMLElement>('.lc-menu'))
       .find((m) => !!m);
@@ -490,11 +487,33 @@ export async function openIconMenuInModal(): Promise<void> {
 export function iconMenuCount(): Promise<number> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
-    return [root?.ownerDocument, document]
-      .map((d) => d?.querySelectorAll('.lc-menu-icons .clickable-icon').length)
-      .find((n) => !!n) ?? 0;
+      HTMLElement | undefined;
+    return (
+      [root?.ownerDocument, document]
+        .map(
+          (d) => d?.querySelectorAll('.lc-menu-icons .clickable-icon').length
+        )
+        .find((n) => !!n) ?? 0
+    );
+  });
+}
+
+/** Number of icon ids the running app registers, custom ones included. */
+export function iconIdCount(): Promise<number> {
+  return browser.executeObsidian(
+    ({ obsidian }) => obsidian.getIconIds().length
+  );
+}
+
+/** Scroll the open icon picker's list to its end. */
+export async function scrollIconMenuToEnd(): Promise<void> {
+  await browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    const list = [root?.ownerDocument, document]
+      .map((d) => d?.querySelector<HTMLElement>('.lc-menu-icons'))
+      .find((l) => !!l);
+    list.scrollTop = list.scrollHeight;
   });
 }
 
@@ -502,8 +521,7 @@ export function iconMenuCount(): Promise<number> {
 export async function searchIconMenu(query: string): Promise<void> {
   await browser.executeObsidian(({ app }, q) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const input = [root?.ownerDocument, document]
       .map((d) => d?.querySelector<HTMLInputElement>('.lc-menu-search input'))
       .find((i) => !!i);
@@ -512,12 +530,38 @@ export async function searchIconMenu(query: string): Promise<void> {
   }, query);
 }
 
+/** Whether the open picker currently lists the icon with this id. */
+export function iconInMenu(id: string): Promise<boolean> {
+  return browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    return [root?.ownerDocument, document].some(
+      (d) =>
+        !!d?.querySelector(
+          `.lc-menu-icons .clickable-icon[data-icon="${wanted}"]`
+        )
+    );
+  }, id);
+}
+
+/** Search the open picker and wait for the icon with this id to be listed. */
+export async function searchIconMenuFor(
+  query: string,
+  id: string
+): Promise<void> {
+  await searchIconMenu(query);
+  await browser.waitUntil(() => iconInMenu(id), {
+    timeout: 5000,
+    interval: 200,
+    timeoutMsg: `icon search for "${query}" did not list ${id}`,
+  });
+}
+
 /** Click an icon in the open picker by its id. */
 export async function clickIconInMenu(id: string): Promise<void> {
   const clicked = await browser.executeObsidian(({ app }, wanted) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const el = [root?.ownerDocument, document]
       .map((d) =>
         d?.querySelector<HTMLElement>(
