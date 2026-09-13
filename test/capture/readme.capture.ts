@@ -17,9 +17,16 @@ import type { Callout } from '../../src/settings';
 import {
   openNote,
   openPluginSettings,
+  reloadPlugin,
   setHighlights,
   setSettings,
+  writeLegacyData,
 } from '../helpers';
+
+/** The original plugin's settings, as it saved them, to make the import offer appear. */
+const LEGACY_DATA = path.resolve(
+  'test/vaults/legacy/.obsidian/plugins/obsidian-list-callouts/data.json'
+);
 
 const OUT_DIR = path.resolve('screenshots');
 
@@ -747,6 +754,47 @@ async function captureIconPicker(name: string): Promise<void> {
   await captureBothSchemes(name, 'picker', original, crop);
 }
 
+/**
+ * Capture the import row on its own.
+ *
+ * The row is only rendered when the original plugin's settings are in the
+ * vault, and that is decided once when the plugin loads -- so the file is
+ * staged and the plugin reloaded first. Runs last, so no other capture sees
+ * the row.
+ */
+async function captureImportRow(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  await writeLegacyData(await fs.readFile(LEGACY_DATA, 'utf8'));
+  await reloadPlugin();
+
+  const { original } = await enterSettingsWindow();
+
+  const crop = await browser.execute((pad: number) => {
+    const row = Array.from(
+      document.querySelectorAll<HTMLElement>('.setting-item')
+    ).find((el) =>
+      (el.querySelector('.setting-item-name')?.textContent ?? '').startsWith(
+        'Import from'
+      )
+    );
+    if (!row) throw new Error('No import row in the settings tab');
+
+    const r = row.getBoundingClientRect();
+    const left = Math.max(r.left - pad, 0);
+    const top = Math.max(r.top - pad, 0);
+
+    return {
+      x: left,
+      y: top,
+      width: Math.min(r.right + pad, window.innerWidth) - left,
+      height: Math.min(r.bottom + pad, window.innerHeight) - top,
+    };
+  }, 16);
+
+  await captureBothSchemes(name, 'import', original, crop);
+}
+
 describe('README screenshots', function () {
   before(async function () {
     await browser.executeObsidian(({ app }) => {
@@ -840,5 +888,9 @@ describe('README screenshots', function () {
   it('captures the settings tab with the icon picker open', async function () {
     await setSettings(callouts(false));
     await captureIconPicker('settings-icon-picker.png');
+  });
+
+  it('captures the import offer', async function () {
+    await captureImportRow('settings-import.png');
   });
 });

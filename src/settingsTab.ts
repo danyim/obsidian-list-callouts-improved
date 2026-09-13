@@ -545,10 +545,17 @@ export class ListCalloutSettingTab extends PluginSettingTab {
       definitions.push({
         name: `Import from ${LEGACY_PLUGIN_NAME}`,
         desc: `Settings from ${LEGACY_PLUGIN_NAME}, the plugin this one was forked from, were found in this vault. Importing replaces your current callouts.`,
-        action: () => {
-          new ConfirmImportModal(this.plugin.app, () => {
-            void this.runImport();
-          }).open();
+        render: (setting: Setting) => {
+          setting.addButton((btn) =>
+            btn
+              .setButtonText('Import')
+              .setCta()
+              .onClick(() => {
+                new ConfirmImportModal(this.plugin.app, () => {
+                  void this.runImport();
+                }).open();
+              })
+          );
         },
       });
     }

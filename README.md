@@ -84,6 +84,8 @@ Because this fork uses a new plugin id, Obsidian treats it as a separate plugin 
 
 If the original plugin's settings are still in your vault, the settings tab offers an **Import from List Callouts** button that copies them across, recolored built-ins and custom callouts alike. Importing replaces the current callouts, so it asks for confirmation first. The button only appears when there's something to import.
 
+![The Import from List Callouts row at the top of the settings tab, shown in light and dark mode](screenshots/settings-import.png)
+
 Once migrated, you should disable or delete the other plugin.
 
 ## Development
