@@ -1289,9 +1289,22 @@ describe('README screenshots', function () {
     await captureEditor('callout-icons.png', true, true);
   });
 
-  it('captures the highlight rendering', async function () {
-    // One prose paragraph, cropped to its height, with icons on so the
-    // picture shows the marker giving way to the callout's icon.
+  it('captures the highlight character rendering', async function () {
+    // One prose paragraph, cropped to its height, with the built-ins as
+    // shipped so the picture shows each highlight led by its character.
+    await openNote('Highlights.md');
+    await setSettings(callouts(false));
+    await captureEditor(
+      'highlight-characters.png',
+      true,
+      true,
+      '.lc-highlight-callout'
+    );
+  });
+
+  it('captures the highlight icon rendering', async function () {
+    // The same paragraph with icons on, so the picture shows the character
+    // giving way to the callout's icon.
     await openNote('Highlights.md');
     await setSettings(callouts(true));
     await captureEditor('highlights.png', true, true, '.lc-highlight-callout');

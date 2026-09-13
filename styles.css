@@ -225,9 +225,15 @@ settings:
   background-color: transparent;
 }
 
+/* Styled like the list marker, so a highlight's character reads as the
+   same callout as the list item's. The gap sits on the span rather than
+   the svg so the character and the icon are spaced from the text alike. */
 .lc-highlight-marker {
+  font-family: var(--font-monospace);
+  font-weight: bold;
   color: rgb(var(--lc-callout-marker-color, var(--lc-callout-color)));
   pointer-events: none;
+  margin-right: 0.25em;
 }
 
 .lc-highlight-marker > svg {
@@ -235,7 +241,6 @@ settings:
   width: 1em;
   height: 1em;
   top: 0.125em;
-  margin-right: 0.25em;
 }
 
 /* Settings */

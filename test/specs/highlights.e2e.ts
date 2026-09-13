@@ -91,12 +91,25 @@ describe('Highlight rendering in live preview', function () {
     }
   });
 
-  it('hides the character and the space', async function () {
+  it('hides the raw character and the space', async function () {
     const text = await editorLineText('Important');
 
     expect(text).toContain('Important');
     expect(text).not.toContain('& ');
     expect(text).not.toContain('==');
+  });
+
+  // Like a list callout, a highlight without an icon is still led by its
+  // character -- otherwise a plain built-in shows nothing but a tint, and
+  // which callout it is has to be guessed from the color.
+  it('shows the character as the marker when no icon is set', async function () {
+    const spans = await editorHighlights();
+
+    for (const char of BUILT_IN_CHARS) {
+      const marked = spans.find((s) => s.char === char && s.marker !== null);
+      expect(marked?.marker).toBe(char);
+      expect(marked.hasIcon).toBe(false);
+    }
   });
 
   it('reveals the markup while the caret is inside', async function () {
@@ -186,6 +199,7 @@ describe('Highlight rendering in live preview', function () {
       'the icon widget did not appear'
     );
 
+    expect(spans.find((s) => s.char === '&' && s.hasIcon).marker).toBe('');
     expect(spans.some((s) => s.char === '?' && s.hasIcon)).toBe(false);
 
     await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
@@ -274,6 +288,16 @@ describe('Highlight rendering in reading mode', function () {
     expect(important.text).toBe('Important');
   });
 
+  it('shows the character as the marker when no icon is set', async function () {
+    const marks = await readingHighlights();
+
+    for (const char of BUILT_IN_CHARS) {
+      const mark = marks.find((m) => m.char === char);
+      expect(mark.marker).toBe(char);
+      expect(mark.hasIcon).toBe(false);
+    }
+  });
+
   it('decorates two highlights on one line separately', async function () {
     const marks = await readingHighlights();
 
@@ -311,6 +335,7 @@ describe('Highlight rendering in reading mode', function () {
     );
 
     expect(marks.find((m) => m.char === '&').hasIcon).toBe(true);
+    expect(marks.find((m) => m.char === '&').marker).toBe('');
     expect(marks.find((m) => m.char === '?').hasIcon).toBe(false);
 
     await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));

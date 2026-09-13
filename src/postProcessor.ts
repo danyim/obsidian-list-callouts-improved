@@ -99,14 +99,20 @@ function decorateHighlights(el: HTMLElement, config: CalloutConfig) {
     mark.setAttribute('data-callout', callout.char);
     applyCalloutColors(mark, callout);
 
-    if (callout.icon) {
-      mark.prepend(
-        createSpan(
-          { cls: 'lc-highlight-marker', attr: { 'aria-hidden': 'true' } },
-          (span) => setIcon(span, callout.icon)
-        )
-      );
-    }
+    mark.prepend(
+      createSpan(
+        {
+          text: callout.char,
+          cls: 'lc-highlight-marker',
+          attr: { 'aria-hidden': 'true' },
+        },
+        (span) => {
+          if (callout.icon) {
+            setIcon(span, callout.icon);
+          }
+        }
+      )
+    );
   });
 }
 
