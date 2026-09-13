@@ -555,10 +555,6 @@ export class ListCalloutSettingTab extends PluginSettingTab {
 
     definitions.push(
       {
-        name: 'Style settings',
-        desc: this.styleSettingsDesc(),
-      },
-      {
         type: 'group',
         heading: 'Highlights',
         items: [
@@ -600,13 +596,30 @@ export class ListCalloutSettingTab extends PluginSettingTab {
           },
         },
       },
+      // Below the list rather than at the top of the tab: the padding and
+      // intensity it points to, and the characters it warns about, are the
+      // callouts' concern. A list definition holds only its rows, so this is
+      // the nearest an aside can sit to them.
+      {
+        name: 'Style settings',
+        desc: this.styleSettingsDesc(),
+      },
       {
         name: 'Reset to defaults',
         desc: RESET_DESC,
-        action: () => {
-          new ConfirmResetModal(this.plugin.app, () => {
-            void this.runReset();
-          }).open();
+        // A real button, styled as the destructive step it is, rather than
+        // the link-like row an `action` definition renders as.
+        render: (setting: Setting) => {
+          setting.addButton((btn) =>
+            btn
+              .setButtonText('Reset')
+              .setWarning()
+              .onClick(() => {
+                new ConfirmResetModal(this.plugin.app, () => {
+                  void this.runReset();
+                }).open();
+              })
+          );
         },
       }
     );
