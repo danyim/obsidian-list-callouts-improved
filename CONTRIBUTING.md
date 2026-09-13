@@ -116,10 +116,15 @@ Review is usually quick. If a PR goes quiet, a nudge on the thread is fine.
 
 ## Releases
 
-For maintainers. `npm run bump` updates `package.json`, `manifest.json` and
-`versions.json`. `npm run release` commits, tags and pushes, which triggers the
-release workflow -- it builds the plugin and creates the GitHub release, with
-notes generated from the commits since the last tag.
+For maintainers. `npm version <x.y.z>` does the whole bump: it updates
+`package.json`, runs the `version` script to sync `manifest.json` and
+`versions.json`, commits, tags, and (via `postversion`) pushes the branch and
+the tag. The pushed tag triggers the release workflow, which builds the
+plugin, attests the release assets, and creates a **draft** GitHub release
+with notes generated from the commits since the last tag.
+
+Check the draft over on GitHub -- assets and generated notes -- then publish
+it from there. Nothing goes out to users until you do.
 
 `minAppVersion` in `manifest.json` is the floor the tests are pinned against, so
 raising it means updating `config/wdio.conf.mts` too.
