@@ -63,33 +63,6 @@ settings:
     max: 60
     step: 1
   -
-    id: lc-bg-left
-    title: "Callout Padding: Left"
-    type: variable-number-slider
-    default: 21
-    format: px
-    min: 0
-    max: 60
-    step: 1
-  -
-    id: lc-bg-left-checkbox-lp
-    title: "Callout Padding: Left (live preview checkbox)"
-    type: variable-number-slider
-    default: 28
-    format: px
-    min: 0
-    max: 60
-    step: 1
-  -
-    id: lc-bg-left-checkbox
-    title: "Callout Padding: Left (source checkbox)"
-    type: variable-number-slider
-    default: 55
-    format: px
-    min: 0
-    max: 60
-    step: 1
-  -
     id: lc-bg-top-reading
     title: "Callout Padding: Top (reading mode)"
     type: variable-number-slider
@@ -131,9 +104,6 @@ settings:
   --lc-bg-top: 0px;
   --lc-bg-right: 0px;
   --lc-bg-bottom: 0px;
-  --lc-bg-left: 21px;
-  --lc-bg-left-checkbox: 55px;
-  --lc-bg-left-checkbox-lp: 28px;
 
   --lc-bg-top-reading: 0px;
   --lc-bg-right-reading: 0px;
@@ -147,6 +117,20 @@ settings:
   --lc-highlight-opacity-dark: 0.15;
 }
 
+/* `left: 0` plus the inherited padding below is deliberate, not an
+   oversight: CodeMirror sets that padding per line to the exact rendered
+   width of that line's own list marker -- bullet, checkbox or number alike
+   -- so `background-clip: content-box` excludes precisely the marker's own
+   footprint from the paint, whatever it is. A fixed pixel offset here
+   instead (as this used to read, via --lc-bg-left and its checkbox
+   variants) sits behind a *specific* marker width correctly, but every
+   other line's own inherited padding is added on top of that same fixed
+   number rather than measured from it -- so a marker wider than the one the
+   constant was tuned against (mgmeyers/obsidian-list-callouts#91: a numbered
+   list's marker widens past a single digit, e.g. "10." over "1.") is left
+   with a growing strip of its own left edge outside the highlight. There is
+   no fixed constant that cancels a per-line dynamic value for every line;
+   zero offset is the only one that does not grow or shrink with it. */
 .lc-list-bg {
   background-color: var(--background-primary);
   background-clip: content-box;
@@ -154,19 +138,11 @@ settings:
   top: calc(-1 * var(--lc-bg-top));
   right: calc(-1 * var(--lc-bg-right));
   bottom: calc(-1 * var(--lc-bg-bottom));
-  left: calc(-1 * var(--lc-bg-left));
+  left: 0;
   display: block;
   padding: inherit;
   z-index: -1;
   pointer-events: none;
-}
-
-.HyperMD-task-line > .lc-list-bg {
-  left: calc(-1 * var(--lc-bg-left-checkbox-lp));
-}
-
-.markdown-source-view:not(.is-live-preview) .HyperMD-task-line > .lc-list-bg {
-  left: calc(-1 * var(--lc-bg-left-checkbox));
 }
 
 .lc-list-bg::after {
