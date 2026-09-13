@@ -245,7 +245,7 @@ export async function clickModalButton(label: string): Promise<void> {
     return true;
   }, label);
 
-  if (!clicked) throw new Error(`No modal button labelled "${label}"`);
+  if (!clicked) throw new Error(`No modal button labeled "${label}"`);
 }
 
 /**

@@ -125,11 +125,11 @@ describe('Highlight rendering in live preview', function () {
 
   // CodeMirror renders one highlight as two of our spans: one around the
   // marker widget on its own, and one around the text nested inside the span
-  // Obsidian paints its own yellow on. If that yellow is not cancelled, the
+  // Obsidian paints its own yellow on. If that yellow is not canceled, the
   // text is blended over it (cyan came out green) while the marker is not, so
-  // an icon sat on a different colour from its text -- and nothing else in
+  // an icon sat on a different color from its text -- and nothing else in
   // this file notices, because classes and attributes are all still right.
-  it('paints the callout colour and nothing else', async function () {
+  it('paints the callout color and nothing else', async function () {
     const paint = await browser.executeObsidian(({ app }) => {
       return Array.from(
         app.workspace.containerEl.querySelectorAll<HTMLElement>(

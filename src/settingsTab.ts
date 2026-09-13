@@ -274,7 +274,7 @@ export function buildCalloutRow(
 }
 
 /**
- * Collects the character, icon and colour for a new custom callout.
+ * Collects the character, icon and color for a new custom callout.
  */
 export class NewCalloutModal extends Modal {
   private callout: Callout = {
@@ -439,12 +439,12 @@ export class ListCalloutSettingTab extends PluginSettingTab {
   private highlightsDesc(): DocumentFragment {
     return createFragment((f) => {
       f.appendText(
-        'Colour inline highlights that start with a callout character. '
+        'Color inline highlights that start with a callout character. '
       );
       f.append(createEl('code', { text: '==& text==' }));
       f.appendText(' becomes a highlight in the ');
       f.append(createEl('code', { text: '&' }));
-      f.appendText(" callout's colour, with its icon in front if one is set.");
+      f.appendText(" callout's color, with its icon in front if one is set.");
     });
   }
 

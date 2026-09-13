@@ -17,7 +17,7 @@ The characters can also be replaced with icons:
 
 ![The same note with each callout character replaced by an icon, shown in light and dark mode](screenshots/callout-icons.png)
 
-Characters, icons and colours are all configurable, and you can add your own callouts. **Set icon** opens a searchable picker of every icon the running copy of Obsidian knows about, so it stays current as Obsidian adds icons:
+Characters, icons and colors are all configurable, and you can add your own callouts. **Set icon** opens a searchable picker of every icon the running copy of Obsidian knows about, so it stays current as Obsidian adds icons:
 
 ![The plugin settings tab with the icon picker open, in light and dark mode](screenshots/settings-icon-picker.png)
 
@@ -25,9 +25,9 @@ The padding of the callouts and the intensity of their backgrounds can be adjust
 
 ## Highlights
 
-The same characters work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout character and a space, and it takes that callout's colour — and its icon, if one is set:
+The same characters work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout character and a space, and it takes that callout's color — and its icon, if one is set:
 
-![A paragraph with several inline highlights, each in a different callout colour and led by that callout's icon, shown in light and dark mode](screenshots/highlights.png)
+![A paragraph with several inline highlights, each in a different callout color and led by that callout's icon, shown in light and dark mode](screenshots/highlights.png)
 
 Highlights and list items share one set of callouts, so `==& text==` is yellow because the `&` callout is yellow. The character and the space are hidden when the note is rendered and reappear in Live Preview while the cursor is inside the highlight, the same way the `==` markers do.
 
@@ -36,7 +36,7 @@ Two settings, under **Highlights** in the settings tab:
 - **Highlight callouts** turns the feature on and off.
 - **Require a space after the character** is on by default, so `==& text==` is a callout and `==!important==` is left alone. Turn it off and `==&text==` works too.
 
-The intensity of the highlight colour can be adjusted using the Style Settings plugin, alongside the callout padding.
+The intensity of the highlight color can be adjusted using the Style Settings plugin, alongside the callout padding.
 
 ## Managing callouts
 
@@ -45,7 +45,7 @@ any of them can be edited, reordered by dragging, or deleted — the built-in on
 included. Nothing is fixed, so a vault can end up with a completely different set, or
 with none at all.
 
-![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon and colour, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
+![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon and color, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
 
 **Reset to defaults**, at the bottom of the settings tab, puts the original seven
 back. It replaces everything currently configured, so callouts you have added and

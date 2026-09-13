@@ -9,7 +9,7 @@ import { openNote } from '../helpers';
  * Ranges are given as offsets from the start of a line in the note, so a test
  * can describe where a range boundary falls without knowing the document's
  * byte offsets. A builder that throws fails the test on the spot, which is the
- * behaviour under test as much as the count is.
+ * behavior under test as much as the count is.
  */
 function buildFor(
   ranges: [number, number][],

@@ -159,7 +159,7 @@ describe('Editing callouts', function () {
     });
   });
 
-  it('keeps a recoloured built-in across a plugin reload', async function () {
+  it('keeps a recolored built-in across a plugin reload', async function () {
     const settings = await getSettings();
     settings[0].color = '7, 7, 7';
     await setSettings(settings);
@@ -315,7 +315,7 @@ describe('Resetting to defaults', function () {
     await closeSettings();
   });
 
-  it('leaves the callouts alone when the warning is cancelled', async function () {
+  it('leaves the callouts alone when the warning is canceled', async function () {
     const only = [{ char: '(', color: '9, 9, 9', custom: true }];
     await setSettings(only);
     await openPluginSettings();

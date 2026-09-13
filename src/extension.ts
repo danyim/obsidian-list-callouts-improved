@@ -102,7 +102,7 @@ export const highlightDecoration = (char: string, color: string) =>
     class: 'lc-highlight-callout',
     // Without this, the mark and the marker widget it wraps start at the same
     // position with the widget sorted first, which puts the widget's DOM node
-    // before the mark's span rather than inside it -- and the marker's colour
+    // before the mark's span rather than inside it -- and the marker's color
     // is set via a custom property on the mark, so it has to be a descendant.
     inclusiveStart: true,
     attributes: {

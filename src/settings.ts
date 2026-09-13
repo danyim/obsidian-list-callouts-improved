@@ -12,7 +12,7 @@ export interface Callout {
 }
 
 export interface HighlightSettings {
-  /** Colour inline highlights that begin with a callout character. */
+  /** Color inline highlights that begin with a callout character. */
   enabled: boolean;
   /**
    * Whether `==& text==` needs the space. Off, `==&text==` works too and a

@@ -66,7 +66,7 @@ function callouts(withIcons: boolean): Callout[] {
 }
 
 /**
- * Switch the colour scheme of whichever window is currently in focus.
+ * Switch the color scheme of whichever window is currently in focus.
  *
  * The theme-dark and theme-light body classes are what drive Obsidian's CSS
  * variables, and toggling them works in a popout window too, where the app
@@ -328,7 +328,7 @@ async function enterSettingsWindow(): Promise<{
 
   const pane = await settingsPane();
 
-  // Obsidian centres the settings column inside a much wider pane, which would
+  // Obsidian centers the settings column inside a much wider pane, which would
   // leave the image mostly empty background. Narrow the pane to the column.
   await browser.execute((selector: string) => {
     const el = document.querySelector<HTMLElement>(selector);
@@ -424,7 +424,7 @@ async function iconPickerCropRect(): Promise<CropRect> {
   });
 }
 
-/** Capture the whole viewport in both colour schemes, cropped to `crop`. */
+/** Capture the whole viewport in both color schemes, cropped to `crop`. */
 async function captureBothSchemes(
   name: string,
   label: string,
@@ -554,7 +554,7 @@ async function stackVertically(slices: PaneSlice[]): Promise<string> {
   }, slices);
 }
 
-/** Capture the whole of the plugin's settings tab, in both colour schemes. */
+/** Capture the whole of the plugin's settings tab, in both color schemes. */
 async function captureSettingsPage(name: string): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
 

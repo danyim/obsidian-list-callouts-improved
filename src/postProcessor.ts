@@ -75,7 +75,7 @@ function wrapLiContent(li: HTMLElement) {
 }
 
 /**
- * Colour the highlights whose text starts with a callout character.
+ * Color the highlights whose text starts with a callout character.
  *
  * <mark> is only ever produced by Obsidian's ==highlight== syntax, so unlike
  * the editor there is nothing to confirm: whatever is here is a highlight.
