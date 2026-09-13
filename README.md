@@ -3,11 +3,9 @@
 Create customized callouts in any list in Obsidian.
 
 > [!NOTE]
-> **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design.
+> **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design. Unfortunately that project has seen no activity since [September 2024](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) and appears to be abandoned the author.
 >
-> That project has seen no releases or commits since [**September 2024**](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) and appears to be abandoned, with issues and pull requests going unanswered.
->
-> This fork picks up maintenance so the plugin keeps working with current versions of Obsidian. Like the original, it is licensed under GPL-3.0.
+> This fork picks up maintenance and feature development so the plugin keeps working with current versions of Obsidian.
 
 Typing a configurable character at the beginning of a list item turns the item into a highlighted callout:
 
@@ -17,13 +15,9 @@ The characters can be replaced with icons:
 
 ![The same note with each callout character replaced by an icon, shown in light and dark mode](screenshots/callout-icons.png)
 
-Characters, icons and colors are all configurable, and you can add your own callouts. **Set icon** opens a searchable picker of every icon the running copy of Obsidian knows about, so it stays current as Obsidian adds icons:
+Characters, icons, and colors are all configurable, and you can add your own callouts:
 
 ![The plugin settings tab with the icon picker open and a tooltip naming the hovered icon, in light and dark mode](screenshots/settings-icon-picker.png)
-
-The color swatch opens a color picker:
-
-![The plugin settings tab with a callout's color picker open below its swatch, in light and dark mode](screenshots/settings-color-picker.png)
 
 A callout's color paints both its marker and its background. If the marker is hard to read against a faint background, switch **Default marker color** to **Custom marker color** and pick a color for the marker alone. The background keeps the callout's color, and the marker color also applies to that callout's highlights:
 
@@ -77,17 +71,15 @@ This is the same folder [Iconize](https://github.com/FlorianWoelki/obsidian-icon
 
 Icons are read when the plugin loads, so restart Obsidian or toggle the plugin after adding files. A name that an Obsidian icon already uses is skipped rather than replaced, and a file that is not usable SVG is skipped with a note in the console.
 
-## Coming from [List Callouts](https://github.com/mgmeyers/obsidian-list-callouts)
+## Migrating from [List Callouts](https://github.com/mgmeyers/obsidian-list-callouts)
 
 This fork uses a new plugin id, so Obsidian treats it as a separate plugin and your existing List Callouts settings won't carry over on their own.
 
-If the original plugin's settings are still in your vault, the settings tab offers an **Import from List Callouts** button that copies them across, recolored built-ins and custom callouts alike. Importing replaces the current callouts, so it asks for confirmation first.
-
-The button only appears when there is something to import. List Callouts writes its settings file the first time you change something in its settings tab, so if you never customized it there is no file, no button, and nothing to carry over: both plugins start from the same built-in callouts.
+If the original plugin's settings are still in your vault, the settings tab offers an **Import from List Callouts** button that copies them over.
 
 ![The Import from List Callouts row at the top of the settings tab, shown in light and dark mode](screenshots/settings-import.png)
 
-Once migrated, disable or delete the other plugin.
+Once migrated, disable or delete the old plugin.
 
 ## Development
 
@@ -97,4 +89,4 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for building the plugin and [docs
 
 [GPL-3.0](LICENSE.md)
 
-If this plugin is useful to you, consider [buying me a coffee](https://buymeacoffee.com/danyim).
+If this plugin is useful to you, please consider [buying me a coffee](https://buymeacoffee.com/danyim).
