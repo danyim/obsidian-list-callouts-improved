@@ -766,6 +766,52 @@ async function captureIconPicker(name: string): Promise<void> {
 }
 
 /**
+ * Capture the first callout's row with a custom marker color in effect, so
+ * the picture shows the dropdown on "Custom marker color", the second picker
+ * it reveals, and a marker painted apart from its background in the preview.
+ */
+async function captureMarkerColorRow(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { original } = await enterSettingsWindow();
+
+  // Scrolled from the row's own top, as the icon picker capture does: the
+  // pane ignores scrollIntoView(), and the margin keeps the row clear of the
+  // popout window's title bar.
+  await browser.execute(() => {
+    const row = document.querySelector<HTMLElement>('.lc-setting');
+    const scrollParent = row?.closest<HTMLElement>('.vertical-tab-content');
+    if (!row || !scrollParent) return;
+
+    const PAD = 40;
+    scrollParent.scrollTop = Math.max(
+      scrollParent.scrollTop + row.getBoundingClientRect().top - PAD,
+      0
+    );
+  });
+
+  const crop = await browser.execute((pad: number) => {
+    const row = document.querySelector<HTMLElement>('.lc-setting');
+    if (!row) throw new Error('No callout row in the settings tab');
+
+    // Less room below than around: the next row's label starts right under
+    // this one's border, and the picture is about this row alone.
+    const r = row.getBoundingClientRect();
+    const left = Math.max(r.left - pad, 0);
+    const top = Math.max(r.top - pad, 0);
+
+    return {
+      x: left,
+      y: top,
+      width: Math.min(r.right + pad, window.innerWidth) - left,
+      height: Math.min(r.bottom + 2, window.innerHeight) - top,
+    };
+  }, 16);
+
+  await captureBothSchemes(name, 'marker-color', original, crop);
+}
+
+/**
  * Capture the import row on its own.
  *
  * The row is only rendered when the original plugin's settings are in the
@@ -893,6 +939,14 @@ describe('README screenshots', function () {
   it('captures the settings tab with the icon picker open', async function () {
     await setSettings(callouts(false));
     await captureIconPicker('settings-icon-picker.png');
+  });
+
+  it('captures a callout with a custom marker color', async function () {
+    // The star's usual yellow stays on the background; the marker itself
+    // goes a dark amber that reads against it.
+    const [first, ...rest] = callouts(true);
+    await setSettings([{ ...first, markerColor: '180, 83, 9' }, ...rest]);
+    await captureMarkerColorRow('settings-marker-color.png');
   });
 
   it('captures the import offer', async function () {
