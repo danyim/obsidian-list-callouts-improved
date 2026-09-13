@@ -12,8 +12,10 @@
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --ignore-path config/.prettierignore --write \"./src/**/*.{ts,tsx}\"",
     "clean": "npm run prettier && npm run lint:fix",
+    "pretest": "npm run build",
     "test": "npm run test:e2e",
     "test:e2e": "scripts/xvfb-wm.sh wdio run ./config/wdio.conf.mts",
+    "prescreenshots": "npm run build",
     "screenshots": "scripts/xvfb-wm.sh wdio run ./config/wdio.screenshots.mts",
     "bump": "node scripts/version-bump.mjs && git add package.json manifest.json versions.json",
     "release": "git commit -m $npm_package_version && git tag $npm_package_version && git push && git push --tags"

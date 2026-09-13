@@ -8,6 +8,10 @@ which downloads and sandboxes its own copies of the app.
 npm test
 ```
 
+Both `npm test` and `npm run screenshots` build `main.js` first, so a fresh pull is
+enough -- Obsidian loads whatever build is in the checkout, and a stale one silently
+tests or captures the wrong code.
+
 By default this runs against Obsidian 1.13.4 and `latest`, on both the desktop and
 emulated-mobile UI. Override with:
 
