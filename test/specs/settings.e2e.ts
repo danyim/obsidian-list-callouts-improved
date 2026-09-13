@@ -25,6 +25,8 @@ import {
   iconInMenu,
   iconMenuCount,
   iconMenuGeometry,
+  iconTooltip,
+  isMobile,
   modalSubmitDisabled,
   modalText,
   openIconMenuInModal,
@@ -150,6 +152,15 @@ describe('Adding a callout', function () {
       await searchIconMenuFor('star', 'lucide-star');
       await clickIconInMenu('lucide-star');
       expect(await modalText()).not.toContain('Set icon');
+    });
+
+    it('names an icon in a tooltip as soon as it is hovered', async function () {
+      // Hover is a pointer thing; the emulated mobile UI has none.
+      if (await isMobile()) this.skip();
+
+      // Half of Obsidian's default tooltip delay, so this only passes if the
+      // picker asks for an instant one, with room for a loaded machine.
+      expect(await iconTooltip('lucide-activity', 500)).toBe('lucide-activity');
     });
 
     it('applies a chosen icon to the new callout', async function () {

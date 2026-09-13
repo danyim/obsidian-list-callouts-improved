@@ -19,7 +19,7 @@ The characters can also be replaced with icons:
 
 Characters, icons and colors are all configurable, and you can add your own callouts. **Set icon** opens a searchable picker of every icon the running copy of Obsidian knows about, so it stays current as Obsidian adds icons:
 
-![The plugin settings tab with the icon picker open, in light and dark mode](screenshots/settings-icon-picker.png)
+![The plugin settings tab with the icon picker open and a tooltip naming the hovered icon, in light and dark mode](screenshots/settings-icon-picker.png)
 
 The color swatch opens a color picker:
 

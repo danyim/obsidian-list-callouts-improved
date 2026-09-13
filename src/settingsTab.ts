@@ -13,6 +13,7 @@ import {
   TextComponent,
   debounce,
   setIcon,
+  setTooltip,
 } from 'obsidian';
 
 import { allIconIds, searchIcons } from './iconSearch';
@@ -157,6 +158,13 @@ function attachIconMenu(
           },
           (item) => {
             setIcon(item, icon);
+            // The id, not a prettier form of it: it is what search matches
+            // on and what the callout stores, so what you read is what you
+            // would type. Shown at once -- the picker is a wall of small
+            // glyphs, and a hover is a question about one of them. A delay
+            // of 1 rather than 0: Obsidian treats 0 as "not set" and falls
+            // back to its default second of hover.
+            setTooltip(item, icon, { delay: 1 });
             item.onClickEvent(() => {
               btn.buttonEl.empty();
               btn.setIcon(icon);
