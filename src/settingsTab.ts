@@ -6,7 +6,6 @@ import {
   ExtraButtonComponent,
   Modal,
   Notice,
-  Platform,
   PluginSettingTab,
   Setting,
   SettingDefinitionItem,
@@ -97,13 +96,19 @@ function attachIconMenu(
         2 -
         (scrollParent?.scrollTop ?? 0)
       }px;`;
-      if (Platform.isMobile) {
-        pos += ` right: ${
-          btnEl.offsetParent.clientWidth -
-          (btnEl.offsetLeft + btnEl.offsetWidth)
-        }px;`;
-      } else {
+      // Hang the menu from the button's left edge when it fits, else from its
+      // right edge. Which one that is depends on where the button landed in
+      // its row: the inputs wrap, so on a narrow (mobile) settings pane the
+      // button can sit at either side.
+      const parentWidth = btnEl.offsetParent.clientWidth;
+      const fitsToTheRight =
+        btnEl.offsetLeft + menuRef.offsetWidth <= parentWidth;
+      if (fitsToTheRight) {
         pos += ` left: ${btnEl.offsetLeft}px;`;
+      } else {
+        pos += ` right: ${
+          parentWidth - (btnEl.offsetLeft + btnEl.offsetWidth)
+        }px;`;
       }
       menuRef.style.cssText = pos;
     };
