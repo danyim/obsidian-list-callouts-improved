@@ -110,6 +110,30 @@ async function sideBySide(light: string, dark: string): Promise<Buffer> {
       ctx.drawImage(a, 0, 0);
       ctx.drawImage(b, a.width + gap, 0);
 
+      // Nothing is left transparent: the gap and whatever lies below the
+      // shorter capture take on the background of the half they belong
+      // to, so the seam sits in the middle and no viewer shows a
+      // checkerboard.
+      const cornerColor = (img: HTMLImageElement, x: number) => {
+        const probe = document.createElement('canvas');
+        probe.width = 1;
+        probe.height = 1;
+        probe.getContext('2d').drawImage(img, x, 0, 1, 1, 0, 0, 1, 1);
+        const [r, g, bl] = probe.getContext('2d').getImageData(0, 0, 1, 1).data;
+        return `rgb(${r}, ${g}, ${bl})`;
+      };
+
+      const half = Math.floor(gap / 2);
+      const mid = a.width + half;
+
+      ctx.fillStyle = cornerColor(a, a.width - 1);
+      ctx.fillRect(a.width, 0, half, canvas.height);
+      ctx.fillRect(0, a.height, a.width, canvas.height - a.height);
+
+      ctx.fillStyle = cornerColor(b, 0);
+      ctx.fillRect(mid, 0, gap - half, canvas.height);
+      ctx.fillRect(a.width + gap, b.height, b.width, canvas.height - b.height);
+
       return canvas.toDataURL('image/png').split(',')[1];
     },
     light,
@@ -150,10 +174,10 @@ async function prepareEditor(hideTitle = false): Promise<number> {
       // element. CodeMirror keeps the sizer at least as tall as the
       // scroller, so this is what decides whether the whole note made it
       // into the image.
-      const lines = document.querySelectorAll(
-        '.markdown-source-view .cm-line'
-      );
-      const last = lines[lines.length - 1];
+      // The last block, not the last .cm-line: a table or callout at the end
+      // of the note is a widget, not a line.
+      const last = document.querySelector('.markdown-source-view .cm-content')
+        ?.lastElementChild;
       if (!last) return -1;
 
       return Math.ceil(
@@ -328,14 +352,27 @@ async function enterSettingsWindow(): Promise<{
 
   const pane = await settingsPane();
 
+  // The popout opens at whatever size Obsidian last used, which on macOS is
+  // too small for the tab sidebar plus a 720px column. Ask for room; a tiling
+  // window manager (the Linux capture setup) may decline, and there the
+  // window already fills the screen. (The driver's own setWindowSize is not
+  // implemented for Electron popouts, hence the DOM call.)
+  await browser.execute(() => window.resizeTo(1280, 1000));
+  await browser.pause(250);
+
   // Obsidian centers the settings column inside a much wider pane, which would
-  // leave the image mostly empty background. Narrow the pane to the column.
+  // leave the image mostly empty background. Narrow the pane to the column --
+  // or to what the window can show, if that is less: anything past the
+  // window's edge is simply absent from a screenshot.
   await browser.execute((selector: string) => {
     const el = document.querySelector<HTMLElement>(selector);
     if (!el) return;
-    el.style.setProperty('width', '720px', 'important');
-    el.style.setProperty('max-width', '720px', 'important');
     el.style.setProperty('padding', '16px', 'important');
+
+    const room = window.innerWidth - el.getBoundingClientRect().left - 16;
+    const width = Math.min(720, room);
+    el.style.setProperty('width', `${width}px`, 'important');
+    el.style.setProperty('max-width', `${width}px`, 'important');
   }, pane);
 
   return { pane, original };
@@ -478,12 +515,21 @@ async function shotPaneScrolled(pane: string, label: string): Promise<string> {
       };
     }, pane);
 
-  // The scrollbar thumb would otherwise be stitched in at a different height
-  // in every slice.
   await browser.execute((selector: string) => {
-    document
-      .querySelector<HTMLElement>(selector)
-      .style.setProperty('scrollbar-width', 'none');
+    const el = document.querySelector<HTMLElement>(selector);
+
+    // Pin the pane's box inside the window. A box taller than the window
+    // keeps its bottom rows below the edge, where scrolling never brings
+    // them and an element shot never reaches, and every slice would come
+    // out shorter than the clientHeight the stepping assumes.
+    const height = window.innerHeight - el.getBoundingClientRect().top - 16;
+    el.style.setProperty('height', `${height}px`, 'important');
+    el.style.setProperty('max-height', `${height}px`, 'important');
+    el.style.setProperty('overflow-y', 'auto', 'important');
+
+    // The scrollbar thumb would otherwise be stitched in at a different
+    // height in every slice.
+    el.style.setProperty('scrollbar-width', 'none');
   }, pane);
 
   const slices: PaneSlice[] = [];
@@ -720,14 +766,16 @@ describe('README screenshots', function () {
 
   it('captures the multi-line highlight rendering', async function () {
     // Obsidian pairs an opener with the next `==` wherever it falls, so a
-    // highlight can cross a line break; this shows the callout doing the same.
+    // highlight can cross a line break, even between list items; and callout
+    // blocks and tables render through the post-processor. Wait for the
+    // table, the last of these to draw.
     await openNote('Multi-line highlight.md');
     await setSettings(callouts(true));
     await captureEditor(
       'highlight-multiline.png',
       true,
       true,
-      '.lc-highlight-callout'
+      '.markdown-source-view table .lc-highlight-callout'
     );
   });
 
