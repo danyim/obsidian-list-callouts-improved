@@ -11,7 +11,8 @@ for this project's actual conventions. For anything not covered here, see
   fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts).
 - Entry point: `src/main.ts`, bundled to `main.js` by esbuild and loaded by
   Obsidian.
-- Release artifacts: `main.js`, `manifest.json`, `styles.css`.
+- Release artifacts: `main.js`, `manifest.json`, `styles.css`, plus a
+  `list-callouts-improved-<version>.zip` of the three for manual installs.
 - Makes no network requests. Settings are the only persisted state, stored via
   `loadData()`/`saveData()` (`data.json` in the plugin's config folder).
 
@@ -141,8 +142,9 @@ npm version <x.y.z>   # bump package.json, sync manifest.json + versions.json,
 The `version` and `postversion` npm lifecycle scripts (see `package.json`)
 do the syncing and pushing; `scripts/version-bump.mjs` is what actually
 writes `manifest.json`/`versions.json`. Pushing the tag triggers
-`.github/workflows/release.yml`, which builds the plugin, generates GitHub
-artifact attestations for `main.js` and `styles.css`
+`.github/workflows/release.yml`, which builds the plugin, zips the three
+release files into a `list-callouts-improved/` folder for manual installs,
+generates GitHub artifact attestations for `main.js`, `styles.css` and the zip
 (`actions/attest-build-provenance`), and creates a **draft** GitHub release
 with those files attached — a maintainer reviews and publishes it manually.
 

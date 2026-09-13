@@ -31,10 +31,30 @@ jobs:
           npm ci
           npm run build
 
+      # Obsidian's community catalog installs from the three loose files, but
+      # a manual install needs them inside a folder named after the plugin id
+      # under .obsidian/plugins/. Ship a zip laid out that way so it can be
+      # extracted there as-is (mgmeyers/obsidian-list-callouts#68).
+      - name: Package zip for manual install
+        id: zip
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          id="$(jq -r .id manifest.json)"
+          zip="$id-$tag.zip"
+
+          mkdir "$id"
+          cp main.js manifest.json styles.css "$id/"
+          zip -r "$zip" "$id"
+
+          echo "path=$zip" >> "$GITHUB_OUTPUT"
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: 'main.js, styles.css'
+          subject-path: |
+            main.js
+            styles.css
+            ${{ steps.zip.outputs.path }}
 
       - name: Create release
         env:
@@ -46,4 +66,4 @@ jobs:
             --title="$tag" \
             --generate-notes \
             --draft \
-            main.js manifest.json styles.css
+            main.js manifest.json styles.css "${{ steps.zip.outputs.path }}"

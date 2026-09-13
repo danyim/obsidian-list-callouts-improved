@@ -121,7 +121,10 @@ For maintainers. `npm version <x.y.z>` does the whole bump: it updates
 `versions.json`, commits, tags, and (via `postversion`) pushes the branch and
 the tag. The pushed tag triggers the release workflow, which builds the
 plugin, attests the release assets, and creates a **draft** GitHub release
-with notes generated from the commits since the last tag.
+with notes generated from the commits since the last tag. The assets are the
+three loose files the community catalog installs from (`main.js`,
+`manifest.json`, `styles.css`) plus `list-callouts-improved-<version>.zip`,
+which wraps them in a `list-callouts-improved/` folder for manual installs.
 
 Check the draft over on GitHub -- assets and generated notes -- then publish
 it from there. Nothing goes out to users until you do.
