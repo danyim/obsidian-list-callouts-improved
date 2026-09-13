@@ -436,6 +436,46 @@ export function buildCalloutDecos(
   return builder.finish();
 }
 
+/**
+ * A nested list line's own `.cm-hmd-list-indent` wraps one span per ancestor
+ * indent level -- CodeMirror renders it as a real, measurable element, unlike
+ * the marker width folded into the line's own `padding-inline-start`, which
+ * has no such breakdown between "ancestor indent" and "this item's own
+ * marker." Its right edge is exactly the boundary `CalloutBackground` needs:
+ * everything before it is indentation carried over from parent list items
+ * (excluded), everything after is this item's own marker and text
+ * (covered). A top-level line has no ancestors and so no such element,
+ * which is also the case in which the background should reach the line's
+ * own left edge, hence the 0 fallback.
+ */
+function alignCalloutBackgrounds(view: EditorView) {
+  view.requestMeasure<{ el: HTMLElement; indent: number }[]>({
+    read(view) {
+      return Array.from(
+        view.dom.querySelectorAll<HTMLElement>('.lc-list-bg')
+      ).flatMap((el) => {
+        const line = el.closest<HTMLElement>('.cm-line');
+        if (!line) return [];
+
+        const indentGuide = line.querySelector<HTMLElement>(
+          '.cm-hmd-list-indent'
+        );
+        const indent = indentGuide
+          ? indentGuide.getBoundingClientRect().right -
+            line.getBoundingClientRect().left
+          : 0;
+
+        return [{ el, indent: Math.max(0, indent) }];
+      });
+    },
+    write(results) {
+      for (const { el, indent } of results) {
+        el.style.left = `${indent}px`;
+      }
+    },
+  });
+}
+
 export const calloutExtension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -449,6 +489,7 @@ export const calloutExtension = ViewPlugin.fromClass(
       const stats: BuildStats = { highlights: 0 };
       this.decorations = buildCalloutDecos(view, state, stats);
       this.hasHighlights = stats.highlights > 0;
+      alignCalloutBackgrounds(view);
     }
 
     update(update: ViewUpdate) {

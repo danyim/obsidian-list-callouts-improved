@@ -117,20 +117,20 @@ settings:
   --lc-highlight-opacity-dark: 0.15;
 }
 
-/* `left: 0` reaches the line's own edge, covering the list marker itself --
-   bullet, checkbox or number alike -- rather than excluding it. An earlier
-   version of this rule instead clipped to content-box with padding inherited
-   from the line, which CodeMirror sets per line to that line's own marker
-   width, to exclude exactly the marker from the paint; the fixed pixel
-   offset that went with it (--lc-bg-left and its checkbox variants) canceled
-   that padding correctly for one specific marker width, but every other
-   line's own inherited padding was added on top of that same fixed number
-   rather than measured from it, so a marker wider than the one the constant
-   was tuned against (mgmeyers/obsidian-list-callouts#91: a numbered list's
-   marker widens past a single digit, e.g. "10." over "1.") was left with a
-   growing, uncovered strip along its own left edge. Covering the marker
-   outright sidesteps that per-line arithmetic entirely -- there's no marker
-   width left to measure or cancel. */
+/* `left: 0` is the fallback for a top-level line -- one with no ancestor
+   list items -- which is also where it belongs: reaching the line's own
+   edge covers the list marker itself (bullet, checkbox or number alike)
+   rather than excluding it. `alignCalloutBackgrounds` in extension.ts
+   overwrites it for a nested line, where "the line's own edge" reaches
+   through every ancestor's own indentation too far left, past this item's
+   own marker (mgmeyers/obsidian-list-callouts#91's numbered-list case is
+   the same defect once flattened to one level: a fixed offset, tuned
+   against one marker width, either excluded too little of a wider one or,
+   at a flat 0, correctly covered every width but had no per-line ancestor
+   indentation to exclude in the first place). CodeMirror renders that
+   indentation as a real, measurable element (`.cm-hmd-list-indent`) with no
+   equivalent for "this item's own marker width," which is why the fix
+   measures the former rather than computing the latter. */
 .lc-list-bg {
   background-color: var(--background-primary);
   position: absolute;
