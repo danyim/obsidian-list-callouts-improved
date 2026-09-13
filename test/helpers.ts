@@ -176,35 +176,114 @@ export async function clickAddCallout(): Promise<void> {
 }
 
 /**
- * Text of the topmost dialog, or '' when none is open.
+ * Run `op` against the topmost dialog, in whichever window it opened.
  *
- * Two wrinkles: on Obsidian 1.13 desktop the settings tab lives in its own
- * window, so dialogs must be looked up in that window's document rather than
- * the main one; and the settings modal itself is excluded, since its own text
- * contains labels like "Add callout".
+ * On Obsidian 1.13 desktop the settings tab lives in its own window, but a
+ * dialog opens in whichever window is *active* -- and a synthetic click on a
+ * settings control never focuses the popout, so the dialog usually lands in
+ * the main window instead. Looking in only one document was a flake that
+ * failed one run in several: the dialog was open, just not where the helper
+ * looked. Both documents are searched, the settings window's first.
+ *
+ * The settings modal itself is excluded, since its own text contains labels
+ * like "Add callout".
  */
+function inTopmostModal<T>(
+  op: 'text' | 'type' | 'click' | 'cancel' | 'disabled',
+  arg = ''
+): Promise<T> {
+  return browser.executeObsidian(
+    ({ app }, what: string, value: string) => {
+      const root = (app as any).setting.activeTab?.containerEl as
+        | HTMLElement
+        | undefined;
+      const docs = [root?.ownerDocument, document].filter(
+        (d, i, all): d is Document => !!d && all.indexOf(d) === i
+      );
+
+      let modal: HTMLElement | null = null;
+      for (const doc of docs) {
+        const found = doc.querySelectorAll<HTMLElement>(
+          '.modal-container .modal:not(.mod-settings)'
+        );
+        if (found.length) {
+          modal = found[found.length - 1];
+          break;
+        }
+      }
+
+      const button = () =>
+        modal
+          ? Array.from(modal.querySelectorAll('button')).find(
+              (b) => (b.textContent ?? '').trim() === value
+            )
+          : undefined;
+
+      switch (what) {
+        case 'text':
+          return (modal?.textContent ?? '').trim();
+        case 'type': {
+          const input = modal?.querySelector<HTMLInputElement>(
+            'input[type="text"]'
+          );
+          if (!input) return false;
+          input.value = value;
+          input.dispatchEvent(new Event('input'));
+          return true;
+        }
+        case 'click': {
+          const btn = button();
+          btn?.click();
+          return !!btn;
+        }
+        case 'cancel': {
+          Array.from(modal?.querySelectorAll('button') ?? [])
+            .find((b) => (b.textContent ?? '').trim() === 'Cancel')
+            ?.click();
+          return true;
+        }
+        case 'disabled':
+          return !!button()?.disabled;
+      }
+    },
+    op,
+    arg
+  ) as Promise<T>;
+}
+
+/** Text of the topmost dialog, or '' when none is open. */
 export function modalText(): Promise<string> {
+  return inTopmostModal<string>('text');
+}
+
+/** Where dialogs are when one fails to show up; appended to the timeout. */
+function modalWhereabouts(): Promise<string> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const modals = doc.querySelectorAll(
-      '.modal-container .modal:not(.mod-settings)'
-    );
-    const modal = modals[modals.length - 1];
-    return (modal?.textContent ?? '').trim();
+      | HTMLElement
+      | undefined;
+    const doc = root?.ownerDocument;
+    const count = (d: Document | undefined) =>
+      d ? d.querySelectorAll('.modal-container .modal').length : -1;
+    return `settings window has ${count(doc)} dialog(s), main window ${count(document)}${
+      doc === document ? ' (same window)' : ''
+    }`;
   });
 }
 
 export async function waitForModal(containing: string): Promise<void> {
-  await browser.waitUntil(
-    async () => (await modalText()).includes(containing),
-    {
-      timeout: 10000,
-      interval: 200,
-      timeoutMsg: `no modal containing "${containing}"`,
-    }
-  );
+  try {
+    await browser.waitUntil(
+      async () => (await modalText()).includes(containing),
+      {
+        timeout: 10000,
+        interval: 200,
+        timeoutMsg: `no modal containing "${containing}"`,
+      }
+    );
+  } catch (e) {
+    throw new Error(`${(e as Error).message}; ${await modalWhereabouts()}`);
+  }
 }
 
 /**
@@ -212,40 +291,16 @@ export async function waitForModal(containing: string): Promise<void> {
  * input event, which is what Obsidian's TextComponent listens for.
  */
 export async function typeInModal(value: string): Promise<void> {
-  await browser.executeObsidian(({ app }, v) => {
-    const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const modals = doc.querySelectorAll(
-      '.modal-container .modal:not(.mod-settings)'
-    );
-    const modal = modals[modals.length - 1] as HTMLElement;
-    const input = modal.querySelector<HTMLInputElement>('input[type="text"]');
-    input.value = v;
-    input.dispatchEvent(new Event('input'));
-  }, value);
+  if (!(await inTopmostModal<boolean>('type', value))) {
+    throw new Error('No dialog with a text input is open');
+  }
 }
 
 /** Click a button in the topmost dialog by its visible label. */
 export async function clickModalButton(label: string): Promise<void> {
-  const clicked = await browser.executeObsidian(({ app }, wanted) => {
-    const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const modals = doc.querySelectorAll(
-      '.modal-container .modal:not(.mod-settings)'
-    );
-    const modal = modals[modals.length - 1] as HTMLElement;
-    if (!modal) return false;
-    const btn = Array.from(modal.querySelectorAll('button')).find(
-      (b) => (b.textContent ?? '').trim() === wanted
-    );
-    if (!btn) return false;
-    btn.click();
-    return true;
-  }, label);
-
-  if (!clicked) throw new Error(`No modal button labeled "${label}"`);
+  if (!(await inTopmostModal<boolean>('click', label))) {
+    throw new Error(`No modal button labeled "${label}"`);
+  }
 }
 
 /**
@@ -253,19 +308,7 @@ export async function clickModalButton(label: string): Promise<void> {
  * teardown, where a test may or may not have submitted the form.
  */
 export async function dismissModal(): Promise<void> {
-  await browser.executeObsidian(({ app }) => {
-    const root = (app as any).setting.activeTab?.containerEl;
-    const doc = root?.ownerDocument ?? document;
-    const modals = doc.querySelectorAll(
-      '.modal-container .modal:not(.mod-settings)'
-    );
-    const modal = modals[modals.length - 1] as HTMLElement;
-    if (!modal) return;
-    const btn = Array.from(modal.querySelectorAll('button')).find(
-      (b) => (b.textContent ?? '').trim() === 'Cancel'
-    );
-    btn?.click();
-  });
+  await inTopmostModal<boolean>('cancel');
 
   await browser.waitUntil(async () => (await modalText()) === '', {
     timeout: 5000,
@@ -276,25 +319,16 @@ export async function dismissModal(): Promise<void> {
 
 /** Whether the topmost dialog's button with this label is disabled. */
 export function modalSubmitDisabled(label: string): Promise<boolean> {
-  return browser.executeObsidian(({ app }, wanted) => {
-    const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const modals = doc.querySelectorAll(
-      '.modal-container .modal:not(.mod-settings)'
-    );
-    const modal = modals[modals.length - 1] as HTMLElement;
-    const btn = Array.from(modal.querySelectorAll('button')).find(
-      (b) => (b.textContent ?? '').trim() === wanted
-    );
-    return !!btn?.disabled;
-  }, label);
+  return inTopmostModal<boolean>('disabled', label);
 }
 
 /**
  * Geometry of the icon picker relative to the button that opened it. Guards
  * against the menu and its button being measured from different offset
  * parents, which puts the picker somewhere off in a corner.
+ *
+ * The picker opens inside the dialog, so like the dialog it may be in either
+ * window; see inTopmostModal.
  */
 export function iconMenuGeometry(): Promise<null | {
   width: number;
@@ -305,12 +339,15 @@ export function iconMenuGeometry(): Promise<null | {
 }> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const win = doc.defaultView ?? window;
-
-    const menu = doc.querySelector<HTMLElement>('.lc-menu');
+      | HTMLElement
+      | undefined;
+    const menu = [root?.ownerDocument, document]
+      .map((d) => d?.querySelector<HTMLElement>('.lc-menu'))
+      .find((m) => !!m);
     if (!menu) return null;
+
+    const doc = menu.ownerDocument;
+    const win = doc.defaultView ?? window;
 
     const modals = doc.querySelectorAll(
       '.modal-container .modal:not(.mod-settings)'
@@ -355,9 +392,11 @@ export async function openIconMenuInModal(): Promise<void> {
 export function iconMenuCount(): Promise<number> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    return doc.querySelectorAll('.lc-menu-icons .clickable-icon').length;
+      | HTMLElement
+      | undefined;
+    return [root?.ownerDocument, document]
+      .map((d) => d?.querySelectorAll('.lc-menu-icons .clickable-icon').length)
+      .find((n) => !!n) ?? 0;
   });
 }
 
@@ -365,9 +404,11 @@ export function iconMenuCount(): Promise<number> {
 export async function searchIconMenu(query: string): Promise<void> {
   await browser.executeObsidian(({ app }, q) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const input = doc.querySelector<HTMLInputElement>('.lc-menu-search input');
+      | HTMLElement
+      | undefined;
+    const input = [root?.ownerDocument, document]
+      .map((d) => d?.querySelector<HTMLInputElement>('.lc-menu-search input'))
+      .find((i) => !!i);
     input.value = q;
     input.dispatchEvent(new Event('input'));
   }, query);
@@ -377,11 +418,15 @@ export async function searchIconMenu(query: string): Promise<void> {
 export async function clickIconInMenu(id: string): Promise<void> {
   const clicked = await browser.executeObsidian(({ app }, wanted) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      HTMLElement | undefined;
-    const doc = root?.ownerDocument ?? document;
-    const el = doc.querySelector<HTMLElement>(
-      `.lc-menu-icons .clickable-icon[data-icon="${wanted}"]`
-    );
+      | HTMLElement
+      | undefined;
+    const el = [root?.ownerDocument, document]
+      .map((d) =>
+        d?.querySelector<HTMLElement>(
+          `.lc-menu-icons .clickable-icon[data-icon="${wanted}"]`
+        )
+      )
+      .find((e) => !!e);
     if (!el) return false;
     el.click();
     return true;

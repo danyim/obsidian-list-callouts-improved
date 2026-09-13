@@ -23,7 +23,7 @@ describe('Callout rendering', function () {
       gte: BUILT_IN_CHARS.length,
     });
 
-    // Each decorated line carries its colour as a custom property, which is
+    // Each decorated line carries its color as a custom property, which is
     // what the stylesheet keys off.
     const colors = await browser.executeObsidian(({ app }) => {
       return Array.from(

@@ -23,11 +23,6 @@ import {
   writeLegacyData,
 } from '../helpers';
 
-/** The original plugin's settings, as it saved them, to make the import offer appear. */
-const LEGACY_DATA = path.resolve(
-  'test/vaults/legacy/.obsidian/plugins/obsidian-list-callouts/data.json'
-);
-
 const OUT_DIR = path.resolve('screenshots');
 
 /** Gutter between the two halves of a composite, in pixels. */
@@ -781,7 +776,9 @@ async function captureIconPicker(name: string): Promise<void> {
 async function captureImportRow(name: string): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
-  await writeLegacyData(await fs.readFile(LEGACY_DATA, 'utf8'));
+  // Any settings the original plugin could have saved will do: only the
+  // row's presence is captured, never what it would import.
+  await writeLegacyData(JSON.stringify([{ char: '&', color: '255, 214, 0' }]));
   await reloadPlugin();
 
   const { original } = await enterSettingsWindow();

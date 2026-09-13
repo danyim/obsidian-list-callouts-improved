@@ -13,7 +13,7 @@ import {
 
 const REMOVE_COMMAND = 'list-callouts-improved:remove-callout';
 
-// One line per shape the editor regex recognises, plus a plain item the
+// One line per shape the editor regex recognizes, plus a plain item the
 // command must not touch. Line numbers are referenced directly by the tests,
 // so keep them in step when editing.
 const FIXTURE = [

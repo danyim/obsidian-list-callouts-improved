@@ -61,7 +61,7 @@ describe('Importing from List Callouts', function () {
     // Seven built-ins plus the one custom callout the old plugin had.
     expect(settings).toHaveLength(8);
 
-    // A recoloured built-in keeps its position and its stored colour.
+    // A recolored built-in keeps its position and its stored color.
     expect(settings[0].char).toBe('&');
     expect(settings[0].color).toBe('1, 2, 3');
 
