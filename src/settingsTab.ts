@@ -580,8 +580,11 @@ export class ListCalloutSettingTab extends PluginSettingTab {
       f.append(createEl('br'));
       f.append(
         createEl('strong', {
-          text: 'Note: using +, *, -, >, or # as the callout character can disrupt reading mode.',
+          text: 'Note:',
         })
+      );
+      f.appendText(
+        ' using +, *, -, >, or # as the callout character can disrupt reading mode.'
       );
     });
   }
@@ -600,15 +603,15 @@ export class ListCalloutSettingTab extends PluginSettingTab {
 
   private requireSpaceDesc(): DocumentFragment {
     return createFragment((f) => {
-      f.appendText('On, only ');
+      f.appendText('When toggled on, only ');
       f.append(createEl('code', { text: '==& text==' }));
-      f.appendText(' is a callout, matching how list callouts work. Off, ');
+      f.appendText(
+        ' is a callout, matching how list callouts work. When off, '
+      );
       f.append(createEl('code', { text: '==&text==' }));
       f.appendText(
-        ' works too and a space after the character is optional. Turn this off for shorter markup; leave it on so highlights like '
+        ' works too and a space after the character becomes optional.'
       );
-      f.append(createEl('code', { text: '==!important==' }));
-      f.appendText(' keep their normal look.');
     });
   }
 
@@ -692,7 +695,7 @@ export class ListCalloutSettingTab extends PluginSettingTab {
 
     definitions.push({
       name: `Import from ${LEGACY_PLUGIN_NAME}`,
-      desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
+      desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault and can be imported. This will replace this plugin's currently configured callouts permanently.`,
       // Obsidian evaluates this on every render of the tab, and doesn't call
       // getSettingDefinitions() again once it has cached them, so this is the
       // one hook that runs each time the tab opens. That makes it the place
