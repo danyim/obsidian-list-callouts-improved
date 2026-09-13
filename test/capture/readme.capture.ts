@@ -16,9 +16,11 @@ import * as path from 'path';
 
 import type { Callout } from '../../src/settings';
 import {
+  editorText,
   openNote,
   openPluginSettings,
   reloadPlugin,
+  setEditorText,
   setHighlights,
   setSettings,
   writeLegacyData,
@@ -1366,12 +1368,18 @@ describe('README screenshots', function () {
     // One prose paragraph, cropped to its height, rendered twice: with the
     // built-ins as shipped, so each highlight is led by its character, and
     // then with icons on, so the picture shows the character giving way to
-    // the callout's icon. Stacked, so the two differ only where they should.
+    // the callout's icon. Stacked, so the two differ only where they should,
+    // each under a heading that says which it is, so the image explains
+    // itself wherever it ends up.
     await openNote('Highlights.md');
+    const paragraph = await editorText();
+
     await setSettings(callouts(false));
+    await setEditorText(`### Callouts without icons\n\n${paragraph}`);
     const characters = await editorComposite(true, true, '.lc-highlight-callout');
 
     await setSettings(callouts(true));
+    await setEditorText(`### Callouts with icons\n\n${paragraph}`);
     await browser.$('.lc-highlight-marker svg').waitForExist({ timeout: 10000 });
     const icons = await editorComposite(true, true, '.lc-highlight-callout');
 
