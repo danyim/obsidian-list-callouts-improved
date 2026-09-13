@@ -5,7 +5,11 @@ import { obsidianPage } from 'wdio-obsidian-service';
 import { DEFAULT_HIGHLIGHT_SETTINGS, DEFAULT_SETTINGS } from '../../src/settings';
 import {
   RenderedHighlight,
+  editorHighlights,
+  editorLineNumber,
+  editorLineText,
   openNote,
+  placeCursor,
   readingHighlights,
   rerenderReadingView,
   setHighlights,
@@ -43,6 +47,165 @@ async function rerenderUntil(
   );
   return marks;
 }
+
+/** Wait until the editor's highlight spans satisfy `ready`. */
+async function editorUntil(
+  ready: (spans: RenderedHighlight[]) => boolean,
+  msg: string
+): Promise<RenderedHighlight[]> {
+  let spans: RenderedHighlight[] = [];
+  await browser.waitUntil(
+    async () => {
+      spans = await editorHighlights();
+      return ready(spans);
+    },
+    { timeout: 10000, interval: 200, timeoutMsg: msg }
+  );
+  return spans;
+}
+
+describe('Highlight rendering in live preview', function () {
+  before(async function () {
+    await obsidianPage.resetVault();
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+    await setHighlights({ ...DEFAULT_HIGHLIGHT_SETTINGS });
+    await openNote('Highlights.md');
+    // The caret lands on the title line, which holds no highlight, so every
+    // marker starts out hidden.
+    await placeCursor(0, 0);
+  });
+
+  it('decorates every built-in character', async function () {
+    const spans = await editorUntil(
+      (s) => s.some((x) => x.char === '%'),
+      'highlights were not decorated'
+    );
+
+    for (const char of BUILT_IN_CHARS) {
+      const span = spans.find((s) => s.char === char);
+      expect(span).toBeDefined();
+      expect(span.color.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('hides the character and the space', async function () {
+    const text = await editorLineText('Important');
+
+    expect(text).toContain('Important');
+    expect(text).not.toContain('& ');
+    expect(text).not.toContain('==');
+  });
+
+  it('reveals the markup while the caret is inside', async function () {
+    // Whether Obsidian also reveals its own `==` delimiters is Obsidian's
+    // call, not this plugin's -- so this only asserts on the marker our own
+    // replacement decoration controls, the callout character and its space.
+    const line = await editorLineNumber('Important');
+    await placeCursor(line, 5);
+
+    await browser.waitUntil(
+      async () => (await editorLineText('Important')).includes('& Important'),
+      { timeout: 5000, interval: 150, timeoutMsg: 'markup was not revealed' }
+    );
+
+    await placeCursor(0, 0);
+
+    await browser.waitUntil(
+      async () => !(await editorLineText('Important')).includes('& '),
+      { timeout: 5000, interval: 150, timeoutMsg: 'markup was not hidden again' }
+    );
+  });
+
+  it('decorates two highlights on one line separately', async function () {
+    const spans = await editorHighlights();
+
+    expect(spans.find((s) => s.text === 'first')?.char).toBe('&');
+    expect(spans.find((s) => s.text === 'second')?.char).toBe('!');
+  });
+
+  it('leaves a plain highlight alone', async function () {
+    const spans = await editorHighlights();
+
+    expect(spans.some((s) => s.text === 'highlight')).toBe(false);
+  });
+
+  it('never decorates highlights inside code', async function () {
+    const spans = await editorHighlights();
+
+    expect(spans.some((s) => s.text.includes('code'))).toBe(false);
+    expect(spans.some((s) => s.text.includes('fenced'))).toBe(false);
+  });
+
+  it('decorates a highlight inside a list callout', async function () {
+    const spans = await editorHighlights();
+
+    expect(spans.find((s) => s.text === 'inline')?.char).toBe('!');
+  });
+
+  it('shows the callout icon when one is set', async function () {
+    await setSettings(withStar());
+
+    const spans = await editorUntil(
+      (s) => s.some((x) => x.char === '&' && x.hasIcon),
+      'the icon widget did not appear'
+    );
+
+    expect(spans.some((s) => s.char === '?' && s.hasIcon)).toBe(false);
+
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+  });
+
+  describe('with the space optional', function () {
+    before(async function () {
+      await setHighlights({ requireSpace: false });
+    });
+
+    after(async function () {
+      await setHighlights({ requireSpace: true });
+    });
+
+    it('treats ==!important== as a callout', async function () {
+      const spans = await editorUntil(
+        (s) => s.some((x) => x.text === 'important' && x.char === '!'),
+        '==!important== was not decorated'
+      );
+
+      expect(spans.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('with the space required', function () {
+    it('leaves ==!important== alone', async function () {
+      await editorUntil(
+        (s) => !s.some((x) => x.text === 'important'),
+        '==!important== stayed decorated'
+      );
+
+      expect(await editorLineText('important')).toContain('!important');
+    });
+  });
+
+  describe('when disabled', function () {
+    before(async function () {
+      await setHighlights({ enabled: false });
+    });
+
+    after(async function () {
+      await setHighlights({ enabled: true });
+    });
+
+    it('decorates no highlights but still decorates list callouts', async function () {
+      await editorUntil((s) => s.length === 0, 'highlights stayed decorated');
+
+      const listCallouts = await browser.executeObsidian(({ app }) => {
+        return app.workspace.containerEl.querySelectorAll(
+          '.markdown-source-view .lc-list-callout'
+        ).length;
+      });
+      expect(listCallouts).toBeGreaterThan(0);
+    });
+  });
+});
 
 describe('Highlight rendering in reading mode', function () {
   before(async function () {

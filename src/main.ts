@@ -6,6 +6,7 @@ import { Editor, EditorChange, MarkdownView, Plugin, debounce } from 'obsidian';
 import { cycleCalloutChanges, removeCalloutChanges } from './commands';
 import { loadCustomIcons, unloadCustomIcons } from './customIcons';
 import {
+  BuildStats,
   buildCalloutDecos,
   calloutExtension,
   calloutsConfigField,
@@ -101,8 +102,8 @@ export default class ListCalloutsPlugin extends Plugin {
    * failing loudly, so it is worth being able to hand the builder those ranges
    * directly.
    */
-  buildDecorations(view: EditorView, state: EditorState) {
-    return buildCalloutDecos(view, state);
+  buildDecorations(view: EditorView, state: EditorState, stats?: BuildStats) {
+    return buildCalloutDecos(view, state, stats);
   }
 
   onunload() {

@@ -502,11 +502,18 @@ export async function setEditorText(text: string): Promise<void> {
   }, text);
 }
 
-/** Put a bare cursor in the active editor. */
+/**
+ * Put a bare cursor in the active editor.
+ *
+ * Focuses CodeMirror directly first: opening a note does not always leave the
+ * editor focused (mobile in particular), and a cursor the editor does not
+ * consider focused does not touch a selection-dependent decoration.
+ */
 export async function placeCursor(line: number, ch = 0): Promise<void> {
   await browser.executeObsidian(
     ({ app, obsidian }, pos) => {
       const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+      (view.editor as unknown as { cm: { focus(): void } }).cm.focus();
       view.editor.setCursor(pos);
     },
     { line, ch }
@@ -628,4 +635,46 @@ export async function rerenderReadingView(): Promise<void> {
     const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
     (view as any).previewMode.rerender(true);
   });
+}
+
+/** Every decorated highlight span in the editor. */
+export function editorHighlights(): Promise<RenderedHighlight[]> {
+  return browser.executeObsidian(({ app }) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-source-view .lc-highlight-callout'
+      )
+    ).map((el) => ({
+      char: el.getAttribute('data-callout'),
+      color: el.style.getPropertyValue('--lc-callout-color'),
+      text: el.textContent ?? '',
+      hasIcon: !!el.querySelector('.lc-highlight-marker svg'),
+    }));
+  });
+}
+
+/**
+ * Rendered text of the first editor line containing `needle`, which is what
+ * the user sees: hidden markup is absent, revealed markup is present.
+ */
+export function editorLineText(containing: string): Promise<string> {
+  return browser.executeObsidian(({ app }, needle) => {
+    const line = Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-source-view .cm-line'
+      )
+    ).find((el) => (el.textContent ?? '').includes(needle));
+    return line?.textContent ?? '';
+  }, containing);
+}
+
+/** Zero-based line number of the first document line containing `needle`. */
+export function editorLineNumber(containing: string): Promise<number> {
+  return browser.executeObsidian(({ app, obsidian }, needle) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    return view.editor
+      .getValue()
+      .split('\n')
+      .findIndex((l) => l.includes(needle));
+  }, containing);
 }
