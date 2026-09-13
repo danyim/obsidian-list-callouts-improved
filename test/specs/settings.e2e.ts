@@ -30,6 +30,7 @@ import {
   modalSubmitDisabled,
   modalText,
   openIconMenuInModal,
+  openIconMenuInTab,
   openPluginSettings,
   reloadPlugin,
   reorderCallout,
@@ -92,8 +93,7 @@ describe('Adding a callout', function () {
       await openIconMenuInModal();
     });
 
-    // The picker positions itself against the button's offset parent. Inside a
-    // modal there is no .vertical-tab-content to measure from, so this guards
+    // The picker positions itself from the button's offsets, so this guards
     // the styling that gives both elements the same positioning context.
     it('opens anchored to its button and on screen', async function () {
       const geo = await iconMenuGeometry();
@@ -241,6 +241,26 @@ describe('Editing callouts', function () {
 
     await openPluginSettings();
     expect(await calloutPreviewCount()).toBe(BUILT_IN_COUNT + 1);
+    await closeSettings();
+  });
+
+  // The picker is positioned within its own row, which scrolls with the tab.
+  // Correcting for the tab's scroll on top of that put the menu a whole
+  // screen above its button, and focusing its search box then yanked the
+  // tab back up to it.
+  it('opens the icon picker under its button without scrolling the tab', async function () {
+    await openPluginSettings();
+    const geo = await openIconMenuInTab();
+
+    expect(geo.scrollBefore).toBeGreaterThan(0);
+    expect(geo.buttonInView).toBe(true);
+    expect(geo.gapBelowButton).toBeGreaterThanOrEqual(0);
+    expect(geo.gapBelowButton).toBeLessThan(10);
+    // Hangs from the button's left edge, or its right edge when the row is
+    // too narrow for that.
+    expect(
+      Math.min(Math.abs(geo.leftOffset), Math.abs(geo.rightOffset))
+    ).toBeLessThan(1);
     await closeSettings();
   });
 });

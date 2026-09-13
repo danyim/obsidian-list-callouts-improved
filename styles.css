@@ -403,10 +403,12 @@ settings:
   flex: 0 0 auto;
 }
 
-/* Inside a modal there is no .vertical-tab-content to position against, so
-   give the icon picker a positioning context that both the button and the menu
-   share -- otherwise the two are measured against different ancestors. */
-.modal .lc-input-container {
+/* The icon picker is placed from its button's offsets, so the row has to be
+   the positioning context for both of them -- otherwise the two are measured
+   against different ancestors. Unscoped: attachIconMenu counts on this in the
+   settings tab as much as in the Add callout modal (and on 1.13+ the tab is
+   itself inside a .modal, so a .modal-scoped rule quietly applied to both). */
+.lc-input-container {
   position: relative;
 }
 

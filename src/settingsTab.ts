@@ -80,10 +80,8 @@ function attachIconMenu(
 
   btn.onClick((e) => {
     e.preventDefault();
-    const scrollParent = btnEl.closest('.vertical-tab-content');
     const destroyEventHandlers = () => {
       btnEl.win.removeEventListener('click', clickOutside);
-      scrollParent?.removeEventListener('scroll', scroll);
     };
     const clickOutside = (e: MouseEvent) => {
       if (menuRef) {
@@ -97,13 +95,13 @@ function attachIconMenu(
       }
     };
 
+    // The menu is a sibling of the button, positioned within the same
+    // .lc-input-container, so the button's offsets are the menu's
+    // coordinates as they are. That container scrolls with the rest of the
+    // settings tab, and the menu along with it -- there is nothing to
+    // correct for the tab's scroll position, and no need to follow it.
     const calcMenuPos = () => {
-      let pos = `top: ${
-        btnEl.offsetTop +
-        btnEl.offsetHeight +
-        2 -
-        (scrollParent?.scrollTop ?? 0)
-      }px;`;
+      let pos = `top: ${btnEl.offsetTop + btnEl.offsetHeight + 2}px;`;
       // Hang the menu from the button's left edge when it fits, else from its
       // right edge. Which one that is depends on where the button landed in
       // its row: the inputs wrap, so on a narrow (mobile) settings pane the
@@ -119,14 +117,6 @@ function attachIconMenu(
         }px;`;
       }
       menuRef.style.cssText = pos;
-    };
-
-    const scroll = () => {
-      if (menuRef) {
-        calcMenuPos();
-      } else {
-        destroyEventHandlers();
-      }
     };
 
     if (menuRef) {
@@ -243,7 +233,6 @@ function attachIconMenu(
 
     btnEl.win.setTimeout(() => {
       btnEl.win.addEventListener('click', clickOutside);
-      scrollParent?.addEventListener('scroll', scroll);
     }, 10);
   });
 }
