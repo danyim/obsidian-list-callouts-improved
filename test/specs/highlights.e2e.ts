@@ -175,6 +175,28 @@ describe('Highlight rendering in live preview', function () {
     expect(spans.find((s) => s.text === 'inline')?.char).toBe('!');
   });
 
+  it('decorates a highlight with formatting inside it', async function () {
+    const spans = await editorHighlights();
+    const text = await editorLineText('bold');
+
+    expect(spans.some((s) => s.char === '&' && s.text.includes('bold'))).toBe(
+      true
+    );
+    // Our marker and Obsidian's `**` are both hidden; the words remain.
+    expect(text).toContain('bold text');
+    expect(text).not.toContain('& ');
+    expect(text).not.toContain('**');
+  });
+
+  it('leaves an unclosed highlight alone', async function () {
+    const spans = await editorHighlights();
+
+    expect(spans.some((s) => s.text.includes('never closed'))).toBe(false);
+    // Obsidian hides the dangling `==` on its own account; the marker after it
+    // is ours to hide, and stays put.
+    expect(await editorLineText('never closed')).toContain('& never closed');
+  });
+
   it('shows the callout icon when one is set', async function () {
     await setSettings(withStar());
 
@@ -298,6 +320,20 @@ describe('Highlight rendering in reading mode', function () {
     const marks = await readingHighlights();
 
     expect(marks.find((m) => m.text === 'inline')?.char).toBe('!');
+  });
+
+  it('decorates a highlight with formatting inside it', async function () {
+    const marks = await readingHighlights();
+    const bold = marks.find((m) => m.text === 'bold text');
+
+    expect(bold).toBeDefined();
+    expect(bold.char).toBe('&');
+  });
+
+  it('leaves an unclosed highlight alone', async function () {
+    const marks = await readingHighlights();
+
+    expect(marks.some((m) => m.text.includes('never closed'))).toBe(false);
   });
 
   it('shows the callout icon when one is set', async function () {
