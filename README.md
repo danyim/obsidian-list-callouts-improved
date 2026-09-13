@@ -1,6 +1,6 @@
 # List Callouts, Improved
 
-Create customized callouts in any list in Obsidian.
+Create customized callouts in any list or highlighted text in Obsidian.
 
 > [!NOTE]
 > **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design. Unfortunately that project has seen no activity since [September 2024](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) and appears to be abandoned by the author.
@@ -27,7 +27,7 @@ Callout padding and background intensity can be adjusted with the Style Settings
 
 ## Highlights
 
-The same characters work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout character and a space, and it takes that callout's color and icon:
+The same callout triggers work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout trigger and a space `==* Highlighted text==`, and it takes that callout's color and icon:
 
 ![A paragraph with several inline highlights, each in a different callout color and led by that callout's icon, shown in light and dark mode](screenshots/highlights.png)
 
@@ -35,18 +35,9 @@ A highlight that runs across a line break is colored as one in both the editor a
 
 ![A paragraph, a list, a callout block and a table, each holding highlights in different callout colors, two of them running across a line break, shown in light and dark mode](screenshots/highlight-multiline.png)
 
-Highlights and list items share one set of callouts, so `==& text==` is yellow because the `&` callout is yellow. The character and the space are hidden when the note is rendered and reappear in Live Preview while the cursor is inside the highlight, like the `==` markers do.
-
-Two settings live under **Highlights** in the settings tab:
-
-- **Highlight callouts** turns the feature on and off.
-- **Require a space after the character** is on by default, so `==& text==` is a callout and `==!important==` is left alone. Turn it off and `==&text==` works too.
-
-Highlight intensity can be adjusted with the Style Settings plugin, alongside the callout padding.
-
 ## Managing callouts
 
-Callouts are one list. A new vault starts with the seven shown above, and any of them can be edited, reordered by dragging, or deleted, built-in ones included. A vault can end up with a completely different set, or none at all.
+Callouts are defined in one list. A new vault starts with the seven shown above, and any of them can be edited, reordered by dragging, or deleted, built-in ones included.
 
 ![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon, color and marker color, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
 
@@ -63,7 +54,7 @@ Each command can be given a hotkey from Settings → Hotkeys. All three act on e
 | Next callout / Previous callout | Steps the line through the callout list in the order the settings tab shows. A plain list item is part of the cycle: stepping off either end leaves a plain list item, so overshooting wraps around instead of stranding the line, and the two directions are exact inverses. |
 | Remove callout | Strips the callout character from the current line, leaving the list item behind. |
 
-## Custom icons
+## Support for custom icons
 
 Any SVG in your vault's `.obsidian/icons` folder is registered as an icon and appears in the picker alongside the ones Obsidian ships. A file named `My Fancy Icon.svg` gets the icon name `my-fancy-icon`.
 
