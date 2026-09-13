@@ -11,6 +11,9 @@ const cacheDir = path.resolve('.obsidian-cache');
 // our floor.
 const OLDEST_PUBLIC_VERSION = '1.13.4';
 
+// Pinned so a new upstream release can't change what the tests exercise.
+const LEGACY_PLUGIN_VERSION = '1.2.9';
+
 let defaultVersions = `${OLDEST_PUBLIC_VERSION}/latest latest/latest`;
 if (await obsidianBetaAvailable({ cacheDir })) {
   defaultVersions += ' latest-beta/latest';
@@ -25,6 +28,18 @@ if (env.CI) {
   // Printed so the workflow can key its Obsidian download cache on it.
   console.log('obsidian-cache-key:', JSON.stringify(desktopVersions));
 }
+
+// The plugin this one was forked from, installed but left off so most specs
+// don't see it. The coexistence spec turns it on to check that the import
+// reads what the real plugin actually writes, not just a hand-made data.json.
+const plugins = [
+  '..',
+  {
+    repo: 'mgmeyers/obsidian-list-callouts',
+    version: LEGACY_PLUGIN_VERSION,
+    enabled: false,
+  },
+];
 
 export const config: WebdriverIO.Config = {
   runner: 'local',
@@ -41,7 +56,7 @@ export const config: WebdriverIO.Config = {
         'wdio:obsidianOptions': {
           appVersion,
           installerVersion,
-          plugins: ['..'],
+          plugins,
           vault: '../test/vaults/callouts',
         },
       })
@@ -55,7 +70,7 @@ export const config: WebdriverIO.Config = {
           appVersion,
           installerVersion,
           emulateMobile: true,
-          plugins: ['..'],
+          plugins,
           vault: '../test/vaults/callouts',
         },
         'goog:chromeOptions': {
