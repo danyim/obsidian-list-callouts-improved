@@ -437,6 +437,25 @@ export function buildCalloutDecos(
 }
 
 /**
+ * The marker glyph a list line renders as pure decoration rather than
+ * content -- a styled bullet dot or a checkbox -- as opposed to a number's
+ * own digits. Both carry a left inset from where CalloutBackground would
+ * otherwise start (Obsidian's own `padding-left` on the marker's formatting
+ * span for a bullet; a few px of the same kind for a checkbox), which
+ * `alignCalloutBackgrounds` halves rather than covers outright, matching
+ * how a bullet or checkbox reference line looked before this fix existed.
+ *
+ * A number's digits are deliberately excluded here: unlike a small bullet
+ * sitting in otherwise-empty space, a gap before a digit re-excludes part
+ * of it from the highlight, not just empty padding -- which is exactly
+ * mgmeyers/obsidian-list-callouts#91's own bug. There is also no fallback
+ * to the raw "- " text: the active (cursor-holding) line shows that
+ * unstyled, flush with the marker's own box, and covering that outright
+ * already looks right with no adjustment.
+ */
+const DECORATIVE_MARKER_GLYPH_SELECTOR = '.list-bullet, .task-list-label';
+
+/**
  * A nested list line's own `.cm-hmd-list-indent` wraps one span per ancestor
  * indent level -- CodeMirror renders it as a real, measurable element, unlike
  * the marker width folded into the line's own `padding-inline-start`, which
@@ -464,12 +483,22 @@ function alignCalloutBackgrounds(view: EditorView) {
         const indentGuide = line.querySelector<HTMLElement>(
           '.cm-hmd-list-indent'
         );
-        const indent = indentGuide
+        const nestingIndent = indentGuide
           ? indentGuide.getBoundingClientRect().right -
             line.getBoundingClientRect().left
           : 0;
 
-        return [{ el, indent: Math.max(0, indent) }];
+        const glyph = line.querySelector<HTMLElement>(
+          DECORATIVE_MARKER_GLYPH_SELECTOR
+        );
+        const glyphInset = glyph
+          ? glyph.getBoundingClientRect().left -
+            (line.getBoundingClientRect().left + nestingIndent)
+          : 0;
+
+        return [
+          { el, indent: Math.max(0, nestingIndent + glyphInset / 2) },
+        ];
       });
     },
     write(results) {

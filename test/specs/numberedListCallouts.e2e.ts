@@ -78,6 +78,7 @@ describe('Callout background in a nested list', function () {
       ).map((line) => {
         const bg = line.querySelector<HTMLElement>('.lc-list-bg');
         const marker = line.querySelector<HTMLElement>('.lc-list-marker');
+        const bullet = line.querySelector<HTMLElement>('.list-bullet');
         const indentGuide = line.querySelector<HTMLElement>(
           '.cm-hmd-list-indent'
         );
@@ -85,6 +86,7 @@ describe('Callout background in a nested list', function () {
           text: line.textContent,
           bgLeft: bg?.getBoundingClientRect().left,
           markerLeft: marker?.getBoundingClientRect().left,
+          bulletLeft: bullet?.getBoundingClientRect().left,
           indentGuideRight: indentGuide?.getBoundingClientRect().right,
         };
       });
@@ -94,16 +96,21 @@ describe('Callout background in a nested list', function () {
 
     for (const row of rows) {
       expect(row.markerLeft).toBeDefined();
+      expect(row.bulletLeft).toBeDefined();
       expect(row.indentGuideRight).toBeDefined();
 
       // Covers this item's own marker -- the point of #91's fix -- rather
       // than stopping short of it.
       expect(row.bgLeft).toBeLessThanOrEqual(row.markerLeft);
-      // But not its ancestors' indentation: once nested, the guide's own
+      // Never as far left as its ancestors' own indentation: the guide's own
       // right edge is exactly where "ancestor indent" gives way to "this
-      // item," and the background should start there, not at the line's own
-      // (much further left) edge.
-      expect(row.bgLeft).toBeCloseTo(row.indentGuideRight, 0);
+      // item," so the background may start at or after it, but never before.
+      expect(row.bgLeft).toBeGreaterThanOrEqual(row.indentGuideRight - 0.5);
+      // And never further right than the bullet itself -- halving its own
+      // left inset (a hair of a gap before it, matching how a bullet
+      // reference line looked before this fix existed) should narrow that
+      // gap, not overshoot past the bullet and re-exclude it.
+      expect(row.bgLeft).toBeLessThanOrEqual(row.bulletLeft + 0.5);
     }
   });
 });
