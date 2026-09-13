@@ -265,6 +265,18 @@ async function captureEditor(
   readySelector = '.lc-list-callout'
 ): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
+  await fs.writeFile(
+    path.join(OUT_DIR, name),
+    await editorComposite(hideTitle, cropToContent, readySelector)
+  );
+}
+
+/** The light/dark composite of the editor, for `captureEditor` or stacking. */
+async function editorComposite(
+  hideTitle: boolean,
+  cropToContent: boolean,
+  readySelector: string
+): Promise<Buffer> {
   await browser.$(readySelector).waitForExist({ timeout: 10000 });
 
   const frame = await prepareEditor(hideTitle);
@@ -291,7 +303,68 @@ async function captureEditor(
   light = await cropToRect(light, rect);
   dark = await cropToRect(dark, rect);
 
-  await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
+  return sideBySide(light, dark);
+}
+
+/**
+ * Stack two composites, one above the other.
+ *
+ * For a picture of the same note under two settings -- the highlights with
+ * characters and then with icons -- so the two renderings sit together in one
+ * image rather than as two that differ only in their markers. The gap takes
+ * the light and dark backgrounds of the halves above it, so the seam between
+ * the two schemes runs straight through.
+ */
+async function stacked(top: Buffer, bottom: Buffer): Promise<Buffer> {
+  const encoded = await browser.executeObsidian(
+    async (_obsidian, topData: string, bottomData: string, gap: number) => {
+      const load = (data: string) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error('could not decode a capture'));
+          img.src = `data:image/png;base64,${data}`;
+        });
+
+      const [a, b] = await Promise.all([load(topData), load(bottomData)]);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(a.width, b.width);
+      canvas.height = a.height + gap + b.height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(a, 0, 0);
+      ctx.drawImage(b, 0, a.height + gap);
+
+      // Each composite is a light half and a dark half of equal width, so
+      // the gap is painted from the bottom edge of the top image: its left
+      // corner color across the left half, its right corner color across
+      // the rest.
+      const cornerColor = (img: HTMLImageElement, x: number, y: number) => {
+        const probe = document.createElement('canvas');
+        probe.width = 1;
+        probe.height = 1;
+        probe.getContext('2d').drawImage(img, x, y, 1, 1, 0, 0, 1, 1);
+        const [r, g, bl] = probe.getContext('2d').getImageData(0, 0, 1, 1).data;
+        return `rgb(${r}, ${g}, ${bl})`;
+      };
+
+      const mid = Math.floor(canvas.width / 2);
+
+      ctx.fillStyle = cornerColor(a, 0, a.height - 1);
+      ctx.fillRect(0, a.height, mid, gap);
+
+      ctx.fillStyle = cornerColor(a, a.width - 1, a.height - 1);
+      ctx.fillRect(mid, a.height, canvas.width - mid, gap);
+
+      return canvas.toDataURL('image/png').split(',')[1];
+    },
+    top.toString('base64'),
+    bottom.toString('base64'),
+    GAP
+  );
+
+  return Buffer.from(encoded, 'base64');
 }
 
 /** The settings pane holding the plugin's own rows, without the tab sidebar. */
@@ -1289,25 +1362,23 @@ describe('README screenshots', function () {
     await captureEditor('callout-icons.png', true, true);
   });
 
-  it('captures the highlight character rendering', async function () {
-    // One prose paragraph, cropped to its height, with the built-ins as
-    // shipped so the picture shows each highlight led by its character.
+  it('captures the highlight rendering', async function () {
+    // One prose paragraph, cropped to its height, rendered twice: with the
+    // built-ins as shipped, so each highlight is led by its character, and
+    // then with icons on, so the picture shows the character giving way to
+    // the callout's icon. Stacked, so the two differ only where they should.
     await openNote('Highlights.md');
     await setSettings(callouts(false));
-    await captureEditor(
-      'highlight-characters.png',
-      true,
-      true,
-      '.lc-highlight-callout'
-    );
-  });
+    const characters = await editorComposite(true, true, '.lc-highlight-callout');
 
-  it('captures the highlight icon rendering', async function () {
-    // The same paragraph with icons on, so the picture shows the character
-    // giving way to the callout's icon.
-    await openNote('Highlights.md');
     await setSettings(callouts(true));
-    await captureEditor('highlights.png', true, true, '.lc-highlight-callout');
+    await browser.$('.lc-highlight-marker svg').waitForExist({ timeout: 10000 });
+    const icons = await editorComposite(true, true, '.lc-highlight-callout');
+
+    await fs.writeFile(
+      path.join(OUT_DIR, 'highlights.png'),
+      await stacked(characters, icons)
+    );
   });
 
   it('captures the multi-line highlight rendering', async function () {
