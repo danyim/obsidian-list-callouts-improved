@@ -9,6 +9,7 @@
  * and dark mode on the right.
  */
 import { browser } from '@wdio/globals';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs/promises';
 import { before, describe, it } from 'mocha';
 import * as path from 'path';
@@ -187,8 +188,9 @@ async function prepareEditor(hideTitle = false): Promise<EditorFrame> {
 
       // The last block, not the last .cm-line: a table or callout at the end
       // of the note is a widget, not a line.
-      const last = document.querySelector('.markdown-source-view .cm-content')
-        ?.lastElementChild;
+      const last = document.querySelector(
+        '.markdown-source-view .cm-content'
+      )?.lastElementChild;
       if (!last) throw new Error('The note has no content to capture');
 
       return {
@@ -475,10 +477,7 @@ async function captureBothSchemes(
   crop: CropRect
 ): Promise<void> {
   await setColorScheme(false);
-  const light = await cropToRect(
-    await shotViewport(`${label}-light`),
-    crop
-  );
+  const light = await cropToRect(await shotViewport(`${label}-light`), crop);
 
   await setColorScheme(true);
   const dark = await cropToRect(await shotViewport(`${label}-dark`), crop);
@@ -766,49 +765,170 @@ async function captureIconPicker(name: string): Promise<void> {
 }
 
 /**
- * Capture the first callout's row with a custom marker color in effect, so
- * the picture shows the dropdown on "Custom marker color", the second picker
- * it reveals, and a marker painted apart from its background in the preview.
+ * Base64 of the whole virtual display, not just the page.
+ *
+ * For what lives outside the page: a color input's picker is a window of
+ * Chromium's own, which no DOM screenshot includes. Linux only, like the
+ * rest of the capture setup (`scripts/xvfb-wm.sh` provides DISPLAY), and
+ * needs ffmpeg for its x11grab input.
  */
-async function captureMarkerColorRow(name: string): Promise<void> {
+async function shotDisplay(
+  label: string,
+  width: number,
+  height: number
+): Promise<string> {
+  const display = process.env.DISPLAY;
+  if (!display) {
+    throw new Error('Capturing the display needs DISPLAY (run under Xvfb)');
+  }
+
+  const tmp = path.join(OUT_DIR, `.tmp-${label}.png`);
+  execFileSync('ffmpeg', [
+    '-y',
+    '-loglevel',
+    'error',
+    '-f',
+    'x11grab',
+    '-draw_mouse',
+    '0',
+    '-video_size',
+    `${width}x${height}`,
+    '-i',
+    display,
+    '-frames:v',
+    '1',
+    tmp,
+  ]);
+
+  try {
+    return (await fs.readFile(tmp)).toString('base64');
+  } finally {
+    await fs.rm(tmp, { force: true });
+  }
+}
+
+/**
+ * How big Chromium draws the popup for an <input type="color">, in CSS px,
+ * and where: hanging from the input's bottom-left corner. It is not in the
+ * page, so there is no rect to read; this is measured from a capture.
+ */
+const COLOR_POPUP = { width: 236, height: 254, gap: 2 };
+
+/** Which of a callout row's two color inputs a capture opens. */
+type ColorInput = 'lc-color' | 'lc-marker-color';
+
+/**
+ * Capture the first callout's row with one of its color pickers open.
+ *
+ * The picker is a separate window, so the display is grabbed rather than
+ * the page, and the settings window is made fullscreen first: that way a
+ * point in the grab is the same point in the viewport, and the row's own
+ * rect says where to crop. Fullscreen also leaves room under the row, so
+ * the popup opens below the input rather than over the row.
+ */
+async function captureColorPicker(
+  name: string,
+  input: ColorInput
+): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
   const { original } = await enterSettingsWindow();
 
-  // Scrolled from the row's own top, as the icon picker capture does: the
-  // pane ignores scrollIntoView(), and the margin keeps the row clear of the
-  // popout window's title bar.
-  await browser.execute(() => {
-    const row = document.querySelector<HTMLElement>('.lc-setting');
-    const scrollParent = row?.closest<HTMLElement>('.vertical-tab-content');
-    if (!row || !scrollParent) return;
+  // Through @electron/remote, which Obsidian exposes to its renderer: the
+  // driver's own window commands are not implemented for Electron popouts.
+  const setFullScreen = (on: boolean) =>
+    browser.execute((flag: boolean) => {
+      const remote = (window as any).require('@electron/remote');
+      remote.getCurrentWindow().setFullScreen(flag);
+    }, on);
 
-    const PAD = 40;
-    scrollParent.scrollTop = Math.max(
-      scrollParent.scrollTop + row.getBoundingClientRect().top - PAD,
-      0
+  await setFullScreen(true);
+  await browser.pause(500);
+
+  try {
+    // Same scroll as the icon picker capture: from the row's own top, with
+    // room above it.
+    await browser.execute(() => {
+      const row = document.querySelector<HTMLElement>('.lc-setting');
+      const scrollParent = row?.closest<HTMLElement>('.vertical-tab-content');
+      if (!row || !scrollParent) return;
+
+      const PAD = 40;
+      scrollParent.scrollTop = Math.max(
+        scrollParent.scrollTop + row.getBoundingClientRect().top - PAD,
+        0
+      );
+    });
+
+    const { crop, screen } = await browser.execute(
+      (cls: string, popup: typeof COLOR_POPUP) => {
+        const row = document.querySelector<HTMLElement>('.lc-setting');
+        const el = row?.querySelector<HTMLElement>(`.${cls} input`);
+        if (!row || !el) throw new Error(`No .${cls} input in the first row`);
+
+        const PAD = 16;
+        const r = row.getBoundingClientRect();
+        const i = el.getBoundingClientRect();
+        const popupTop = i.bottom + popup.gap;
+
+        const left = Math.max(Math.min(r.left, i.left) - PAD, 0);
+        const top = Math.max(r.top - PAD, 0);
+        const right = Math.min(
+          Math.max(r.right, i.left + popup.width) + PAD,
+          window.innerWidth
+        );
+        const bottom = Math.min(
+          Math.max(r.bottom, popupTop + popup.height) + PAD,
+          window.innerHeight
+        );
+
+        return {
+          crop: { x: left, y: top, width: right - left, height: bottom - top },
+          screen: { width: window.innerWidth, height: window.innerHeight },
+        };
+      },
+      input,
+      COLOR_POPUP
     );
-  });
 
-  const crop = await browser.execute((pad: number) => {
-    const row = document.querySelector<HTMLElement>('.lc-setting');
-    if (!row) throw new Error('No callout row in the settings tab');
+    const shotWithPickerOpen = async (label: string) => {
+      // A driver click, not a DOM one: the popup only opens on a real user
+      // gesture.
+      await browser.$(`.lc-setting .${input} input`).click();
+      await browser.pause(750);
 
-    // Less room below than around: the next row's label starts right under
-    // this one's border, and the picture is about this row alone.
-    const r = row.getBoundingClientRect();
-    const left = Math.max(r.left - pad, 0);
-    const top = Math.max(r.top - pad, 0);
+      const data = await shotDisplay(label, screen.width, screen.height);
 
-    return {
-      x: left,
-      y: top,
-      width: Math.min(r.right + pad, window.innerWidth) - left,
-      height: Math.min(r.bottom + 2, window.innerHeight) - top,
+      // Clicking anywhere in the page closes the popup; the row's label is
+      // never under it.
+      await browser.$('.lc-setting .setting-item-name').click();
+      await browser.pause(250);
+
+      return cropToRect(data, crop);
     };
-  }, 16);
 
-  await captureBothSchemes(name, 'marker-color', original, crop);
+    await setColorScheme(false);
+    const light = await shotWithPickerOpen(`${input}-light`);
+
+    await setColorScheme(true);
+    const dark = await shotWithPickerOpen(`${input}-dark`);
+
+    await setColorScheme(false);
+
+    await browser.switchToWindow(original);
+    await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
+  } finally {
+    // Back the way the other settings captures expect the window.
+    const handles = await browser.getWindowHandles();
+    for (const handle of handles) {
+      await browser.switchToWindow(handle);
+      if (await browser.$('.lc-callout-container').isExisting()) {
+        await setFullScreen(false);
+        break;
+      }
+    }
+    await browser.switchToWindow(original);
+  }
 }
 
 /**
@@ -941,12 +1061,20 @@ describe('README screenshots', function () {
     await captureIconPicker('settings-icon-picker.png');
   });
 
-  it('captures a callout with a custom marker color', async function () {
+  it('captures the color picker open', async function () {
+    await setSettings(callouts(true));
+    await captureColorPicker('settings-color-picker.png', 'lc-color');
+  });
+
+  it('captures the marker color picker open', async function () {
     // The star's usual yellow stays on the background; the marker itself
     // goes a dark amber that reads against it.
     const [first, ...rest] = callouts(true);
     await setSettings([{ ...first, markerColor: '180, 83, 9' }, ...rest]);
-    await captureMarkerColorRow('settings-marker-color.png');
+    await captureColorPicker(
+      'settings-marker-color-picker.png',
+      'lc-marker-color'
+    );
   });
 
   it('captures the import offer', async function () {
