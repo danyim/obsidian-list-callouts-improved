@@ -156,10 +156,12 @@ settings:
   background-color: rgba(var(--lc-callout-color), var(--lc-bg-opacity-dark));
 }
 
+/* A callout may override its marker's color on its own; without one the
+   marker falls back to the callout color the background uses. */
 .lc-list-marker {
   font-family: var(--font-monospace);
   font-weight: bold;
-  color: rgb(var(--lc-callout-color));
+  color: rgb(var(--lc-callout-marker-color, var(--lc-callout-color)));
   pointer-events: none;
 }
 
@@ -224,7 +226,7 @@ settings:
 }
 
 .lc-highlight-marker {
-  color: rgb(var(--lc-callout-color));
+  color: rgb(var(--lc-callout-marker-color, var(--lc-callout-color)));
   pointer-events: none;
 }
 
@@ -291,16 +293,23 @@ settings:
   min-height: 0;
 }
 
-/* Was two selectors scoped to .lc-setting instead (input margin-right, and
-   margin-right on > button specifically), which is why this same markup
-   inside NewCalloutModal -- outside .lc-setting entirely -- rendered its
+/* Wraps: with the marker color controls there are up to six inputs, more
+   than a mobile settings row is wide. column-gap replaces what used to be
+   two selectors scoped to .lc-setting instead (input margin-right, and
+   margin-right on > button specifically) -- scoped that way, this same
+   markup inside NewCalloutModal, outside .lc-setting entirely, rendered its
    input, "Set icon" button and color swatch flush against each other with
    no spacing at all. A flex gap here applies uniformly regardless of
-   container context or child element type. */
+   container context or child element type, including the marker-color
+   controls' own <select>. row-gap is separate and smaller: it only ever
+   shows once wrapped, between rows of controls rather than between
+   controls sitting side by side. */
 .lc-input-container {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
+  row-gap: 6px;
 }
 
 .lc-menu {

@@ -174,9 +174,9 @@ Specific to this plugin:
   to the other modules in `src/`.
 - Bundle everything into `main.js` — no unbundled runtime dependencies.
 - `isDesktopOnly` is `false`: avoid Node/Electron-only APIs, and be mindful
-  of mobile (`settingsTab.ts`'s icon-menu positioning already branches on
-  `Platform.isMobile` where desktop and mobile genuinely need different
-  layout).
+  of mobile (`settingsTab.ts`'s inputs wrap and its icon menu anchors to
+  whichever side of its button it fits on, because a mobile settings pane is
+  narrow enough to lay the same controls out differently).
 
 ## Agent do/don't
 

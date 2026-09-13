@@ -5,6 +5,7 @@ import {
   calloutPreviewCount,
   closeSettings,
   getSettings,
+  importRowVisible,
   legacyDataAvailable,
   openPluginSettings,
   runImport,
@@ -46,7 +47,7 @@ describe('Importing from List Callouts', function () {
   it('offers the import in the settings tab', async function () {
     await openPluginSettings();
 
-    expect(await settingsText()).toContain('Import from List Callouts');
+    expect(await importRowVisible()).toBe(true);
 
     await closeSettings();
   });
@@ -132,7 +133,7 @@ describe('A vault with no List Callouts data', function () {
   it('hides the import row', async function () {
     await openPluginSettings();
 
-    expect(await settingsText()).not.toContain('Import from List Callouts');
+    expect(await importRowVisible()).toBe(false);
 
     await closeSettings();
   });

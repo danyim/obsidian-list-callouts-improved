@@ -2,10 +2,10 @@ import {
   App,
   ButtonComponent,
   ColorComponent,
+  DropdownComponent,
   ExtraButtonComponent,
   Modal,
   Notice,
-  Platform,
   PluginSettingTab,
   Setting,
   SettingDefinitionItem,
@@ -18,7 +18,7 @@ import {
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
-import { Callout, HighlightSettings } from './settings';
+import { Callout, HighlightSettings, calloutColorStyle } from './settings';
 
 // Build a static CM6 list line with callout markup applied
 export function buildSettingCallout(root: HTMLElement, callout: Callout) {
@@ -32,7 +32,7 @@ export function buildSettingCallout(root: HTMLElement, callout: Callout) {
         {
           cls: 'HyperMD-list-line HyperMD-list-line-1 lc-list-callout cm-line',
           attr: {
-            style: `text-indent: -8px; padding-left: 12px; --lc-callout-color: ${callout.color}`,
+            style: `text-indent: -8px; padding-left: 12px; ${calloutColorStyle(callout)}`,
           },
         },
         (mockListLine) => {
@@ -62,6 +62,13 @@ export function buildSettingCallout(root: HTMLElement, callout: Callout) {
     }
   );
 }
+
+/**
+ * How many icons the picker adds to its list at a time: a couple of screens,
+ * so a flick of the wheel does not run into the end, and still cheap to
+ * build.
+ */
+const ICON_PAGE_SIZE = 120;
 
 function attachIconMenu(
   btn: ButtonComponent,
@@ -96,13 +103,19 @@ function attachIconMenu(
         2 -
         (scrollParent?.scrollTop ?? 0)
       }px;`;
-      if (Platform.isMobile) {
-        pos += ` right: ${
-          btnEl.offsetParent.clientWidth -
-          (btnEl.offsetLeft + btnEl.offsetWidth)
-        }px;`;
-      } else {
+      // Hang the menu from the button's left edge when it fits, else from its
+      // right edge. Which one that is depends on where the button landed in
+      // its row: the inputs wrap, so on a narrow (mobile) settings pane the
+      // button can sit at either side.
+      const parentWidth = btnEl.offsetParent.clientWidth;
+      const fitsToTheRight =
+        btnEl.offsetLeft + menuRef.offsetWidth <= parentWidth;
+      if (fitsToTheRight) {
         pos += ` left: ${btnEl.offsetLeft}px;`;
+      } else {
+        pos += ` right: ${
+          parentWidth - (btnEl.offsetLeft + btnEl.offsetWidth)
+        }px;`;
       }
       menuRef.style.cssText = pos;
     };
@@ -127,7 +140,62 @@ function attachIconMenu(
       btnEl.after(menuRef);
       calcMenuPos();
 
+      // Obsidian registers a couple of thousand icons and the list shows
+      // about fifty of them at a time, so an element is only built when its
+      // icon comes into view -- building an SVG for each of them up front
+      // stalled the picker for a noticeable moment every time it opened.
+      // Built elements are kept for the life of the menu so a search that
+      // brings one back does not build it twice.
       const iconEls: Record<string, HTMLDivElement> = {};
+      const iconEl = (icon: string) =>
+        (iconEls[icon] ??= createDiv(
+          {
+            cls: 'clickable-icon',
+            attr: {
+              'data-icon': icon,
+            },
+          },
+          (item) => {
+            setIcon(item, icon);
+            item.onClickEvent(() => {
+              btn.buttonEl.empty();
+              btn.setIcon(icon);
+              onSelect(icon);
+              destroyEventHandlers();
+              menuRef.detach();
+              menuRef = null;
+            });
+          }
+        ));
+
+      // The icons still to be added to the list, in display order.
+      let pending: string[] = [];
+
+      const showMore = () => {
+        pending
+          .splice(0, ICON_PAGE_SIZE)
+          .forEach((icon) => iconList.append(iconEl(icon)));
+      };
+
+      // Keep adding pages until the list can scroll, or runs out: a
+      // handful of hits from a search, or a wide list on a large screen, may
+      // not fill the box, and then there is no scroll to ask for more.
+      const fill = () => {
+        while (
+          pending.length &&
+          iconList.scrollHeight <= iconList.clientHeight
+        ) {
+          showMore();
+        }
+      };
+
+      const showIcons = (icons: string[]) => {
+        iconList.empty();
+        iconList.scrollTop = 0;
+        pending = icons.slice();
+        showMore();
+        fill();
+      };
 
       menu.createDiv('lc-menu-search', (el) => {
         el.createEl(
@@ -143,15 +211,7 @@ function attachIconMenu(
               input.focus();
             });
             const handler = debounce(
-              () => {
-                iconList.empty();
-
-                searchIcons(input.value).forEach((icon) => {
-                  if (iconEls[icon]) {
-                    iconList.append(iconEls[icon]);
-                  }
-                });
-              },
+              () => showIcons(searchIcons(input.value)),
               250,
               true
             );
@@ -160,31 +220,17 @@ function attachIconMenu(
         );
       });
 
-      const iconList = menu.createDiv('lc-menu-icons', (el) => {
-        // Menu
-        allIconIds().forEach((icon) => {
-          el.createDiv(
-            {
-              cls: 'clickable-icon',
-              attr: {
-                'data-icon': icon,
-              },
-            },
-            (item) => {
-              iconEls[icon] = item;
-              setIcon(item, icon);
-              item.onClickEvent(() => {
-                btn.buttonEl.empty();
-                btn.setIcon(icon);
-                onSelect(icon);
-                destroyEventHandlers();
-                menuRef.detach();
-                menuRef = null;
-              });
-            }
-          );
-        });
+      const iconList = menu.createDiv('lc-menu-icons');
+
+      iconList.addEventListener('scroll', () => {
+        const { scrollTop, clientHeight, scrollHeight } = iconList;
+        // Within a screen of the end: add the next page before it is reached.
+        if (scrollHeight - scrollTop - clientHeight < clientHeight) {
+          showMore();
+        }
       });
+
+      showIcons(allIconIds());
     });
 
     btnEl.win.setTimeout(() => {
@@ -192,6 +238,91 @@ function attachIconMenu(
       scrollParent?.addEventListener('scroll', scroll);
     }, 10);
   });
+}
+
+function parseRgb(color: string) {
+  const [r, g, b] = color.split(',').map((v) => parseInt(v.trim(), 10));
+  return { r, g, b };
+}
+
+function formatRgb({ r, g, b }: { r: number; g: number; b: number }) {
+  return `${r}, ${g}, ${b}`;
+}
+
+/**
+ * A color picker wrapped so it can be labeled, found and removed as a unit:
+ * ColorComponent does not expose its input element.
+ */
+function colorPicker(
+  container: HTMLElement,
+  cls: string,
+  label: string,
+  color: string,
+  onPick: (color: string) => void
+) {
+  const wrapper = container.createSpan({ cls });
+  const picker = new ColorComponent(wrapper)
+    .setValueRgb(parseRgb(color))
+    .onChange(() => onPick(formatRgb(picker.getValueRgb())));
+  wrapper.querySelector('input')?.setAttribute('aria-label', label);
+  return wrapper;
+}
+
+/**
+ * The color controls of a callout: its color, and a dropdown that either
+ * leaves the marker on that color or opens a second picker for it. Edits
+ * `callout` in place and calls `onChange` after each one.
+ *
+ * Switching to "custom" stores the callout's current color as the marker
+ * color straight away, so the preview does not change until a color is
+ * picked -- and so the dropdown reads "custom" again when the tab is reopened
+ * even if none ever is.
+ */
+function buildColorControls(
+  container: HTMLElement,
+  callout: Callout,
+  onChange: () => void
+) {
+  colorPicker(container, 'lc-color', 'Color', callout.color, (color) => {
+    callout.color = color;
+    onChange();
+  });
+
+  let markerPicker: HTMLElement | null = null;
+
+  const showMarkerPicker = () => {
+    markerPicker = colorPicker(
+      container,
+      'lc-marker-color',
+      'Marker color',
+      callout.markerColor,
+      (color) => {
+        callout.markerColor = color;
+        onChange();
+      }
+    );
+  };
+
+  new DropdownComponent(container)
+    .addOptions({
+      default: 'Default marker color',
+      custom: 'Custom marker color',
+    })
+    .setValue(callout.markerColor ? 'custom' : 'default')
+    .onChange((mode) => {
+      if (mode === 'custom') {
+        callout.markerColor = callout.color;
+        showMarkerPicker();
+      } else {
+        delete callout.markerColor;
+        markerPicker?.remove();
+        markerPicker = null;
+      }
+      onChange();
+    })
+    .selectEl.addClass('lc-marker-color-mode');
+
+  if (callout.markerColor) showMarkerPicker();
 }
 
 /**
@@ -257,20 +388,10 @@ export function buildCalloutRow(
       });
     });
 
-    // Color selection.
-    const [r, g, b] = callout.color
-      .split(',')
-      .map((v) => parseInt(v.trim(), 10));
-
-    const color = new ColorComponent(inputContainer)
-      .setValueRgb({ r, g, b })
-      .onChange(() => {
-        const { r, g, b } = color.getValueRgb();
-        plugin.settings[index].color = `${r}, ${g}, ${b}`;
-
-        void plugin.saveSettings();
-        redrawPreview();
-      });
+    buildColorControls(inputContainer, plugin.settings[index], () => {
+      void plugin.saveSettings();
+      redrawPreview();
+    });
   });
 }
 
@@ -323,13 +444,7 @@ export class NewCalloutModal extends Modal {
       redraw();
     });
 
-    const color = new ColorComponent(inputContainer)
-      .setValueRgb({ r: 158, g: 158, b: 158 })
-      .onChange(() => {
-        const { r, g, b } = color.getValueRgb();
-        this.callout.color = `${r}, ${g}, ${b}`;
-        redraw();
-      });
+    buildColorControls(inputContainer, this.callout, () => redraw());
 
     const errorEl = this.contentEl.createDiv({ cls: 'lc-error' });
 
@@ -538,28 +653,34 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     const settings = this.plugin.settings;
     const definitions: SettingDefinitionItem[] = [];
 
-    // Omitted outright rather than hidden with `visible`: a hidden definition
-    // still renders into the DOM and carries its text into settings search,
-    // and there's nothing to reveal later -- legacyDataAvailable is resolved
-    // once during load.
-    if (this.plugin.legacyDataAvailable) {
-      definitions.push({
-        name: `Import from ${LEGACY_PLUGIN_NAME}`,
-        desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
-        render: (setting: Setting) => {
-          setting.addButton((btn) =>
-            btn
-              .setButtonText('Import')
-              .setCta()
-              .onClick(() => {
-                new ConfirmImportModal(this.plugin.app, () => {
-                  void this.runImport();
-                }).open();
-              })
-          );
-        },
-      });
-    }
+    definitions.push({
+      name: `Import from ${LEGACY_PLUGIN_NAME}`,
+      desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
+      // Obsidian evaluates this on every render of the tab, and doesn't call
+      // getSettingDefinitions() again once it has cached them, so this is the
+      // one hook that runs each time the tab opens. That makes it the place
+      // to look for the legacy file again -- the other plugin may have saved
+      // its settings since we loaded. The check is async and this isn't, so
+      // the row paints from the last answer and is toggled if that changed.
+      visible: () => {
+        void this.plugin.recheckLegacyData().then((changed) => {
+          if (changed) this.refreshDomState();
+        });
+        return this.plugin.legacyDataAvailable;
+      },
+      render: (setting: Setting) => {
+        setting.addButton((btn) =>
+          btn
+            .setButtonText('Import')
+            .setCta()
+            .onClick(() => {
+              new ConfirmImportModal(this.plugin.app, () => {
+                void this.runImport();
+              }).open();
+            })
+        );
+      },
+    });
 
     definitions.push(
       {

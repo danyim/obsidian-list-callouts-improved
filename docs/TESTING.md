@@ -2,7 +2,9 @@
 
 End-to-end tests run against real Obsidian via
 [wdio-obsidian-service](https://github.com/jesse-r-s-hines/wdio-obsidian-service),
-which downloads and sandboxes its own copies of the app.
+which downloads and sandboxes its own copies of the app. It also fetches a pinned
+release of the upstream List Callouts plugin (see `config/wdio.conf.mts`) so the
+coexistence spec can check the import against what that plugin really writes.
 
 ```bash
 npm test

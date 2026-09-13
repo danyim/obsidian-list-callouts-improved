@@ -27,7 +27,8 @@ export function getSettings(): Promise<Callout[]> {
 
 export function legacyDataAvailable(): Promise<boolean> {
   return browser.executeObsidian(({ app }) => {
-    return (app as any).plugins.plugins['list-callouts-improved'].legacyDataAvailable;
+    return (app as any).plugins.plugins['list-callouts-improved']
+      .legacyDataAvailable;
   }) as Promise<boolean>;
 }
 
@@ -176,6 +177,104 @@ export async function clickAddCallout(): Promise<void> {
 }
 
 /**
+ * Whether the "Import from List Callouts" row is showing in the settings
+ * tab. The row is always in the definitions and hidden with `visible`, which
+ * Obsidian applies as an inline display:none, so the tab's text isn't enough
+ * to tell.
+ */
+export function importRowVisible(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        el.querySelector('.setting-item-name')?.textContent ===
+        'Import from List Callouts'
+    );
+    return row !== undefined && getComputedStyle(row).display !== 'none';
+  });
+}
+
+/**
+ * Click the Import button on the "Import from List Callouts" row of the
+ * settings tab, the way a user migrating would. Throws if the row isn't
+ * showing.
+ */
+export async function clickImportButton(): Promise<void> {
+  const clicked = await browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        el.querySelector('.setting-item-name')?.textContent ===
+        'Import from List Callouts'
+    );
+    const button = row?.querySelector<HTMLElement>('button');
+    if (!row || !button || getComputedStyle(row).display === 'none') {
+      return false;
+    }
+
+    button.click();
+    return true;
+  });
+
+  if (!clicked) {
+    throw new Error('No "Import from List Callouts" row in the settings tab');
+  }
+}
+
+/**
+ * The forked-from plugin, as installed by config/wdio.conf.mts. These drive
+ * its own settings object and `saveSettings()`, which is exactly what its
+ * settings tab does when a control changes, so the `data.json` it leaves
+ * behind is the genuine article rather than one this test suite wrote.
+ */
+export const LEGACY_PLUGIN_ID = 'obsidian-list-callouts';
+
+export function legacyPluginLoaded(): Promise<boolean> {
+  return browser.executeObsidian(({ app }, id) => {
+    return Boolean((app as any).plugins.plugins[id]);
+  }, LEGACY_PLUGIN_ID);
+}
+
+export function legacyPluginSettings(): Promise<Callout[]> {
+  return browser.executeObsidian(({ app }, id) => {
+    return JSON.parse(
+      JSON.stringify((app as any).plugins.plugins[id].settings)
+    );
+  }, LEGACY_PLUGIN_ID) as Promise<Callout[]>;
+}
+
+/** Replace the legacy plugin's callouts through its own API and let it save. */
+export async function customizeLegacyPlugin(
+  callouts: Callout[]
+): Promise<void> {
+  await browser.executeObsidian(
+    async ({ app }, id, next) => {
+      const p = (app as any).plugins.plugins[id];
+      p.settings = next;
+      await p.saveSettings();
+    },
+    LEGACY_PLUGIN_ID,
+    callouts
+  );
+}
+
+export async function legacyDataFileExists(): Promise<boolean> {
+  return await browser.executeObsidian(async ({ app }, id) => {
+    return await app.vault.adapter.exists(
+      `${app.vault.configDir}/plugins/${id}/data.json`
+    );
+  }, LEGACY_PLUGIN_ID);
+}
+
+/**
  * Run `op` against the topmost dialog, in whichever window it opened.
  *
  * On Obsidian 1.13 desktop the settings tab lives in its own window, but a
@@ -195,8 +294,7 @@ function inTopmostModal<T>(
   return browser.executeObsidian(
     ({ app }, what: string, value: string) => {
       const root = (app as any).setting.activeTab?.containerEl as
-        | HTMLElement
-        | undefined;
+        HTMLElement | undefined;
       const docs = [root?.ownerDocument, document].filter(
         (d, i, all): d is Document => !!d && all.indexOf(d) === i
       );
@@ -223,9 +321,8 @@ function inTopmostModal<T>(
         case 'text':
           return (modal?.textContent ?? '').trim();
         case 'type': {
-          const input = modal?.querySelector<HTMLInputElement>(
-            'input[type="text"]'
-          );
+          const input =
+            modal?.querySelector<HTMLInputElement>('input[type="text"]');
           if (!input) return false;
           input.value = value;
           input.dispatchEvent(new Event('input'));
@@ -260,8 +357,7 @@ export function modalText(): Promise<string> {
 function modalWhereabouts(): Promise<string> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const doc = root?.ownerDocument;
     const count = (d: Document | undefined) =>
       d ? d.querySelectorAll('.modal-container .modal').length : -1;
@@ -339,8 +435,7 @@ export function iconMenuGeometry(): Promise<null | {
 }> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const menu = [root?.ownerDocument, document]
       .map((d) => d?.querySelector<HTMLElement>('.lc-menu'))
       .find((m) => !!m);
@@ -392,11 +487,33 @@ export async function openIconMenuInModal(): Promise<void> {
 export function iconMenuCount(): Promise<number> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
-    return [root?.ownerDocument, document]
-      .map((d) => d?.querySelectorAll('.lc-menu-icons .clickable-icon').length)
-      .find((n) => !!n) ?? 0;
+      HTMLElement | undefined;
+    return (
+      [root?.ownerDocument, document]
+        .map(
+          (d) => d?.querySelectorAll('.lc-menu-icons .clickable-icon').length
+        )
+        .find((n) => !!n) ?? 0
+    );
+  });
+}
+
+/** Number of icon ids the running app registers, custom ones included. */
+export function iconIdCount(): Promise<number> {
+  return browser.executeObsidian(
+    ({ obsidian }) => obsidian.getIconIds().length
+  );
+}
+
+/** Scroll the open icon picker's list to its end. */
+export async function scrollIconMenuToEnd(): Promise<void> {
+  await browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    const list = [root?.ownerDocument, document]
+      .map((d) => d?.querySelector<HTMLElement>('.lc-menu-icons'))
+      .find((l) => !!l);
+    list.scrollTop = list.scrollHeight;
   });
 }
 
@@ -404,8 +521,7 @@ export function iconMenuCount(): Promise<number> {
 export async function searchIconMenu(query: string): Promise<void> {
   await browser.executeObsidian(({ app }, q) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const input = [root?.ownerDocument, document]
       .map((d) => d?.querySelector<HTMLInputElement>('.lc-menu-search input'))
       .find((i) => !!i);
@@ -414,12 +530,38 @@ export async function searchIconMenu(query: string): Promise<void> {
   }, query);
 }
 
+/** Whether the open picker currently lists the icon with this id. */
+export function iconInMenu(id: string): Promise<boolean> {
+  return browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    return [root?.ownerDocument, document].some(
+      (d) =>
+        !!d?.querySelector(
+          `.lc-menu-icons .clickable-icon[data-icon="${wanted}"]`
+        )
+    );
+  }, id);
+}
+
+/** Search the open picker and wait for the icon with this id to be listed. */
+export async function searchIconMenuFor(
+  query: string,
+  id: string
+): Promise<void> {
+  await searchIconMenu(query);
+  await browser.waitUntil(() => iconInMenu(id), {
+    timeout: 5000,
+    interval: 200,
+    timeoutMsg: `icon search for "${query}" did not list ${id}`,
+  });
+}
+
 /** Click an icon in the open picker by its id. */
 export async function clickIconInMenu(id: string): Promise<void> {
   const clicked = await browser.executeObsidian(({ app }, wanted) => {
     const root = (app as any).setting.activeTab?.containerEl as
-      | HTMLElement
-      | undefined;
+      HTMLElement | undefined;
     const el = [root?.ownerDocument, document]
       .map((d) =>
         d?.querySelector<HTMLElement>(
@@ -765,4 +907,142 @@ async function setViewMode(mode: 'preview' | 'source'): Promise<void> {
   if (current !== mode) {
     await browser.executeObsidianCommand('markdown:toggle-preview');
   }
+}
+
+/** What the marker color controls of one callout form currently show. */
+export interface MarkerColorControls {
+  /** The dropdown's value: 'default' or 'custom'. */
+  mode: string;
+  /** The marker color picker's hex value, or null when it is not shown. */
+  picker: string | null;
+}
+
+/**
+ * Drive the marker color controls inside `root`: the callout row at `index`
+ * in the settings tab, or the add-callout dialog when `index` is null.
+ */
+function inMarkerColorControls<T>(
+  index: number | null,
+  op: 'read' | 'mode' | 'pick',
+  arg = ''
+): Promise<T> {
+  return browser.executeObsidian(
+    ({ app }, i: number | null, what: string, value: string) => {
+      const tab = (app as any).setting.activeTab?.containerEl as
+        | HTMLElement
+        | undefined;
+
+      let root: Element | null = null;
+      if (i === null) {
+        // Same two-window search as the modal helpers: the dialog opens in
+        // whichever window is active, not necessarily the settings window.
+        const docs = [tab?.ownerDocument, document].filter(
+          (d, k, all): d is Document => !!d && all.indexOf(d) === k
+        );
+        for (const doc of docs) {
+          const found = doc.querySelectorAll(
+            '.modal-container .modal:not(.mod-settings)'
+          );
+          if (found.length) {
+            root = found[found.length - 1];
+            break;
+          }
+        }
+      } else {
+        root = tab?.querySelectorAll('.lc-setting')[i] ?? null;
+      }
+      if (!root) throw new Error(`No callout form (index ${String(i)})`);
+
+      const select = root.querySelector<HTMLSelectElement>(
+        'select.lc-marker-color-mode'
+      );
+      const picker = root.querySelector<HTMLInputElement>(
+        '.lc-marker-color input'
+      );
+
+      switch (what) {
+        case 'read':
+          return { mode: select?.value ?? '', picker: picker?.value ?? null };
+        case 'mode':
+          if (!select) throw new Error('No marker color dropdown');
+          select.value = value;
+          select.dispatchEvent(new Event('change'));
+          return null;
+        case 'pick':
+          if (!picker) throw new Error('No marker color picker');
+          picker.value = value;
+          picker.dispatchEvent(new Event('change'));
+          return null;
+      }
+    },
+    index,
+    op,
+    arg
+  ) as Promise<T>;
+}
+
+/** The marker color controls of the settings row for the callout at `index`. */
+export function markerColorControls(
+  index: number
+): Promise<MarkerColorControls> {
+  return inMarkerColorControls(index, 'read');
+}
+
+/** Pick 'default' or 'custom' in the row's marker color dropdown. */
+export async function setMarkerColorMode(
+  index: number,
+  mode: 'default' | 'custom'
+): Promise<void> {
+  await inMarkerColorControls(index, 'mode', mode);
+}
+
+/** Choose `hex` (e.g. '#010203') in the row's marker color picker. */
+export async function pickMarkerColor(
+  index: number,
+  hex: string
+): Promise<void> {
+  await inMarkerColorControls(index, 'pick', hex);
+}
+
+/** The marker color controls of the open add-callout dialog. */
+export function modalMarkerColorControls(): Promise<MarkerColorControls> {
+  return inMarkerColorControls(null, 'read');
+}
+
+/** Pick 'default' or 'custom' in the add-callout dialog's dropdown. */
+export async function setModalMarkerColorMode(
+  mode: 'default' | 'custom'
+): Promise<void> {
+  await inMarkerColorControls(null, 'mode', mode);
+}
+
+/** Choose `hex` in the add-callout dialog's marker color picker. */
+export async function pickModalMarkerColor(hex: string): Promise<void> {
+  await inMarkerColorControls(null, 'pick', hex);
+}
+
+/**
+ * The `--lc-callout-marker-color` property and the marker's painted color for
+ * each decorated element matching `selector`, keyed by callout character.
+ */
+export function markerPaint(
+  selector: string
+): Promise<Record<string, { property: string; painted: string }>> {
+  return browser.executeObsidian(({ app }, sel: string) => {
+    const out: Record<string, { property: string; painted: string }> = {};
+    app.workspace.containerEl
+      .querySelectorAll<HTMLElement>(sel)
+      .forEach((el) => {
+        const char = el.getAttribute('data-callout');
+        const marker = el.querySelector<HTMLElement>(
+          '.lc-list-marker, .lc-highlight-marker'
+        );
+        if (!char || !marker) return;
+        out[char] = {
+          property: el.style.getPropertyValue('--lc-callout-marker-color'),
+          painted: getComputedStyle(marker).color,
+        };
+      });
+    return out;
+  }, selector);
 }

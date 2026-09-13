@@ -97,7 +97,10 @@ change touches `settingsTab.ts`, run against both before opening the PR.
 
 Each run writes renderings into `test/screenshots/`, which CI uploads as
 artifacts. The README's images are separate and come from `npm run screenshots`;
-regenerate them if you change how callouts look.
+regenerate them if you change how callouts look. That script needs the Inter font
+and, for the two captures with a color picker open, `ffmpeg` and a Linux display
+(the picker is a window of Chromium's own, so it is grabbed off the screen rather
+than out of the page).
 
 ## Pull requests
 
