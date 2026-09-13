@@ -446,17 +446,20 @@ async function iconPickerCropRect(): Promise<CropRect> {
     }
 
     const PAD = 16;
-    const rowRect = row.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
+    // The tooltip, when one is up, hangs below the hovered icon and can
+    // reach past the menu's bottom edge.
+    const rects = [row, menu, document.querySelector('.tooltip')]
+      .filter((el) => !!el)
+      .map((el) => el.getBoundingClientRect());
 
-    const left = Math.max(Math.min(rowRect.left, menuRect.left) - PAD, 0);
-    const top = Math.max(Math.min(rowRect.top, menuRect.top) - PAD, 0);
+    const left = Math.max(Math.min(...rects.map((r) => r.left)) - PAD, 0);
+    const top = Math.max(Math.min(...rects.map((r) => r.top)) - PAD, 0);
     const right = Math.min(
-      Math.max(rowRect.right, menuRect.right) + PAD,
+      Math.max(...rects.map((r) => r.right)) + PAD,
       window.innerWidth
     );
     const bottom = Math.min(
-      Math.max(rowRect.bottom, menuRect.bottom) + PAD,
+      Math.max(...rects.map((r) => r.bottom)) + PAD,
       window.innerHeight
     );
 
@@ -684,9 +687,10 @@ async function captureSettingsPage(name: string): Promise<void> {
 /**
  * Capture the settings tab with the icon picker open: the same rows as the
  * full-page shot plus the thing the rows lead to, which a picture explains
- * better than a sentence does.
+ * better than a sentence does. With `hover`, the pointer is parked on that
+ * icon so its tooltip is in the picture too.
  */
-async function captureIconPicker(name: string): Promise<void> {
+async function captureIconPicker(name: string, hover?: string): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
   const { original } = await enterSettingsWindow();
@@ -758,6 +762,15 @@ async function captureIconPicker(name: string): Promise<void> {
       'important'
     );
   });
+
+  if (hover) {
+    // A real pointer move, which is what the tooltip answers to. It stays
+    // put across the two color-scheme shots, and so does the tooltip.
+    await browser
+      .$(`.lc-menu .lc-menu-icons .clickable-icon[data-icon="${hover}"]`)
+      .moveTo();
+    await browser.$('.tooltip').waitForExist({ timeout: 5000 });
+  }
 
   const crop = await iconPickerCropRect();
 
@@ -1058,7 +1071,7 @@ describe('README screenshots', function () {
 
   it('captures the settings tab with the icon picker open', async function () {
     await setSettings(callouts(false));
-    await captureIconPicker('settings-icon-picker.png');
+    await captureIconPicker('settings-icon-picker.png', 'lucide-activity');
   });
 
   it('captures the color picker open', async function () {
