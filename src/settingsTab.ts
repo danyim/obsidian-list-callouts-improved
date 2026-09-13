@@ -545,7 +545,7 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     if (this.plugin.legacyDataAvailable) {
       definitions.push({
         name: `Import from ${LEGACY_PLUGIN_NAME}`,
-        desc: `Settings from ${LEGACY_PLUGIN_NAME}, the plugin this one was forked from, were found in this vault. Importing replaces your current callouts.`,
+        desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
         render: (setting: Setting) => {
           setting.addButton((btn) =>
             btn
