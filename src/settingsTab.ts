@@ -373,7 +373,7 @@ export class NewCalloutModal extends Modal {
 }
 
 const RESET_DESC =
-  'Replace your callouts with the seven built-in ones. Callouts you have added, and any changes to the built-in ones, are permanently lost.';
+  'Replace all your callouts with the seven default items. Any callouts you have added, including any changes to the default, will be permanently lost.';
 
 /**
  * Resetting throws away every callout the user has configured, so confirm
