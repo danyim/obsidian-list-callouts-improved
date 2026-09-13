@@ -899,9 +899,12 @@ async function captureColorPicker(
 
       const data = await shotDisplay(label, screen.width, screen.height);
 
-      // Clicking anywhere in the page closes the popup; the row's label is
-      // never under it.
-      await browser.$('.lc-setting .setting-item-name').click();
+      // Clicking anywhere in the page closes the popup; the row's own top
+      // left corner is never under it (the popup opens near the color
+      // swatch, toward the row's right side). Was the row's own name
+      // element, now empty (and so no longer a click target at all) since
+      // callout rows don't show one.
+      await browser.$('.lc-setting').click({ x: 4, y: 4 });
       await browser.pause(250);
 
       return cropToRect(data, crop);

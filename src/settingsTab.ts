@@ -640,7 +640,10 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     index: number
   ): SettingDefinitionRender {
     return {
-      name: callout.char ? `Callout ${callout.char}` : 'Callout',
+      // Not worth showing: every row's own name would start with the same
+      // "Callout " prefix, and the character itself already appears in the
+      // row's own preview and character input right below.
+      name: '',
       aliases: callout.icon ? [callout.icon] : undefined,
       render: (setting: Setting) => {
         setting.settingEl.addClass('lc-setting');
