@@ -1,7 +1,10 @@
 import { browser, expect } from '@wdio/globals';
 import { afterEach, before, beforeEach, describe, it } from 'mocha';
 
-import { DEFAULT_HIGHLIGHT_SETTINGS, DEFAULT_SETTINGS } from '../../src/settings';
+import {
+  DEFAULT_HIGHLIGHT_SETTINGS,
+  DEFAULT_SETTINGS,
+} from '../../src/settings';
 import {
   calloutPatternsAreNull,
   calloutPreviewCount,
@@ -18,6 +21,8 @@ import {
   getHighlights,
   getSettings,
   highlightPatternsAreNull,
+  iconIdCount,
+  iconInMenu,
   iconMenuCount,
   iconMenuGeometry,
   modalSubmitDisabled,
@@ -27,7 +32,9 @@ import {
   reloadPlugin,
   reorderCallout,
   runReset,
+  scrollIconMenuToEnd,
   searchIconMenu,
+  searchIconMenuFor,
   setHighlights,
   setSettings,
   settingsText,
@@ -115,7 +122,38 @@ describe('Adding a callout', function () {
       expect(narrowed).toBeLessThan(all);
     });
 
+    // Obsidian registers a couple of thousand icons, and building an SVG for
+    // each of them on every open is what made the picker stall. Only the
+    // first stretch of the list is built up front; the rest follows as it
+    // is scrolled into view.
+    it('builds the list lazily as it is scrolled', async function () {
+      const total = await iconIdCount();
+      const initial = await iconMenuCount();
+
+      expect(initial).toBeGreaterThan(0);
+      expect(initial).toBeLessThan(total);
+
+      await scrollIconMenuToEnd();
+      await browser.waitUntil(async () => (await iconMenuCount()) > initial, {
+        timeout: 5000,
+        interval: 200,
+        timeoutMsg: 'scrolling the icon list did not add icons',
+      });
+    });
+
+    // lucide-star sits deep in the alphabet, past what the picker builds on
+    // open, so this only passes if search draws on the full id list rather
+    // than on what happens to be in the DOM.
+    it('finds an icon the list has not built yet', async function () {
+      expect(await iconInMenu('lucide-star')).toBe(false);
+
+      await searchIconMenuFor('star', 'lucide-star');
+      await clickIconInMenu('lucide-star');
+      expect(await modalText()).not.toContain('Set icon');
+    });
+
     it('applies a chosen icon to the new callout', async function () {
+      await searchIconMenuFor('star', 'lucide-star');
       await clickIconInMenu('lucide-star');
       await typeInModal('(');
       await clickModalButton('Add');
