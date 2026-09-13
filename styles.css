@@ -252,11 +252,6 @@ settings:
   z-index: 0;
 }
 
-.lc-setting input,
-.lc-setting .lc-input-container > button {
-  margin-right: 10px;
-}
-
 .lc-setting input {
   width: 4em;
 }
@@ -277,9 +272,16 @@ settings:
   min-height: 0;
 }
 
+/* Was two selectors scoped to .lc-setting instead (input margin-right, and
+   margin-right on > button specifically), which is why this same markup
+   inside NewCalloutModal -- outside .lc-setting entirely -- rendered its
+   input, "Set icon" button and color swatch flush against each other with
+   no spacing at all. A flex gap here applies uniformly regardless of
+   container context or child element type. */
 .lc-input-container {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .lc-menu {

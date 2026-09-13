@@ -808,6 +808,251 @@ async function captureImportRow(name: string): Promise<void> {
   await captureBothSchemes(name, 'import', original, crop);
 }
 
+/** Bounding box, in viewport pixels, of the topmost modal dialog. */
+async function modalCropRect(pad = 16): Promise<CropRect> {
+  return browser.execute((padding: number) => {
+    const modals = document.querySelectorAll<HTMLElement>(
+      '.modal-container .modal:not(.mod-settings)'
+    );
+    const modal = modals[modals.length - 1];
+    if (!modal) throw new Error('No modal is open');
+
+    const r = modal.getBoundingClientRect();
+    const left = Math.max(r.left - padding, 0);
+    const top = Math.max(r.top - padding, 0);
+
+    return {
+      x: left,
+      y: top,
+      width: Math.min(r.right + padding, window.innerWidth) - left,
+      height: Math.min(r.bottom + padding, window.innerHeight) - top,
+    };
+  }, pad);
+}
+
+/** The topmost dialog's own text, or '' when none is open. Plain execute(),
+ * not executeObsidian() -- once enterSettingsWindow has switched the
+ * session to a popout, that window has no wdio-obsidian-service bridge, so
+ * anything after it has to read the DOM directly instead. */
+function modalTextInWindow(): Promise<string> {
+  return browser.execute(() => {
+    const modals = document.querySelectorAll<HTMLElement>(
+      '.modal-container .modal:not(.mod-settings)'
+    );
+    return (modals[modals.length - 1]?.textContent ?? '').trim();
+  });
+}
+
+async function waitForModalInWindow(containing: string): Promise<void> {
+  await browser.waitUntil(
+    async () => (await modalTextInWindow()).includes(containing),
+    {
+      timeout: 10000,
+      interval: 200,
+      timeoutMsg: `no modal containing "${containing}"`,
+    }
+  );
+}
+
+/** Click "Cancel" on the topmost dialog and wait for it to close. */
+async function dismissModalInWindow(): Promise<void> {
+  await browser.execute(() => {
+    const modals = document.querySelectorAll<HTMLElement>(
+      '.modal-container .modal:not(.mod-settings)'
+    );
+    const modal = modals[modals.length - 1];
+    const btn = Array.from(modal?.querySelectorAll('button') ?? []).find(
+      (b) => (b.textContent ?? '').trim() === 'Cancel'
+    );
+    btn?.click();
+  });
+
+  await browser.waitUntil(async () => (await modalTextInWindow()) === '', {
+    timeout: 5000,
+    interval: 150,
+    timeoutMsg: 'a dialog stayed open after teardown',
+  });
+}
+
+/** Capture the "Add callout" modal on its own. */
+async function captureAddCalloutModal(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+
+  const clicked = await browser.execute((selector: string) => {
+    const root = document.querySelector<HTMLElement>(selector);
+    const target =
+      root?.querySelector<HTMLElement>('[aria-label="Add callout"]') ??
+      root?.querySelector<HTMLElement>('.mod-add-item');
+    if (!target) return false;
+    target.click();
+    return true;
+  }, pane);
+  if (!clicked) throw new Error('Could not find the "Add callout" control');
+
+  await waitForModalInWindow('Add callout');
+
+  const settingsWindow = await browser.getWindowHandle();
+  const crop = await modalCropRect();
+  await captureBothSchemes(name, 'add-callout', original, crop);
+
+  // captureBothSchemes ends switched to `original` (the main window) --
+  // dismissing there would silently no-op against a window that never had
+  // the modal, leaving it stuck open in the popout underneath. Switching
+  // back to `original` again afterward keeps the invariant every other
+  // capture here relies on: each one leaves the session on the main
+  // window, not wherever its own popout happened to be.
+  await browser.switchToWindow(settingsWindow);
+  await dismissModalInWindow();
+  await browser.switchToWindow(original);
+}
+
+/** Capture the "Reset to defaults" confirmation modal on its own. */
+async function captureResetConfirmModal(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+
+  const clicked = await browser.execute(
+    (selector: string, wanted: string) => {
+      const root = document.querySelector<HTMLElement>(selector);
+      const row = Array.from(
+        root?.querySelectorAll<HTMLElement>('.setting-item') ?? []
+      ).find(
+        (el) =>
+          (el.querySelector('.setting-item-name')?.textContent ?? '').trim() ===
+          wanted
+      );
+      const control = row?.querySelector<HTMLElement>('button');
+      if (!control) return false;
+      control.click();
+      return true;
+    },
+    pane,
+    'Reset to defaults'
+  );
+  if (!clicked) throw new Error('No "Reset to defaults" button in settings');
+
+  await waitForModalInWindow('Reset to defaults');
+
+  const settingsWindow = await browser.getWindowHandle();
+  const crop = await modalCropRect();
+  await captureBothSchemes(name, 'reset-confirm', original, crop);
+
+  // captureBothSchemes ends switched to `original` (the main window) --
+  // dismissing there would silently no-op against a window that never had
+  // the modal, leaving it stuck open in the popout underneath. Switching
+  // back to `original` again afterward keeps the invariant every other
+  // capture here relies on: each one leaves the session on the main
+  // window, not wherever its own popout happened to be.
+  await browser.switchToWindow(settingsWindow);
+  await dismissModalInWindow();
+  await browser.switchToWindow(original);
+}
+
+/**
+ * Capture a callout row mid-drag, reordering it in the list.
+ *
+ * Obsidian's own list reorder (Yv/_v in its bundle) is a handwritten
+ * mousedown/mousemove/mouseup drag, not HTML5 drag-and-drop or a library
+ * like SortableJS -- and specifically mousedown, not pointerdown, so
+ * WebDriver's own pointer actions (which Chrome dispatches as trusted
+ * PointerEvents) never reach its listener. Real, trusted input aside,
+ * nothing about the check is browser-specific, so a plain synthetic
+ * MouseEvent sequence dispatched straight at the handle and window drives
+ * it identically. Left mid-drag (no mouseup) for the screenshot, then
+ * released to leave the settings tab usable afterward.
+ */
+async function captureDragState(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { original } = await enterSettingsWindow();
+
+  // Defensive: a no-op when nothing is open, but a stray modal left over
+  // from an earlier capture in the same window would otherwise sit on top
+  // of the drag ghost in the screenshot.
+  await dismissModalInWindow();
+
+  const rect = await browser.execute(() => {
+    const handle = document.querySelector<HTMLElement>('.mod-drag-handle');
+    const scrollParent = handle?.closest<HTMLElement>('.vertical-tab-content');
+    if (!handle || !scrollParent) return null;
+
+    // The first callout row -- and so its own drag handle -- sits below
+    // the fold under the settings tab's other groups; bring it into view
+    // first, the same way a person would have to scroll to reach it.
+    scrollParent.scrollTop =
+      handle.getBoundingClientRect().top -
+      scrollParent.getBoundingClientRect().top +
+      scrollParent.scrollTop -
+      100;
+
+    const r = handle.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+
+    const fire = (target: EventTarget, type: string, cx: number, cy: number) =>
+      target.dispatchEvent(
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          button: 0,
+          buttons: 1,
+          clientX: cx,
+          clientY: cy,
+          view: window,
+        })
+      );
+
+    fire(handle, 'mousedown', x, y);
+    fire(window, 'mousemove', x, y + 10);
+    fire(window, 'mousemove', x, y + 30);
+    fire(window, 'mousemove', x, y + 60);
+
+    const listEl = handle.closest('.setting-item')?.parentElement;
+    const listRect = listEl?.getBoundingClientRect();
+    const ghostRect = document
+      .querySelector('.drag-reorder-ghost')
+      ?.getBoundingClientRect();
+    if (!listRect || !ghostRect) return null;
+
+    const PAD = 16;
+    const left = Math.max(Math.min(listRect.left, ghostRect.left) - PAD, 0);
+    const top = Math.max(Math.min(listRect.top, ghostRect.top) - PAD, 0);
+    const right = Math.min(
+      Math.max(listRect.right, ghostRect.right) + PAD,
+      window.innerWidth
+    );
+    const bottom = Math.min(
+      Math.max(listRect.bottom, ghostRect.bottom) + PAD,
+      window.innerHeight
+    );
+
+    return { x: left, y: top, width: right - left, height: bottom - top };
+  });
+
+  if (!rect) throw new Error('Could not start a drag on the callout list');
+
+  await captureBothSchemes(name, 'drag-state', original, rect);
+
+  // Releasing the button ends the drag Obsidian's own side is tracking;
+  // window is where _v attaches its mousemove/mouseup listeners once a
+  // drag starts, mirroring how fire() above dispatched the moves that
+  // drove it.
+  await browser.execute(() => {
+    window.dispatchEvent(
+      new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 0,
+      })
+    );
+  });
+}
+
 describe('README screenshots', function () {
   before(async function () {
     await browser.executeObsidian(({ app }) => {
@@ -895,6 +1140,21 @@ describe('README screenshots', function () {
     await captureIconPicker('settings-icon-picker.png');
   });
 
+  it('captures the add callout modal', async function () {
+    await captureAddCalloutModal('settings-add-callout.png');
+  });
+
+  it('captures the reset confirmation modal', async function () {
+    await captureResetConfirmModal('settings-reset-confirm.png');
+  });
+
+  it('captures a callout row mid-drag', async function () {
+    await captureDragState('settings-drag-state.png');
+  });
+
+  // Mutates shared plugin state (legacy data + a plugin reload), so it runs
+  // last -- no other capture should see the import row, or the window churn
+  // reloading the plugin leaves behind.
   it('captures the import offer', async function () {
     await captureImportRow('settings-import.png');
   });
