@@ -45,6 +45,8 @@ any of them can be edited, reordered by dragging, or deleted — the built-in on
 included. Nothing is fixed, so a vault can end up with a completely different set, or
 with none at all.
 
+![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon and colour, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
+
 **Reset to defaults**, at the bottom of the settings tab, puts the original seven
 back. It replaces everything currently configured, so callouts you have added and
 edits to the built-in ones are lost; it asks for confirmation first, and the change

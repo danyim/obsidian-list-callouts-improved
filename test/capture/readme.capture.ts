@@ -447,10 +447,136 @@ async function captureBothSchemes(
   await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
 }
 
+/** One viewport's worth of a scrolled pane, and the slice of it that is new. */
+interface PaneSlice {
+  data: string;
+  /** CSS width of the shot, so the slice can be scaled to the image's pixels. */
+  cssWidth: number;
+  /** Where the not-yet-captured content starts in this shot, in CSS px. */
+  y: number;
+  height: number;
+}
+
 /**
- * Capture the settings tab with the icon picker open. This stands in for a
- * plain shot of the settings: it shows the same rows plus the thing the rows
- * lead to, which a picture explains better than a sentence does.
+ * Shoot a scrolling pane in full, however tall its content is.
+ *
+ * An element screenshot only ever shows the part of a scroller that is on
+ * screen, and the window cannot be made taller than the display. So the pane
+ * is scrolled one viewport at a time, shot at each stop, and only the strip
+ * each stop newly reveals is kept -- the last stop overlaps the one before
+ * it, since scrollTop clamps at the bottom.
+ */
+async function shotPaneScrolled(pane: string, label: string): Promise<string> {
+  const metrics = () =>
+    browser.execute((selector: string) => {
+      const el = document.querySelector<HTMLElement>(selector);
+      return {
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+        scrollHeight: el.scrollHeight,
+        width: el.getBoundingClientRect().width,
+      };
+    }, pane);
+
+  // The scrollbar thumb would otherwise be stitched in at a different height
+  // in every slice.
+  await browser.execute((selector: string) => {
+    document
+      .querySelector<HTMLElement>(selector)
+      .style.setProperty('scrollbar-width', 'none');
+  }, pane);
+
+  const slices: PaneSlice[] = [];
+  let covered = 0;
+
+  for (;;) {
+    await browser.execute(
+      (selector: string, top: number) => {
+        document.querySelector<HTMLElement>(selector).scrollTop = top;
+      },
+      pane,
+      covered
+    );
+    // Let the scroll and any repaint settle before measuring and shooting.
+    await browser.pause(150);
+
+    const m = await metrics();
+    const data = await shotElement(pane, `${label}-${slices.length}`);
+    const y = covered - m.scrollTop;
+
+    slices.push({ data, cssWidth: m.width, y, height: m.clientHeight - y });
+    covered = m.scrollTop + m.clientHeight;
+
+    if (covered >= m.scrollHeight) break;
+  }
+
+  await browser.execute((selector: string) => {
+    const el = document.querySelector<HTMLElement>(selector);
+    el.scrollTop = 0;
+    el.style.removeProperty('scrollbar-width');
+  }, pane);
+
+  return stackVertically(slices);
+}
+
+/** Stitch pane slices top to bottom on a canvas, returning base64 PNG data. */
+async function stackVertically(slices: PaneSlice[]): Promise<string> {
+  return browser.execute(async (parts: PaneSlice[]) => {
+    const load = (data: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('could not decode a capture'));
+        img.src = `data:image/png;base64,${data}`;
+      });
+
+    const images = await Promise.all(parts.map((p) => load(p.data)));
+
+    // A retina display shoots at more than one pixel per CSS pixel, so the
+    // CSS-measured slice has to be scaled to the image's own pixels.
+    const scaled = parts.map((p, i) => {
+      const scale = images[i].width / p.cssWidth;
+      return { img: images[i], y: p.y * scale, height: p.height * scale };
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(...scaled.map((s) => s.img.width));
+    canvas.height = Math.ceil(scaled.reduce((sum, s) => sum + s.height, 0));
+
+    const ctx = canvas.getContext('2d');
+    let offset = 0;
+    for (const { img, y, height } of scaled) {
+      ctx.drawImage(img, 0, y, img.width, height, 0, offset, img.width, height);
+      offset += height;
+    }
+
+    return canvas.toDataURL('image/png').split(',')[1];
+  }, slices);
+}
+
+/** Capture the whole of the plugin's settings tab, in both colour schemes. */
+async function captureSettingsPage(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+
+  await setColorScheme(false);
+  const light = await shotPaneScrolled(pane, 'settings-light');
+
+  await setColorScheme(true);
+  const dark = await shotPaneScrolled(pane, 'settings-dark');
+
+  await setColorScheme(false);
+
+  // Compose back in the main window, where the Obsidian globals live.
+  await browser.switchToWindow(original);
+  await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
+}
+
+/**
+ * Capture the settings tab with the icon picker open: the same rows as the
+ * full-page shot plus the thing the rows lead to, which a picture explains
+ * better than a sentence does.
  */
 async function captureIconPicker(name: string): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
@@ -590,6 +716,11 @@ describe('README screenshots', function () {
     await openNote('Highlights.md');
     await setSettings(callouts(true));
     await captureEditor('highlights.png', true, true, '.lc-highlight-callout');
+  });
+
+  it('captures the whole settings tab', async function () {
+    await setSettings(callouts(false));
+    await captureSettingsPage('settings.png');
   });
 
   it('captures the settings tab with the icon picker open', async function () {
