@@ -138,7 +138,7 @@ function attachIconMenu(
             },
           },
           (input) => {
-            window.setTimeout(() => {
+            activeWindow.setTimeout(() => {
               input.focus();
             });
             const handler = debounce(
