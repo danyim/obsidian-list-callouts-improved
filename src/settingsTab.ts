@@ -2,10 +2,10 @@ import {
   App,
   ButtonComponent,
   ColorComponent,
+  DropdownComponent,
   ExtraButtonComponent,
   Modal,
   Notice,
-  Platform,
   PluginSettingTab,
   Setting,
   SettingDefinitionItem,
@@ -18,7 +18,7 @@ import {
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
-import { Callout, HighlightSettings } from './settings';
+import { Callout, HighlightSettings, calloutColorStyle } from './settings';
 
 // Build a static CM6 list line with callout markup applied
 export function buildSettingCallout(root: HTMLElement, callout: Callout) {
@@ -32,7 +32,7 @@ export function buildSettingCallout(root: HTMLElement, callout: Callout) {
         {
           cls: 'HyperMD-list-line HyperMD-list-line-1 lc-list-callout cm-line',
           attr: {
-            style: `text-indent: -8px; padding-left: 12px; --lc-callout-color: ${callout.color}`,
+            style: `text-indent: -8px; padding-left: 12px; ${calloutColorStyle(callout)}`,
           },
         },
         (mockListLine) => {
@@ -96,13 +96,19 @@ function attachIconMenu(
         2 -
         (scrollParent?.scrollTop ?? 0)
       }px;`;
-      if (Platform.isMobile) {
-        pos += ` right: ${
-          btnEl.offsetParent.clientWidth -
-          (btnEl.offsetLeft + btnEl.offsetWidth)
-        }px;`;
-      } else {
+      // Hang the menu from the button's left edge when it fits, else from its
+      // right edge. Which one that is depends on where the button landed in
+      // its row: the inputs wrap, so on a narrow (mobile) settings pane the
+      // button can sit at either side.
+      const parentWidth = btnEl.offsetParent.clientWidth;
+      const fitsToTheRight =
+        btnEl.offsetLeft + menuRef.offsetWidth <= parentWidth;
+      if (fitsToTheRight) {
         pos += ` left: ${btnEl.offsetLeft}px;`;
+      } else {
+        pos += ` right: ${
+          parentWidth - (btnEl.offsetLeft + btnEl.offsetWidth)
+        }px;`;
       }
       menuRef.style.cssText = pos;
     };
@@ -194,6 +200,91 @@ function attachIconMenu(
   });
 }
 
+function parseRgb(color: string) {
+  const [r, g, b] = color.split(',').map((v) => parseInt(v.trim(), 10));
+  return { r, g, b };
+}
+
+function formatRgb({ r, g, b }: { r: number; g: number; b: number }) {
+  return `${r}, ${g}, ${b}`;
+}
+
+/**
+ * A color picker wrapped so it can be labeled, found and removed as a unit:
+ * ColorComponent does not expose its input element.
+ */
+function colorPicker(
+  container: HTMLElement,
+  cls: string,
+  label: string,
+  color: string,
+  onPick: (color: string) => void
+) {
+  const wrapper = container.createSpan({ cls });
+  const picker = new ColorComponent(wrapper)
+    .setValueRgb(parseRgb(color))
+    .onChange(() => onPick(formatRgb(picker.getValueRgb())));
+  wrapper.querySelector('input')?.setAttribute('aria-label', label);
+  return wrapper;
+}
+
+/**
+ * The color controls of a callout: its color, and a dropdown that either
+ * leaves the marker on that color or opens a second picker for it. Edits
+ * `callout` in place and calls `onChange` after each one.
+ *
+ * Switching to "custom" stores the callout's current color as the marker
+ * color straight away, so the preview does not change until a color is
+ * picked -- and so the dropdown reads "custom" again when the tab is reopened
+ * even if none ever is.
+ */
+function buildColorControls(
+  container: HTMLElement,
+  callout: Callout,
+  onChange: () => void
+) {
+  colorPicker(container, 'lc-color', 'Color', callout.color, (color) => {
+    callout.color = color;
+    onChange();
+  });
+
+  let markerPicker: HTMLElement | null = null;
+
+  const showMarkerPicker = () => {
+    markerPicker = colorPicker(
+      container,
+      'lc-marker-color',
+      'Marker color',
+      callout.markerColor,
+      (color) => {
+        callout.markerColor = color;
+        onChange();
+      }
+    );
+  };
+
+  new DropdownComponent(container)
+    .addOptions({
+      default: 'Default marker color',
+      custom: 'Custom marker color',
+    })
+    .setValue(callout.markerColor ? 'custom' : 'default')
+    .onChange((mode) => {
+      if (mode === 'custom') {
+        callout.markerColor = callout.color;
+        showMarkerPicker();
+      } else {
+        delete callout.markerColor;
+        markerPicker?.remove();
+        markerPicker = null;
+      }
+      onChange();
+    })
+    .selectEl.addClass('lc-marker-color-mode');
+
+  if (callout.markerColor) showMarkerPicker();
+}
+
 /**
  * Fill `containerEl` with one callout's preview and controls, rendered into
  * the control element of a declarative `list` setting definition.
@@ -257,20 +348,10 @@ export function buildCalloutRow(
       });
     });
 
-    // Color selection.
-    const [r, g, b] = callout.color
-      .split(',')
-      .map((v) => parseInt(v.trim(), 10));
-
-    const color = new ColorComponent(inputContainer)
-      .setValueRgb({ r, g, b })
-      .onChange(() => {
-        const { r, g, b } = color.getValueRgb();
-        plugin.settings[index].color = `${r}, ${g}, ${b}`;
-
-        void plugin.saveSettings();
-        redrawPreview();
-      });
+    buildColorControls(inputContainer, plugin.settings[index], () => {
+      void plugin.saveSettings();
+      redrawPreview();
+    });
   });
 }
 
@@ -323,13 +404,7 @@ export class NewCalloutModal extends Modal {
       redraw();
     });
 
-    const color = new ColorComponent(inputContainer)
-      .setValueRgb({ r: 158, g: 158, b: 158 })
-      .onChange(() => {
-        const { r, g, b } = color.getValueRgb();
-        this.callout.color = `${r}, ${g}, ${b}`;
-        redraw();
-      });
+    buildColorControls(inputContainer, this.callout, () => redraw());
 
     const errorEl = this.contentEl.createDiv({ cls: 'lc-error' });
 

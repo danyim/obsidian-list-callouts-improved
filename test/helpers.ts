@@ -766,3 +766,141 @@ async function setViewMode(mode: 'preview' | 'source'): Promise<void> {
     await browser.executeObsidianCommand('markdown:toggle-preview');
   }
 }
+
+/** What the marker color controls of one callout form currently show. */
+export interface MarkerColorControls {
+  /** The dropdown's value: 'default' or 'custom'. */
+  mode: string;
+  /** The marker color picker's hex value, or null when it is not shown. */
+  picker: string | null;
+}
+
+/**
+ * Drive the marker color controls inside `root`: the callout row at `index`
+ * in the settings tab, or the add-callout dialog when `index` is null.
+ */
+function inMarkerColorControls<T>(
+  index: number | null,
+  op: 'read' | 'mode' | 'pick',
+  arg = ''
+): Promise<T> {
+  return browser.executeObsidian(
+    ({ app }, i: number | null, what: string, value: string) => {
+      const tab = (app as any).setting.activeTab?.containerEl as
+        | HTMLElement
+        | undefined;
+
+      let root: Element | null = null;
+      if (i === null) {
+        // Same two-window search as the modal helpers: the dialog opens in
+        // whichever window is active, not necessarily the settings window.
+        const docs = [tab?.ownerDocument, document].filter(
+          (d, k, all): d is Document => !!d && all.indexOf(d) === k
+        );
+        for (const doc of docs) {
+          const found = doc.querySelectorAll(
+            '.modal-container .modal:not(.mod-settings)'
+          );
+          if (found.length) {
+            root = found[found.length - 1];
+            break;
+          }
+        }
+      } else {
+        root = tab?.querySelectorAll('.lc-setting')[i] ?? null;
+      }
+      if (!root) throw new Error(`No callout form (index ${String(i)})`);
+
+      const select = root.querySelector<HTMLSelectElement>(
+        'select.lc-marker-color-mode'
+      );
+      const picker = root.querySelector<HTMLInputElement>(
+        '.lc-marker-color input'
+      );
+
+      switch (what) {
+        case 'read':
+          return { mode: select?.value ?? '', picker: picker?.value ?? null };
+        case 'mode':
+          if (!select) throw new Error('No marker color dropdown');
+          select.value = value;
+          select.dispatchEvent(new Event('change'));
+          return null;
+        case 'pick':
+          if (!picker) throw new Error('No marker color picker');
+          picker.value = value;
+          picker.dispatchEvent(new Event('change'));
+          return null;
+      }
+    },
+    index,
+    op,
+    arg
+  ) as Promise<T>;
+}
+
+/** The marker color controls of the settings row for the callout at `index`. */
+export function markerColorControls(
+  index: number
+): Promise<MarkerColorControls> {
+  return inMarkerColorControls(index, 'read');
+}
+
+/** Pick 'default' or 'custom' in the row's marker color dropdown. */
+export async function setMarkerColorMode(
+  index: number,
+  mode: 'default' | 'custom'
+): Promise<void> {
+  await inMarkerColorControls(index, 'mode', mode);
+}
+
+/** Choose `hex` (e.g. '#010203') in the row's marker color picker. */
+export async function pickMarkerColor(
+  index: number,
+  hex: string
+): Promise<void> {
+  await inMarkerColorControls(index, 'pick', hex);
+}
+
+/** The marker color controls of the open add-callout dialog. */
+export function modalMarkerColorControls(): Promise<MarkerColorControls> {
+  return inMarkerColorControls(null, 'read');
+}
+
+/** Pick 'default' or 'custom' in the add-callout dialog's dropdown. */
+export async function setModalMarkerColorMode(
+  mode: 'default' | 'custom'
+): Promise<void> {
+  await inMarkerColorControls(null, 'mode', mode);
+}
+
+/** Choose `hex` in the add-callout dialog's marker color picker. */
+export async function pickModalMarkerColor(hex: string): Promise<void> {
+  await inMarkerColorControls(null, 'pick', hex);
+}
+
+/**
+ * The `--lc-callout-marker-color` property and the marker's painted color for
+ * each decorated element matching `selector`, keyed by callout character.
+ */
+export function markerPaint(
+  selector: string
+): Promise<Record<string, { property: string; painted: string }>> {
+  return browser.executeObsidian(({ app }, sel: string) => {
+    const out: Record<string, { property: string; painted: string }> = {};
+    app.workspace.containerEl
+      .querySelectorAll<HTMLElement>(sel)
+      .forEach((el) => {
+        const char = el.getAttribute('data-callout');
+        const marker = el.querySelector<HTMLElement>(
+          '.lc-list-marker, .lc-highlight-marker'
+        );
+        if (!char || !marker) return;
+        out[char] = {
+          property: el.style.getPropertyValue('--lc-callout-marker-color'),
+          painted: getComputedStyle(marker).color,
+        };
+      });
+    return out;
+  }, selector);
+}

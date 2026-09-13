@@ -1,6 +1,6 @@
 import { MarkdownPostProcessor, setIcon } from 'obsidian';
 
-import { CalloutConfig } from './settings';
+import { CalloutConfig, applyCalloutColors } from './settings';
 
 function getFirstTextNode(li: HTMLElement) {
   for (const node of Array.from(li.childNodes)) {
@@ -97,7 +97,7 @@ function decorateHighlights(el: HTMLElement, config: CalloutConfig) {
 
     mark.addClass('lc-highlight-callout');
     mark.setAttribute('data-callout', callout.char);
-    mark.style.setProperty('--lc-callout-color', callout.color);
+    applyCalloutColors(mark, callout);
 
     if (callout.icon) {
       mark.prepend(
@@ -141,7 +141,7 @@ export function buildPostProcessor(
       if (callout) {
         li.addClass('lc-list-callout');
         li.setAttribute('data-callout', callout.char);
-        li.style.setProperty('--lc-callout-color', callout.color);
+        applyCalloutColors(li, callout);
 
         node.replaceWith(
           createFragment((f) => {

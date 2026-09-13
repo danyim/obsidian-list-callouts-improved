@@ -156,10 +156,12 @@ settings:
   background-color: rgba(var(--lc-callout-color), var(--lc-bg-opacity-dark));
 }
 
+/* A callout may override its marker's color on its own; without one the
+   marker falls back to the callout color the background uses. */
 .lc-list-marker {
   font-family: var(--font-monospace);
   font-weight: bold;
-  color: rgb(var(--lc-callout-color));
+  color: rgb(var(--lc-callout-marker-color, var(--lc-callout-color)));
   pointer-events: none;
 }
 
@@ -224,7 +226,7 @@ settings:
 }
 
 .lc-highlight-marker {
-  color: rgb(var(--lc-callout-color));
+  color: rgb(var(--lc-callout-marker-color, var(--lc-callout-color)));
   pointer-events: none;
 }
 
@@ -253,7 +255,8 @@ settings:
 }
 
 .lc-setting input,
-.lc-setting .lc-input-container > button {
+.lc-setting .lc-input-container > button,
+.lc-setting .lc-input-container > select {
   margin-right: 10px;
 }
 
@@ -277,9 +280,13 @@ settings:
   min-height: 0;
 }
 
+/* Wraps: with the marker color controls there are up to six inputs, more
+   than a mobile settings row is wide. */
 .lc-input-container {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  row-gap: 6px;
 }
 
 .lc-menu {

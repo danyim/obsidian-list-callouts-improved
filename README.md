@@ -21,6 +21,14 @@ Characters, icons and colors are all configurable, and you can add your own call
 
 ![The plugin settings tab with the icon picker open, in light and dark mode](screenshots/settings-icon-picker.png)
 
+The color swatch opens a color picker:
+
+![The plugin settings tab with a callout's color picker open below its swatch, in light and dark mode](screenshots/settings-color-picker.png)
+
+A callout's color paints both its marker and its background. When the two need to differ — a background that is too faint to read the marker against, say — switch **Default marker color** to **Custom marker color** and pick one for the marker alone. The background keeps the callout's color, and the same marker color is used for that callout's highlights:
+
+![A callout's settings row with the marker color dropdown on "Custom marker color", its preview showing a dark amber star on the callout's yellow background, and the marker color picker open below the second swatch, in light and dark mode](screenshots/settings-marker-color-picker.png)
+
 The padding of the callouts and the intensity of their backgrounds can be adjusted using the Style Settings plugin.
 
 ## Highlights
@@ -49,7 +57,7 @@ any of them can be edited, reordered by dragging, or deleted — the built-in on
 included. Nothing is fixed, so a vault can end up with a completely different set, or
 with none at all.
 
-![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon and color, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
+![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon, color and marker color, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
 
 **Reset to defaults**, at the bottom of the settings tab, puts the original seven
 back. It replaces everything currently configured, so callouts you have added and

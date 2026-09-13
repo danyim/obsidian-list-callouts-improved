@@ -21,7 +21,7 @@ import {
 } from '@codemirror/view';
 import { editorLivePreviewField, setIcon } from 'obsidian';
 
-import { Callout, CalloutConfig } from './settings';
+import { Callout, CalloutConfig, calloutColorStyle } from './settings';
 
 export const setConfig = StateEffect.define<CalloutConfig>();
 
@@ -120,16 +120,16 @@ export class HighlightMarker extends WidgetType {
   }
 }
 
-export const calloutDecoration = (char: string, color: string) =>
+export const calloutDecoration = (callout: Callout) =>
   Decoration.line({
     attributes: {
       class: 'lc-list-callout',
-      style: `--lc-callout-color: ${color}`,
-      'data-callout': char,
+      style: calloutColorStyle(callout),
+      'data-callout': callout.char,
     },
   });
 
-export const highlightDecoration = (char: string, color: string) =>
+export const highlightDecoration = (callout: Callout) =>
   Decoration.mark({
     class: 'lc-highlight-callout',
     // Without this, the mark and the marker widget it wraps start at the same
@@ -138,8 +138,8 @@ export const highlightDecoration = (char: string, color: string) =>
     // is set via a custom property on the mark, so it has to be a descendant.
     inclusiveStart: true,
     attributes: {
-      style: `--lc-callout-color: ${color}`,
-      'data-callout': char,
+      style: calloutColorStyle(callout),
+      'data-callout': callout.char,
     },
   });
 
@@ -264,11 +264,7 @@ function addHighlightDeco(
   // inclusiveStart makes it sort first, which is what nests the replacement
   // -- the icon widget, when there is one -- inside the mark's span rather
   // than putting it before as a sibling.
-  builder.add(
-    contentFrom,
-    contentTo,
-    highlightDecoration(callout.char, callout.color)
-  );
+  builder.add(contentFrom, contentTo, highlightDecoration(callout));
 
   const livePreview = state.field(editorLivePreviewField, false) ?? false;
 
@@ -400,11 +396,7 @@ export function buildCalloutDecos(
         const labelPos = line.from + match[1].length;
 
         // Set the line class and callout color
-        builder.add(
-          line.from,
-          line.from,
-          calloutDecoration(callout.char, callout.color)
-        );
+        builder.add(line.from, line.from, calloutDecoration(callout));
 
         // Add the callout background element
         builder.add(
