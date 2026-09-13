@@ -74,6 +74,42 @@ function wrapLiContent(li: HTMLElement) {
   }
 }
 
+/**
+ * Color the highlights whose text starts with a callout character.
+ *
+ * <mark> is only ever produced by Obsidian's ==highlight== syntax, so unlike
+ * the editor there is nothing to confirm: whatever is here is a highlight.
+ */
+function decorateHighlights(el: HTMLElement, config: CalloutConfig) {
+  const marks = el.querySelectorAll('mark');
+  if (!marks.length) return;
+
+  marks.forEach((mark) => {
+    const node = mark.firstChild;
+    if (!node || node.nodeType !== document.TEXT_NODE) return;
+
+    const text = (node as Text).nodeValue ?? '';
+    const match = text.match(config.highlightRe);
+    const callout = match ? config.callouts[match[1]] : null;
+    if (!callout) return;
+
+    (node as Text).nodeValue = text.slice(match[0].length);
+
+    mark.addClass('lc-highlight-callout');
+    mark.setAttribute('data-callout', callout.char);
+    mark.style.setProperty('--lc-callout-color', callout.color);
+
+    if (callout.icon) {
+      mark.prepend(
+        createSpan(
+          { cls: 'lc-highlight-marker', attr: { 'aria-hidden': 'true' } },
+          (span) => setIcon(span, callout.icon)
+        )
+      );
+    }
+  });
+}
+
 export function buildPostProcessor(
   getConfig: () => CalloutConfig
 ): MarkdownPostProcessor {
@@ -129,5 +165,7 @@ export function buildPostProcessor(
         wrapLiContent(li);
       }
     });
+
+    if (config.highlightRe) decorateHighlights(el, config);
   };
 }

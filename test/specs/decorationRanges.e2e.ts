@@ -9,11 +9,11 @@ import { openNote } from '../helpers';
  * Ranges are given as offsets from the start of a line in the note, so a test
  * can describe where a range boundary falls without knowing the document's
  * byte offsets. A builder that throws fails the test on the spot, which is the
- * behaviour under test as much as the count is.
+ * behavior under test as much as the count is.
  */
 function buildFor(
   ranges: [number, number][],
-  anchor: 'callout' | 'plain' = 'callout'
+  anchor: 'callout' | 'plain' | 'mixed' = 'callout'
 ): Promise<number> {
   return browser.executeObsidian(
     ({ app, obsidian }, offsets, want) => {
@@ -29,7 +29,9 @@ function buildFor(
         const wanted =
           want === 'callout'
             ? isCallout
-            : !isCallout && line.text.startsWith('- ');
+            : want === 'mixed'
+              ? isCallout && line.text.includes('==')
+              : !isCallout && line.text.startsWith('- ');
         if (wanted) {
           target = line;
           break;
@@ -119,5 +121,22 @@ describe('Building decorations for visible ranges', function () {
     // The fixture's plain list item, which looks like a list but carries no
     // callout character.
     expect(await buildFor([[0, 10]], 'plain')).toBe(0);
+  });
+
+  // A highlight adds two decorations: the marker replacement and the mark.
+  // Both start at the same position, and the builder only accepts them in
+  // one order, so this holds that order as well as the count.
+  it('decorates a highlight on a callout line', async function () {
+    const length = await browser.executeObsidian(({ app, obsidian }) => {
+      const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+      const cm = (view.editor as any).cm;
+      for (let i = 1; i <= cm.state.doc.lines; i++) {
+        const line = cm.state.doc.line(i);
+        if (line.text.includes('==! inline==')) return line.text.length as number;
+      }
+      return 0;
+    });
+
+    expect(await buildFor([[0, length]], 'mixed')).toBe(PER_CALLOUT + 2);
   });
 });

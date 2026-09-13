@@ -12,6 +12,7 @@
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --ignore-path config/.prettierignore --write \"./src/**/*.{ts,tsx}\"",
     "clean": "npm run prettier && npm run lint:fix",
+    "pretest": "npm run build",
     "test": "npm run test:e2e",
     "pretest:e2e": "npm run build",
     "test:e2e": "scripts/xvfb-wm.sh wdio run ./config/wdio.conf.mts",

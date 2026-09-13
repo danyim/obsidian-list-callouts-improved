@@ -6,6 +6,7 @@ import { Editor, EditorChange, MarkdownView, Plugin, debounce } from 'obsidian';
 import { cycleCalloutChanges, removeCalloutChanges } from './commands';
 import { loadCustomIcons, unloadCustomIcons } from './customIcons';
 import {
+  BuildStats,
   buildCalloutDecos,
   calloutExtension,
   calloutsConfigField,
@@ -16,13 +17,17 @@ import { buildPostProcessor } from './postProcessor';
 import {
   Callout,
   CalloutConfig,
+  HighlightSettings,
   ListCalloutsSettings,
+  PluginData,
   defaultCallouts,
+  defaultHighlightSettings,
 } from './settings';
 import { ListCalloutSettingTab } from './settingsTab';
 
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
+  highlights: HighlightSettings;
   postProcessorConfig: CalloutConfig;
 
   /**
@@ -97,8 +102,8 @@ export default class ListCalloutsPlugin extends Plugin {
    * failing loudly, so it is worth being able to hand the builder those ranges
    * directly.
    */
-  buildDecorations(view: EditorView, state: EditorState) {
-    return buildCalloutDecos(view, state);
+  buildDecorations(view: EditorView, state: EditorState, stats?: BuildStats) {
+    return buildCalloutDecos(view, state, stats);
   }
 
   onunload() {
@@ -174,6 +179,31 @@ export default class ListCalloutsPlugin extends Plugin {
       .join('|');
   }
 
+  /**
+   * The highlight pattern, or null when there is nothing to match. `anchored`
+   * is the post-processor's form, which tests the text of a <mark> the
+   * renderer has already found; `whole` finds a complete span in a line of
+   * raw markdown, and `opener` just the start of one, for a highlight that
+   * closes on a later line.
+   */
+  private highlightPattern(
+    chars: string,
+    form: 'anchored' | 'whole' | 'opener'
+  ): RegExp | null {
+    if (!chars || !this.highlights.enabled) return null;
+
+    const space = this.highlights.requireSpace ? ' ' : ' ?';
+
+    switch (form) {
+      case 'anchored':
+        return new RegExp(`^(${chars})${space}`);
+      case 'whole':
+        return new RegExp(`==(${chars})${space}(.*?)==`, 'g');
+      case 'opener':
+        return new RegExp(`==(${chars})${space}`, 'g');
+    }
+  }
+
   buildEditorConfig(): CalloutConfig {
     const chars = this.charPattern();
 
@@ -184,6 +214,8 @@ export default class ListCalloutsPlugin extends Plugin {
             `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
           )
         : null,
+      highlightRe: this.highlightPattern(chars, 'whole'),
+      highlightOpenRe: this.highlightPattern(chars, 'opener'),
     };
   }
 
@@ -193,6 +225,7 @@ export default class ListCalloutsPlugin extends Plugin {
     this.postProcessorConfig = {
       callouts: this.calloutsByChar(),
       re: chars ? new RegExp(`^(${chars}) `) : null,
+      highlightRe: this.highlightPattern(chars, 'anchored'),
     };
   }
 
@@ -217,16 +250,33 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const stored = (await this.loadData()) as Callout[] | null;
+    const stored = (await this.loadData()) as
+      Callout[] | Partial<PluginData> | null;
 
-    // A vault that has never saved settings gets the built-ins seeded. One
-    // that has is taken at its word, empty included -- reconstructing the
-    // built-ins here is what used to make deleting them impossible.
-    this.settings = Array.isArray(stored) ? stored : defaultCallouts();
+    if (Array.isArray(stored)) {
+      // Written before highlight settings existed.
+      this.settings = stored;
+      this.highlights = defaultHighlightSettings();
+    } else if (stored && Array.isArray(stored.callouts)) {
+      // A vault that has saved is taken at its word, empty included --
+      // reconstructing the built-ins here is what used to make deleting them
+      // impossible. Missing highlight keys come from a version that did not
+      // know them, so they take the defaults.
+      this.settings = stored.callouts;
+      this.highlights = { ...defaultHighlightSettings(), ...stored.highlights };
+    } else {
+      this.settings = defaultCallouts();
+      this.highlights = defaultHighlightSettings();
+    }
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    const data: PluginData = {
+      callouts: this.settings,
+      highlights: this.highlights,
+    };
+
+    await this.saveData(data);
     this.emitSettingsUpdate();
     this.buildPostProcessorConfig();
   }

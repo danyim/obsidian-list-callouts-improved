@@ -2,6 +2,7 @@ import {
   App,
   ButtonComponent,
   ColorComponent,
+  ExtraButtonComponent,
   Modal,
   Notice,
   Platform,
@@ -17,7 +18,7 @@ import {
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
-import { Callout } from './settings';
+import { Callout, HighlightSettings } from './settings';
 
 // Build a static CM6 list line with callout markup applied
 export function buildSettingCallout(root: HTMLElement, callout: Callout) {
@@ -274,7 +275,7 @@ export function buildCalloutRow(
 }
 
 /**
- * Collects the character, icon and colour for a new custom callout.
+ * Collects the character, icon and color for a new custom callout.
  */
 export class NewCalloutModal extends Modal {
   private callout: Callout = {
@@ -372,7 +373,7 @@ export class NewCalloutModal extends Modal {
 }
 
 const RESET_DESC =
-  'Replace your callouts with the seven built-in ones. Callouts you have added, and any changes to the built-in ones, are permanently lost.';
+  'Replace all your callouts with the seven default items. Any callouts you have added, including any changes to the default, will be permanently lost.';
 
 /**
  * Resetting throws away every callout the user has configured, so confirm
@@ -434,6 +435,43 @@ export class ListCalloutSettingTab extends PluginSettingTab {
         })
       );
     });
+  }
+
+  private highlightsDesc(): DocumentFragment {
+    return createFragment((f) => {
+      f.appendText(
+        'Color inline highlights that start with a callout character. '
+      );
+      f.append(createEl('code', { text: '==& text==' }));
+      f.appendText(' becomes a highlight in the ');
+      f.append(createEl('code', { text: '&' }));
+      f.appendText(" callout's color, with its icon in front if one is set.");
+    });
+  }
+
+  private requireSpaceDesc(): DocumentFragment {
+    return createFragment((f) => {
+      f.appendText('On, only ');
+      f.append(createEl('code', { text: '==& text==' }));
+      f.appendText(' is a callout, matching how list callouts work. Off, ');
+      f.append(createEl('code', { text: '==&text==' }));
+      f.appendText(
+        ' works too and a space after the character is optional. Turn this off for shorter markup; leave it on so highlights like '
+      );
+      f.append(createEl('code', { text: '==!important==' }));
+      f.appendText(' keep their normal look.');
+    });
+  }
+
+  // The default implementations read and write `plugin.settings[key]`, which
+  // here is the callout array; the toggles live on `plugin.highlights`.
+  getControlValue(key: string): unknown {
+    return this.plugin.highlights[key as keyof HighlightSettings];
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    this.plugin.highlights[key as keyof HighlightSettings] = value as boolean;
+    await this.plugin.saveSettings();
   }
 
   private async runImport(): Promise<void> {
@@ -507,19 +545,67 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     if (this.plugin.legacyDataAvailable) {
       definitions.push({
         name: `Import from ${LEGACY_PLUGIN_NAME}`,
-        desc: `Settings from ${LEGACY_PLUGIN_NAME}, the plugin this one was forked from, were found in this vault. Importing replaces your current callouts.`,
-        action: () => {
-          new ConfirmImportModal(this.plugin.app, () => {
-            void this.runImport();
-          }).open();
+        desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
+        render: (setting: Setting) => {
+          setting.addButton((btn) =>
+            btn
+              .setButtonText('Import')
+              .setCta()
+              .onClick(() => {
+                new ConfirmImportModal(this.plugin.app, () => {
+                  void this.runImport();
+                }).open();
+              })
+          );
         },
       });
     }
 
     definitions.push(
       {
-        name: 'Style settings',
-        desc: this.styleSettingsDesc(),
+        type: 'group',
+        heading: 'Highlights',
+        items: [
+          {
+            name: 'Highlight callouts',
+            desc: this.highlightsDesc(),
+            control: { type: 'toggle', key: 'enabled', defaultValue: true },
+          },
+          {
+            name: 'Require a space after the character',
+            desc: this.requireSpaceDesc(),
+            control: {
+              type: 'toggle',
+              key: 'requireSpace',
+              defaultValue: true,
+            },
+          },
+        ],
+      },
+      {
+        // The list below can hold only its rows, so the aside about the
+        // callouts' padding, intensity and unsafe characters lives in a group
+        // of its own that carries the heading -- and the add button, which
+        // would otherwise sit on an empty header row of the headingless list.
+        type: 'group',
+        heading: 'Callouts',
+        extraButtons: [
+          (btn: ExtraButtonComponent) =>
+            btn
+              .setIcon('plus')
+              .setTooltip('Add callout')
+              .onClick(() => {
+                new NewCalloutModal(this.plugin, (callout) =>
+                  this.addCallout(callout)
+                ).open();
+              }),
+        ],
+        items: [
+          {
+            name: 'Style settings',
+            desc: this.styleSettingsDesc(),
+          },
+        ],
       },
       {
         // One list rather than a built-in group and a custom one: every
@@ -527,29 +613,29 @@ export class ListCalloutSettingTab extends PluginSettingTab {
         // next/previous commands step through, so a custom callout has to be
         // able to sit between two built-ins.
         type: 'list',
-        heading: 'Callouts',
         emptyState:
           'No callouts. Reset to defaults to bring the built-in ones back.',
         items: settings.map((callout, i) => this.calloutDefinition(callout, i)),
         onDelete: (index: number) => this.deleteCallout(index),
         onReorder: (oldIndex: number, newIndex: number) =>
           this.reorderCallout(oldIndex, newIndex),
-        addItem: {
-          name: 'Add callout',
-          action: () => {
-            new NewCalloutModal(this.plugin, (callout) =>
-              this.addCallout(callout)
-            ).open();
-          },
-        },
       },
       {
         name: 'Reset to defaults',
         desc: RESET_DESC,
-        action: () => {
-          new ConfirmResetModal(this.plugin.app, () => {
-            void this.runReset();
-          }).open();
+        // A real button, styled as the destructive step it is, rather than
+        // the link-like row an `action` definition renders as.
+        render: (setting: Setting) => {
+          setting.addButton((btn) =>
+            btn
+              .setButtonText('Reset')
+              .setDestructive()
+              .onClick(() => {
+                new ConfirmResetModal(this.plugin.app, () => {
+                  void this.runReset();
+                }).open();
+              })
+          );
         },
       }
     );

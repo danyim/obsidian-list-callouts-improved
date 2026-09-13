@@ -2,7 +2,7 @@ import { browser } from '@wdio/globals';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-import type { Callout } from '../src/settings';
+import type { Callout, HighlightSettings } from '../src/settings';
 
 export const PLUGIN_ID = 'list-callouts-improved';
 
@@ -245,7 +245,7 @@ export async function clickModalButton(label: string): Promise<void> {
     return true;
   }, label);
 
-  if (!clicked) throw new Error(`No modal button labelled "${label}"`);
+  if (!clicked) throw new Error(`No modal button labeled "${label}"`);
 }
 
 /**
@@ -432,6 +432,29 @@ export async function clickSettingByName(name: string): Promise<void> {
   if (!clicked) throw new Error(`No settings row named "${name}"`);
 }
 
+/** Flip a toggle in the plugin's settings tab, found by its row name. */
+export async function clickToggleByName(name: string): Promise<void> {
+  const clicked = await browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        (el.querySelector('.setting-item-name')?.textContent ?? '').trim() ===
+        wanted
+    );
+
+    const toggle = row?.querySelector<HTMLElement>('.checkbox-container');
+    if (!toggle) return false;
+    toggle.click();
+    return true;
+  }, name);
+
+  if (!clicked) throw new Error(`No toggle named "${name}"`);
+}
+
 /** Run the reset the way the settings button does. */
 export async function runReset(): Promise<void> {
   await browser.executeObsidian(async ({ app }) => {
@@ -502,11 +525,18 @@ export async function setEditorText(text: string): Promise<void> {
   }, text);
 }
 
-/** Put a bare cursor in the active editor. */
+/**
+ * Put a bare cursor in the active editor.
+ *
+ * Focuses CodeMirror directly first: opening a note does not always leave the
+ * editor focused (mobile in particular), and a cursor the editor does not
+ * consider focused does not touch a selection-dependent decoration.
+ */
 export async function placeCursor(line: number, ch = 0): Promise<void> {
   await browser.executeObsidian(
     ({ app, obsidian }, pos) => {
       const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+      (view.editor as unknown as { cm: { focus(): void } }).cm.focus();
       view.editor.setCursor(pos);
     },
     { line, ch }
@@ -545,4 +575,149 @@ export async function undo(): Promise<void> {
     const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
     view.editor.undo();
   });
+}
+
+export function getHighlights(): Promise<HighlightSettings> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return JSON.parse(JSON.stringify(p.highlights));
+  }) as Promise<HighlightSettings>;
+}
+
+/** Change some or all of the highlight settings, as the toggles would. */
+export async function setHighlights(
+  patch: Partial<HighlightSettings>
+): Promise<void> {
+  await browser.executeObsidian(async ({ app }, next) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.highlights = { ...p.highlights, ...next };
+    await p.saveSettings();
+    p.dispatchUpdate();
+    p.settingTab?.refresh?.();
+  }, patch);
+}
+
+/** Write the plugin's data.json verbatim, to stage a particular stored shape. */
+export async function writePluginData(contents: string): Promise<void> {
+  await browser.executeObsidian(async ({ app }, data) => {
+    const dir = `${app.vault.configDir}/plugins/list-callouts-improved`;
+    if (!(await app.vault.adapter.exists(dir))) {
+      await app.vault.adapter.mkdir(dir);
+    }
+    await app.vault.adapter.write(`${dir}/data.json`, data);
+  }, contents);
+}
+
+/** Whether both highlight patterns are null, i.e. highlights match nothing. */
+export function highlightPatternsAreNull(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.buildPostProcessorConfig();
+    return (
+      p.buildEditorConfig().highlightRe === null &&
+      p.postProcessorConfig.highlightRe === null
+    );
+  });
+}
+
+/** Source text of the editor's highlight pattern, or '' when there is none. */
+export function editorHighlightPattern(): Promise<string> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return (p.buildEditorConfig().highlightRe?.source ?? '') as string;
+  });
+}
+
+export interface RenderedHighlight {
+  /** The callout character, or null for a highlight the plugin left alone. */
+  char: string | null;
+  color: string;
+  text: string;
+  hasIcon: boolean;
+}
+
+/** Every <mark> in reading view, decorated or not. */
+export function readingHighlights(): Promise<RenderedHighlight[]> {
+  return browser.executeObsidian(({ app }) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-reading-view mark'
+      )
+    ).map((el) => ({
+      char: el.getAttribute('data-callout'),
+      color: el.style.getPropertyValue('--lc-callout-color'),
+      text: el.textContent ?? '',
+      hasIcon: !!el.querySelector('.lc-highlight-marker svg'),
+    }));
+  });
+}
+
+/** Re-run the post processors on the open note, as a settings change needs. */
+export async function rerenderReadingView(): Promise<void> {
+  await browser.executeObsidian(({ app, obsidian }) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    (view as any).previewMode.rerender(true);
+  });
+}
+
+/** Every decorated highlight span in the editor. */
+export function editorHighlights(): Promise<RenderedHighlight[]> {
+  return browser.executeObsidian(({ app }) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-source-view .lc-highlight-callout'
+      )
+    ).map((el) => ({
+      char: el.getAttribute('data-callout'),
+      color: el.style.getPropertyValue('--lc-callout-color'),
+      text: el.textContent ?? '',
+      hasIcon: !!el.querySelector('.lc-highlight-marker svg'),
+    }));
+  });
+}
+
+/**
+ * Rendered text of the first editor line containing `needle`, which is what
+ * the user sees: hidden markup is absent, revealed markup is present.
+ */
+export function editorLineText(containing: string): Promise<string> {
+  return browser.executeObsidian(({ app }, needle) => {
+    const line = Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-source-view .cm-line'
+      )
+    ).find((el) => (el.textContent ?? '').includes(needle));
+    return line?.textContent ?? '';
+  }, containing);
+}
+
+/** Zero-based line number of the first document line containing `needle`. */
+export function editorLineNumber(containing: string): Promise<number> {
+  return browser.executeObsidian(({ app, obsidian }, needle) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    return view.editor
+      .getValue()
+      .split('\n')
+      .findIndex((l) => l.includes(needle));
+  }, containing);
+}
+
+/** Put the active markdown view into reading mode, if it is not already. */
+export async function ensureReadingMode(): Promise<void> {
+  await setViewMode('preview');
+}
+
+/** Put the active markdown view into the editor, if it is not already. */
+export async function ensureEditingMode(): Promise<void> {
+  await setViewMode('source');
+}
+
+async function setViewMode(mode: 'preview' | 'source'): Promise<void> {
+  const current = await browser.executeObsidian(({ app, obsidian }) => {
+    return app.workspace.getActiveViewOfType(obsidian.MarkdownView).getMode();
+  });
+
+  if (current !== mode) {
+    await browser.executeObsidianCommand('markdown:toggle-preview');
+  }
 }

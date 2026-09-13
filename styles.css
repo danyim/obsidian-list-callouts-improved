@@ -20,6 +20,22 @@ settings:
     max: 1
     step: 0.01
   -
+    id: lc-highlight-opacity-light
+    title: "Highlight Intensity (light)"
+    type: variable-number-slider
+    default: 0.1
+    min: 0
+    max: 1
+    step: 0.01
+  -
+    id: lc-highlight-opacity-dark
+    title: "Highlight Intensity (dark)"
+    type: variable-number-slider
+    default: 0.15
+    min: 0
+    max: 1
+    step: 0.01
+  -
     id: lc-bg-top
     title: "Callout Padding: Top"
     type: variable-number-slider
@@ -126,6 +142,9 @@ settings:
 
   --lc-bg-opacity-light: 0.1;
   --lc-bg-opacity-dark: 0.15;
+
+  --lc-highlight-opacity-light: 0.1;
+  --lc-highlight-opacity-dark: 0.15;
 }
 
 .lc-list-bg {
@@ -198,6 +217,49 @@ settings:
 
 .theme-dark .lc-li-wrapper::after {
   background-color: rgba(var(--lc-callout-color), var(--lc-bg-opacity-dark));
+}
+
+/* Highlights */
+
+/* Obsidian paints both <mark> and the editor's .cm-highlight span from
+   --text-highlight-bg, so overriding the variable on our element recolors
+   whichever of the two it is. */
+.lc-highlight-callout {
+  --text-highlight-bg: rgba(
+    var(--lc-callout-color),
+    var(--lc-highlight-opacity-light)
+  );
+  background-color: var(--text-highlight-bg);
+}
+
+.theme-dark .lc-highlight-callout {
+  --text-highlight-bg: rgba(
+    var(--lc-callout-color),
+    var(--lc-highlight-opacity-dark)
+  );
+}
+
+/* CodeMirror nests our mark and Obsidian's own highlight span inside one
+   another, in an order we do not control. Paint the color once, on ours,
+   rather than twice through a translucent background. Obsidian's rule is
+   `.cm-s-obsidian span.cm-highlight`, so these have to be at least that
+   specific or its yellow stays underneath every highlight. */
+.cm-s-obsidian .lc-highlight-callout span.cm-highlight,
+.cm-s-obsidian span.cm-highlight:has(.lc-highlight-callout) {
+  background-color: transparent;
+}
+
+.lc-highlight-marker {
+  color: rgb(var(--lc-callout-color));
+  pointer-events: none;
+}
+
+.lc-highlight-marker > svg {
+  position: relative;
+  width: 1em;
+  height: 1em;
+  top: 0.125em;
+  margin-right: 0.25em;
 }
 
 /* Settings */

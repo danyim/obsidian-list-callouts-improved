@@ -11,6 +11,35 @@ export interface Callout {
   custom?: boolean;
 }
 
+export interface HighlightSettings {
+  /** Color inline highlights that begin with a callout character. */
+  enabled: boolean;
+  /**
+   * Whether `==& text==` needs the space. Off, `==&text==` works too and a
+   * space after the character is optional. On by default so highlights such
+   * as `==!important==` keep their normal look when the plugin updates.
+   */
+  requireSpace: boolean;
+}
+
+export const DEFAULT_HIGHLIGHT_SETTINGS: HighlightSettings = {
+  enabled: true,
+  requireSpace: true,
+};
+
+export function defaultHighlightSettings(): HighlightSettings {
+  return { ...DEFAULT_HIGHLIGHT_SETTINGS };
+}
+
+/**
+ * What data.json holds. Versions before highlight settings existed stored the
+ * callout array on its own, which loadSettings still accepts.
+ */
+export interface PluginData {
+  callouts: Callout[];
+  highlights: HighlightSettings;
+}
+
 export interface CalloutConfig {
   callouts: Record<string, Callout>;
   /**
@@ -19,6 +48,18 @@ export interface CalloutConfig {
    * pattern that matches every list item.
    */
   re: RegExp | null;
+  /**
+   * Null when highlights are disabled or no callouts are configured. The
+   * editor's copy is global and matches a whole `==& text==` span; the
+   * post-processor's is anchored to the start of a <mark>'s text.
+   */
+  highlightRe: RegExp | null;
+  /**
+   * Editor only: just the opening `==& ` of a highlight, for one whose closer
+   * sits on a later line and so is out of `highlightRe`'s reach. Global, so
+   * the search can start past the highlights the line has already matched.
+   */
+  highlightOpenRe?: RegExp | null;
 }
 
 export type ListCalloutsSettings = Callout[];

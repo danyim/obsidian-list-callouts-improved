@@ -12,3 +12,5 @@
 	- A nested item with no callout of its own
 		- @ It therefore fractures with sharp edges
 - % Pliny the Elder called it lapis obsidianus
+
+Highlights use the same characters: Obsidian ==& forms where lava cools== so fast that ==? crystals have no time to grow==, leaving ==! a glass rather than a rock== that ==~ fractures with sharp edges==.

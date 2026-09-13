@@ -17,3 +17,7 @@ Ordered lists and tasks are callouts too:
 
 1. & Ordered callout
 - [ ] & Task callout
+
+A list callout with a highlight inside:
+
+- & Mixed line with ==! inline== highlight
