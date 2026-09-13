@@ -14,7 +14,12 @@ import { before, describe, it } from 'mocha';
 import * as path from 'path';
 
 import type { Callout } from '../../src/settings';
-import { openNote, openPluginSettings, setSettings } from '../helpers';
+import {
+  openNote,
+  openPluginSettings,
+  setHighlights,
+  setSettings,
+} from '../helpers';
 
 const OUT_DIR = path.resolve('screenshots');
 
@@ -212,10 +217,11 @@ const EDITOR_SELECTOR = '.markdown-source-view .cm-sizer';
 async function captureEditor(
   name: string,
   hideTitle = false,
-  cropToContent = false
+  cropToContent = false,
+  readySelector = '.lc-list-callout'
 ): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
-  await browser.$('.lc-list-callout').waitForExist({ timeout: 10000 });
+  await browser.$(readySelector).waitForExist({ timeout: 10000 });
 
   const contentBottom = await prepareEditor(hideTitle);
 
@@ -457,14 +463,6 @@ async function captureIconPicker(name: string): Promise<void> {
     );
     if (!button) return false;
 
-    // The popout settings window is short enough that the menu, anchored to
-    // the button, can run past the top or bottom edge if the button sits too
-    // close to either. Centering it first gives the menu room to open fully
-    // on screen in whichever direction it picks -- has to happen before the
-    // click, since the menu computes its position from the button's rect at
-    // open time.
-    button.scrollIntoView({ block: 'center' });
-
     button.click();
     return true;
   });
@@ -477,6 +475,55 @@ async function captureIconPicker(name: string): Promise<void> {
   await browser
     .$('.lc-menu .lc-menu-icons .clickable-icon')
     .waitForExist({ timeout: 10000 });
+
+  // `.vertical-tab-content` does not respond to scrollIntoView() here, so
+  // the row is scrolled into view by setting scrollTop directly. Scroll
+  // from the row's own top rather than the button's: the row also carries
+  // the preview line and its label above the button, and the menu -- row
+  // height plus menu height -- still comfortably fits under it. The margin
+  // is wider than the crop's own padding to keep the row clear of the
+  // popout window's title bar, which sits just above the viewport's origin.
+  await browser.execute(() => {
+    const row = document.querySelector<HTMLElement>('.lc-setting');
+    const scrollParent = row?.closest<HTMLElement>('.vertical-tab-content');
+    if (!row || !scrollParent) return;
+
+    const PAD = 40;
+    scrollParent.scrollTop = Math.max(
+      scrollParent.scrollTop + row.getBoundingClientRect().top - PAD,
+      0
+    );
+  });
+
+  // The menu tracks the button's position only through a `scroll` listener
+  // the plugin attaches after a short delay, which can still be pending
+  // here -- and reading the button's rect for this in the same execute()
+  // call as the scrollTop write above would still see its pre-scroll
+  // position. So this is a separate round trip, repositioning the menu
+  // directly from the button's now-settled rect instead of waiting on
+  // that listener.
+  await browser.execute(() => {
+    const button = Array.from(document.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Set icon'
+    );
+    const menu = document.querySelector<HTMLElement>('.lc-menu');
+    if (!button || !menu) return;
+
+    const parent = (menu.offsetParent as HTMLElement) ?? document.body;
+    const parentRect = parent.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+
+    menu.style.setProperty(
+      'top',
+      `${buttonRect.bottom - parentRect.top + 2}px`,
+      'important'
+    );
+    menu.style.setProperty(
+      'left',
+      `${buttonRect.left - parentRect.left}px`,
+      'important'
+    );
+  });
 
   const crop = await iconPickerCropRect();
 
@@ -499,6 +546,10 @@ describe('README screenshots', function () {
     });
 
     await openNote('List Callouts, Improved.md');
+
+    // Pinned rather than inherited, so the images never depend on whatever
+    // the capturing vault last saved.
+    await setHighlights({ enabled: true, requireSpace: true });
 
     // The vault asks for Inter so the images do not depend on whatever the
     // capturing machine happens to default to. Fail loudly rather than
@@ -531,6 +582,14 @@ describe('README screenshots', function () {
     await openNote('Icons.md');
     await setSettings(callouts(true));
     await captureEditor('callout-icons.png', true, true);
+  });
+
+  it('captures the highlight rendering', async function () {
+    // One prose paragraph, cropped to its height, with icons on so the
+    // picture shows the marker giving way to the callout's icon.
+    await openNote('Highlights.md');
+    await setSettings(callouts(true));
+    await captureEditor('highlights.png', true, true, '.lc-highlight-callout');
   });
 
   it('captures the settings tab with the icon picker open', async function () {

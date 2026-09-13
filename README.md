@@ -21,7 +21,22 @@ Characters, icons and colours are all configurable, and you can add your own cal
 
 ![The plugin settings tab with the icon picker open, in light and dark mode](screenshots/settings-icon-picker.png)
 
-The padding of the callouts can be adjusted using the Style Settings plugin.
+The padding of the callouts and the intensity of their backgrounds can be adjusted using the Style Settings plugin.
+
+## Highlights
+
+The same characters work inside Obsidian's `==highlight==` syntax. Start a highlight with a callout character and a space, and it takes that callout's colour — and its icon, if one is set:
+
+![A paragraph with several inline highlights, each in a different callout colour and led by that callout's icon, shown in light and dark mode](screenshots/highlights.png)
+
+Highlights and list items share one set of callouts, so `==& text==` is yellow because the `&` callout is yellow. The character and the space are hidden when the note is rendered and reappear in Live Preview while the cursor is inside the highlight, the same way the `==` markers do.
+
+Two settings, under **Highlights** in the settings tab:
+
+- **Highlight callouts** turns the feature on and off.
+- **Require a space after the character** is on by default, so `==& text==` is a callout and `==!important==` is left alone. Turn it off and `==&text==` works too.
+
+The intensity of the highlight colour can be adjusted using the Style Settings plugin, alongside the callout padding.
 
 ## Managing callouts
 
