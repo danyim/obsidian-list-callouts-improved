@@ -263,9 +263,19 @@ settings:
       pane's own padded content edge. This clone instead renders as a
       visually boxed "card" (background, border, shadow, all Obsidian's
       own), positioned outside that pane entirely, so its content now
-      touches the card's own edges with nothing to separate them. */
+      touches the card's own edges with nothing to separate them.
+
+   Obsidian also stamps a fixed inline `height` (border-box) onto this same
+   clone, sized from the original row's own height -- measured before this
+   rule's padding is taken into account. Left alone, that pins the box to
+   its pre-drag height and any padding added here just eats into the
+   control row instead of growing the card, so extra bottom padding never
+   becomes visible. `!important` is the only way to win against an inline
+   style from a stylesheet rule; `auto` then lets the box size itself to
+   its own content and padding, the same as an ordinary (undragged) row. */
 .lc-setting.mod-dragged-item {
-  padding: 15px;
+  padding: 15px 15px 1.5rem;
+  height: auto !important;
 }
 
 .lc-setting .lc-list-bg {
