@@ -9,7 +9,7 @@ Open an issue and the form will ask for what's needed. The two things worth
 knowing up front:
 
 - **Include the Obsidian version and the plugin version.** The plugin supports
-  Obsidian back to 1.13.0, so behaviour can genuinely differ between versions.
+  Obsidian back to 1.13.0, so behavior can genuinely differ between versions.
 - **Check which plugin you're running.** List Callouts, Improved is a fork of
   [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts).
   The two can be installed side by side and don't share state, so a bug in the
@@ -87,7 +87,7 @@ xvfb-run -a npm test                      # Linux needs a display
 ```
 
 The first run downloads Obsidian, so give it a minute. Specs live in
-`test/specs/`, and the vaults they open live in `test/vaults/`. New behaviour
+`test/specs/`, and the vaults they open live in `test/vaults/`. New behavior
 should come with a spec; a bug fix should come with one that fails without the
 fix.
 

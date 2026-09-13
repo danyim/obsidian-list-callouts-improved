@@ -68,7 +68,7 @@ jobs:
           key: obsidian-cache-${{ hashFiles('obsidian-versions-lock.txt') }}
 
       # Obsidian is an Electron app, so Linux runners need a virtual display.
-      # herbstluftwm is a window manager -- some Obsidian behaviour (window
+      # herbstluftwm is a window manager -- some Obsidian behavior (window
       # sizing, focus) misbehaves under a bare Xvfb without one.
       - name: Set up virtual graphics
         run: |

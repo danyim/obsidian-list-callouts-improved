@@ -21,7 +21,7 @@ const CHARS = DEFAULT_SETTINGS.map((c) => c.char);
 const FIRST = CHARS[0];
 const LAST = CHARS[CHARS.length - 1];
 
-// One line per shape the editor pattern recognises, plus a plain list item to
+// One line per shape the editor pattern recognizes, plus a plain list item to
 // start from and a paragraph the commands must not touch. Line numbers are
 // referenced directly by the tests, so keep them in step when editing.
 const FIXTURE = [
