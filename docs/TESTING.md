@@ -14,6 +14,11 @@ Both `npm test` and `npm run screenshots` build `main.js` first, so a fresh pull
 enough -- Obsidian loads whatever build is in the checkout, and a stale one silently
 tests or captures the wrong code.
 
+`npm test` also runs `npm run test:scripts` first: plain `node --test` unit tests for
+the Node scripts under `scripts/` (currently `swap-installed-plugin.mjs`). They take
+well under a second and need no display or Obsidian download, so they're the thing
+to run on their own while working on a script.
+
 By default this runs against Obsidian 1.13.4 and `latest`, on both the desktop and
 emulated-mobile UI. Override with:
 

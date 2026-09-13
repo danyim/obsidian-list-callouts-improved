@@ -49,6 +49,10 @@ export default tseslint.config(
       // exactly the point of some of them (e.g. npm run icons).
       'obsidianmd/no-nodejs-modules': 'off',
       'obsidianmd/rule-custom-message': 'off',
+      // scripts/swap-installed-plugin.mjs walks a vault on disk from outside
+      // Obsidian, where `Vault#configDir` doesn't exist. `.obsidian` is only
+      // a guess there; the user can point it at a renamed config folder.
+      'obsidianmd/hardcoded-config-path': 'off',
     },
   },
   {
