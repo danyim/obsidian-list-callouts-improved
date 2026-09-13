@@ -3,7 +3,7 @@
 Create customized callouts in any list in Obsidian.
 
 > [!NOTE]
-> **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design. Unfortunately that project has seen no activity since [September 2024](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) and appears to be abandoned the author.
+> **This project is a fork of [obsidian-list-callouts](https://github.com/mgmeyers/obsidian-list-callouts) by [@mgmeyers](https://github.com/mgmeyers)**, who deserves all the credit for the original plugin and its design. Unfortunately that project has seen no activity since [September 2024](https://github.com/mgmeyers/obsidian-list-callouts/releases/tag/1.2.9) and appears to be abandoned by the author.
 >
 > This fork picks up maintenance and feature development so the plugin keeps working with current versions of Obsidian.
 
