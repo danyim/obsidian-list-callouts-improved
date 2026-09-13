@@ -653,28 +653,34 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     const settings = this.plugin.settings;
     const definitions: SettingDefinitionItem[] = [];
 
-    // Omitted outright rather than hidden with `visible`: a hidden definition
-    // still renders into the DOM and carries its text into settings search,
-    // and there's nothing to reveal later -- legacyDataAvailable is resolved
-    // once during load.
-    if (this.plugin.legacyDataAvailable) {
-      definitions.push({
-        name: `Import from ${LEGACY_PLUGIN_NAME}`,
-        desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
-        render: (setting: Setting) => {
-          setting.addButton((btn) =>
-            btn
-              .setButtonText('Import')
-              .setCta()
-              .onClick(() => {
-                new ConfirmImportModal(this.plugin.app, () => {
-                  void this.runImport();
-                }).open();
-              })
-          );
-        },
-      });
-    }
+    definitions.push({
+      name: `Import from ${LEGACY_PLUGIN_NAME}`,
+      desc: `Settings from ${LEGACY_PLUGIN_NAME} (legacy plugin) were found in your vault. This is a one-time action that will replace your current callouts.`,
+      // Obsidian evaluates this on every render of the tab, and doesn't call
+      // getSettingDefinitions() again once it has cached them, so this is the
+      // one hook that runs each time the tab opens. That makes it the place
+      // to look for the legacy file again -- the other plugin may have saved
+      // its settings since we loaded. The check is async and this isn't, so
+      // the row paints from the last answer and is toggled if that changed.
+      visible: () => {
+        void this.plugin.recheckLegacyData().then((changed) => {
+          if (changed) this.refreshDomState();
+        });
+        return this.plugin.legacyDataAvailable;
+      },
+      render: (setting: Setting) => {
+        setting.addButton((btn) =>
+          btn
+            .setButtonText('Import')
+            .setCta()
+            .onClick(() => {
+              new ConfirmImportModal(this.plugin.app, () => {
+                void this.runImport();
+              }).open();
+            })
+        );
+      },
+    });
 
     definitions.push(
       {

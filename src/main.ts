@@ -32,8 +32,9 @@ export default class ListCalloutsPlugin extends Plugin {
 
   /**
    * Whether this vault still holds settings from the plugin this one was
-   * forked from. Resolved once during load so the settings tab can decide
-   * synchronously whether to offer the import.
+   * forked from. Resolved during load so the settings tab can decide
+   * synchronously whether to offer the import, and re-checked each time the
+   * tab opens, since the other plugin may have saved its settings since.
    */
   legacyDataAvailable = false;
 
@@ -227,6 +228,17 @@ export default class ListCalloutsPlugin extends Plugin {
       re: chars ? new RegExp(`^(${chars}) `) : null,
       highlightRe: this.highlightPattern(chars, 'anchored'),
     };
+  }
+
+  /**
+   * Look for the legacy settings file again. Resolves true when the answer
+   * differs from the last check, so a caller knows whether to re-render.
+   */
+  async recheckLegacyData(): Promise<boolean> {
+    const available = await legacySettingsExist(this.app);
+    const changed = available !== this.legacyDataAvailable;
+    this.legacyDataAvailable = available;
+    return changed;
   }
 
   /**

@@ -177,6 +177,104 @@ export async function clickAddCallout(): Promise<void> {
 }
 
 /**
+ * Whether the "Import from List Callouts" row is showing in the settings
+ * tab. The row is always in the definitions and hidden with `visible`, which
+ * Obsidian applies as an inline display:none, so the tab's text isn't enough
+ * to tell.
+ */
+export function importRowVisible(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        el.querySelector('.setting-item-name')?.textContent ===
+        'Import from List Callouts'
+    );
+    return row !== undefined && getComputedStyle(row).display !== 'none';
+  });
+}
+
+/**
+ * Click the Import button on the "Import from List Callouts" row of the
+ * settings tab, the way a user migrating would. Throws if the row isn't
+ * showing.
+ */
+export async function clickImportButton(): Promise<void> {
+  const clicked = await browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
+    if (!root) return false;
+
+    const row = Array.from(
+      root.querySelectorAll<HTMLElement>('.setting-item')
+    ).find(
+      (el) =>
+        el.querySelector('.setting-item-name')?.textContent ===
+        'Import from List Callouts'
+    );
+    const button = row?.querySelector<HTMLElement>('button');
+    if (!row || !button || getComputedStyle(row).display === 'none') {
+      return false;
+    }
+
+    button.click();
+    return true;
+  });
+
+  if (!clicked) {
+    throw new Error('No "Import from List Callouts" row in the settings tab');
+  }
+}
+
+/**
+ * The forked-from plugin, as installed by config/wdio.conf.mts. These drive
+ * its own settings object and `saveSettings()`, which is exactly what its
+ * settings tab does when a control changes, so the `data.json` it leaves
+ * behind is the genuine article rather than one this test suite wrote.
+ */
+export const LEGACY_PLUGIN_ID = 'obsidian-list-callouts';
+
+export function legacyPluginLoaded(): Promise<boolean> {
+  return browser.executeObsidian(({ app }, id) => {
+    return Boolean((app as any).plugins.plugins[id]);
+  }, LEGACY_PLUGIN_ID);
+}
+
+export function legacyPluginSettings(): Promise<Callout[]> {
+  return browser.executeObsidian(({ app }, id) => {
+    return JSON.parse(
+      JSON.stringify((app as any).plugins.plugins[id].settings)
+    );
+  }, LEGACY_PLUGIN_ID) as Promise<Callout[]>;
+}
+
+/** Replace the legacy plugin's callouts through its own API and let it save. */
+export async function customizeLegacyPlugin(
+  callouts: Callout[]
+): Promise<void> {
+  await browser.executeObsidian(
+    async ({ app }, id, next) => {
+      const p = (app as any).plugins.plugins[id];
+      p.settings = next;
+      await p.saveSettings();
+    },
+    LEGACY_PLUGIN_ID,
+    callouts
+  );
+}
+
+export async function legacyDataFileExists(): Promise<boolean> {
+  return await browser.executeObsidian(async ({ app }, id) => {
+    return await app.vault.adapter.exists(
+      `${app.vault.configDir}/plugins/${id}/data.json`
+    );
+  }, LEGACY_PLUGIN_ID);
+}
+
+/**
  * Run `op` against the topmost dialog, in whichever window it opened.
  *
  * On Obsidian 1.13 desktop the settings tab lives in its own window, but a
