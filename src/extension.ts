@@ -14,6 +14,7 @@ import {
   Decoration,
   DecorationSet,
   EditorView,
+  Rect,
   ViewPlugin,
   ViewUpdate,
   WidgetType,
@@ -33,6 +34,37 @@ export class CalloutBackground extends WidgetType {
       },
     });
   }
+
+  /**
+   * Report this zero-length widget's position as a point taken from its
+   * actual next sibling in the line, rather than letting CodeMirror measure
+   * `toDOM()`'s own node. That node is `position: absolute` and stretched
+   * across most of the line to paint the callout background, which is
+   * exactly the shape of box CodeMirror's own coordinate-based hit-testing
+   * doesn't expect -- End/Home and their macOS Cmd-Arrow equivalents resolve
+   * a wrapped line's visual boundary this way (mgmeyers/obsidian-list-callouts#86).
+   *
+   * A `Range` collapsed at the start of the next sibling gives the same
+   * coordinates the line's actual content would report on its own, with no
+   * dependency on this widget's own CSS. Returning that (rather than `null`)
+   * also matters beyond #86: callers like `RectangleMarker.forRange`, which
+   * draws the cursor and selection, have no fallback for a `null` result --
+   * they simply draw nothing.
+   */
+  coordsAt(dom: HTMLElement): Rect | null {
+    const next = dom.nextSibling;
+    if (!next) return null;
+
+    const range = document.createRange();
+    range.setStart(next, 0);
+    range.setEnd(next, 0);
+
+    const rect = range.getClientRects()[0];
+    if (!rect) return null;
+
+    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.left };
+  }
+
   eq(): boolean {
     return true;
   }
