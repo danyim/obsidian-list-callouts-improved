@@ -754,6 +754,14 @@ describe('README screenshots', function () {
       (app as any).workspace.leftSplit?.collapse?.();
       (app as any).workspace.rightSplit?.collapse?.();
 
+      // The status bar (backlink and word counts) floats over the editor's
+      // bottom corner. It is not part of the editor's layout, so hiding it
+      // costs nothing and keeps it out of every scrolled slice -- where it
+      // would otherwise be stitched into the middle of a tall capture.
+      document
+        .querySelector<HTMLElement>('.status-bar')
+        ?.style.setProperty('display', 'none', 'important');
+
       // Bump the base font size rather than the window zoom: zoom leaves the
       // element's CSS box unchanged, so the screenshot ends up cropped to the
       // pre-zoom bounds. A larger font grows the box itself.
