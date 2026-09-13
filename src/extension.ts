@@ -454,7 +454,11 @@ function alignCalloutBackgrounds(view: EditorView) {
       return Array.from(
         view.dom.querySelectorAll<HTMLElement>('.lc-list-bg')
       ).flatMap((el) => {
-        const line = el.closest<HTMLElement>('.cm-line');
+        // Always a direct child by construction -- this widget is the one
+        // inserted at line.from -- so this is parentElement in substance,
+        // just without asking getBoundingClientRect's neighbor, closest, to
+        // walk and re-match a selector for an answer already known.
+        const line = el.parentElement;
         if (!line) return [];
 
         const indentGuide = line.querySelector<HTMLElement>(
@@ -470,7 +474,12 @@ function alignCalloutBackgrounds(view: EditorView) {
     },
     write(results) {
       for (const { el, indent } of results) {
-        el.style.left = `${indent}px`;
+        // Skipped when unchanged (the common case: most updates that reach
+        // here at all still leave most on-screen lines' own nesting
+        // exactly as it was) to avoid a style write, and the recalculation
+        // it can trigger, for a value that would just be set back to itself.
+        const next = `${indent}px`;
+        if (el.style.left !== next) el.style.left = next;
       }
     },
   });
@@ -483,23 +492,29 @@ export const calloutExtension = ViewPlugin.fromClass(
 
     constructor(view: EditorView) {
       this.build(view, view.state);
+      alignCalloutBackgrounds(view);
     }
 
     build(view: EditorView, state: EditorState) {
       const stats: BuildStats = { highlights: 0 };
       this.decorations = buildCalloutDecos(view, state, stats);
       this.hasHighlights = stats.highlights > 0;
-      alignCalloutBackgrounds(view);
     }
 
     update(update: ViewUpdate) {
-      if (
+      // The parser runs in the background, so a line can be unparsed when it
+      // is first drawn. Rebuilding as the tree advances is what lets those
+      // lines pick up their decorations without an edit -- and is also the
+      // only one of these three that can change a line's own nesting depth
+      // without docChanged or viewportChanged already having done so (a
+      // block quote or code fence resolving around an already-visible list).
+      const layoutMayHaveChanged =
         update.docChanged ||
         update.viewportChanged ||
-        // The parser runs in the background, so a line can be unparsed when it
-        // is first drawn. Rebuilding as the tree advances is what lets those
-        // lines pick up their decorations without an edit.
-        syntaxTree(update.state) !== syntaxTree(update.startState) ||
+        syntaxTree(update.state) !== syntaxTree(update.startState);
+
+      if (
+        layoutMayHaveChanged ||
         // A highlight's marker is hidden or revealed by where the caret is,
         // so caret movement matters -- but only on a screen that has one.
         (update.selectionSet && this.hasHighlights) ||
@@ -508,6 +523,16 @@ export const calloutExtension = ViewPlugin.fromClass(
         )
       ) {
         this.build(update.view, update.state);
+      }
+
+      // Nesting depth -- and so where each on-screen callout's own
+      // background should start -- only ever moves alongside the document
+      // or its viewport. A bare selection change or a setConfig effect
+      // (recoloring, say) rebuilds decorations above but never moves a
+      // marker, so re-measuring for either would just confirm nothing
+      // changed at DOM-read cost.
+      if (layoutMayHaveChanged) {
+        alignCalloutBackgrounds(update.view);
       }
     }
   },
