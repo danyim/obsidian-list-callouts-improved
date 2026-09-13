@@ -629,7 +629,7 @@ export class ListCalloutSettingTab extends PluginSettingTab {
           setting.addButton((btn) =>
             btn
               .setButtonText('Reset')
-              .setWarning()
+              .setDestructive()
               .onClick(() => {
                 new ConfirmResetModal(this.plugin.app, () => {
                   void this.runReset();
