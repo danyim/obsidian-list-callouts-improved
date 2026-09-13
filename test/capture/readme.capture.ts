@@ -509,18 +509,28 @@ interface PaneSlice {
 const SCROLLER_ATTR = 'data-lc-capture-scroller';
 
 /**
+ * Height, in CSS px, left out of the bottom of every slice. Whatever floats
+ * over the bottom of a window -- Obsidian's status bar, today -- never makes
+ * it into a capture, without having to know what it is.
+ */
+const SLICE_INSET = 48;
+
+/**
  * Shoot scrolling content in full, however tall it is and however small the
  * window.
  *
  * The scroll container is found from `anchor` -- the nearest ancestor that
  * scrolls, or failing that the nearest one allowed to. An element screenshot
- * only ever shows the part of it inside the window, so every step measures
- * that on-screen rectangle and keeps just the strip of content it newly
- * reveals; the last step overlaps the one before, since scrollTop clamps at
- * the bottom. Nothing here assumes the container's box fits the window.
+ * only ever shows the part of it inside the window, so the content is shot
+ * one window at a time and the slices stacked.
+ *
+ * Each slice begins exactly where the previous one ended: the container is
+ * padded by a window's worth at the bottom first, so scrolling never clamps
+ * short of the content and there is no overlap to subtract -- a seam a pixel
+ * off doubles a line of text. The padding is trimmed from the result.
  */
 async function shotScrolled(anchor: string, label: string): Promise<string> {
-  await browser.execute(
+  const contentHeight = await browser.execute(
     (selector: string, attr: string) => {
       const scrolls = (el: HTMLElement) =>
         /(auto|scroll)/.test(getComputedStyle(el).overflowY);
@@ -539,10 +549,19 @@ async function shotScrolled(anchor: string, label: string): Promise<string> {
       }
 
       const scroller = found ?? document.querySelector<HTMLElement>(selector);
+      const height = scroller.scrollHeight;
+
       scroller.setAttribute(attr, '');
       // The scrollbar thumb would otherwise be stitched in at a different
       // height in every slice.
       scroller.style.setProperty('scrollbar-width', 'none');
+      scroller.style.setProperty(
+        'padding-bottom',
+        `${window.innerHeight}px`,
+        'important'
+      );
+
+      return height;
     },
     anchor,
     SCROLLER_ATTR
@@ -550,44 +569,44 @@ async function shotScrolled(anchor: string, label: string): Promise<string> {
 
   const scrollerSelector = `[${SCROLLER_ATTR}]`;
 
-  const step = (top: number) =>
-    browser.execute(
-      (selector: string, scrollTo: number) => {
+  const slices: PaneSlice[] = [];
+  let covered = 0;
+
+  while (covered < contentHeight) {
+    const m = await browser.execute(
+      (selector: string, target: number, inset: number) => {
         const el = document.querySelector<HTMLElement>(selector);
-        el.scrollTop = scrollTo;
+
+        // Put content offset `target` at the top of the on-screen part of the
+        // box, which is the box's own top unless that sits above the window.
+        const above = Math.max(0, -el.getBoundingClientRect().top);
+        el.scrollTop = target - above;
 
         const r = el.getBoundingClientRect();
         const visTop = Math.max(r.top, 0);
-        const visBottom = Math.min(r.bottom, window.innerHeight);
+        const visBottom = Math.min(r.bottom, window.innerHeight - inset);
         const visLeft = Math.max(r.left, 0);
         const visRight = Math.min(r.right, window.innerWidth);
 
-        // Rects are fractional; the screenshot and scrollHeight are not.
+        // Rects are fractional; the screenshot is not.
         return {
-          scrollHeight: el.scrollHeight,
-          // Content offsets of the first and last rows on screen.
           shownFrom: Math.round(el.scrollTop + (visTop - r.top)),
-          shownTo: Math.round(el.scrollTop + (visBottom - r.top)),
           shotHeight: Math.round(visBottom - visTop),
           shotWidth: Math.round(visRight - visLeft),
         };
       },
       scrollerSelector,
-      top
+      covered,
+      SLICE_INSET
     );
-
-  const slices: PaneSlice[] = [];
-  let covered = 0;
-
-  for (;;) {
-    await step(covered);
-    // Let the scroll and any repaint settle before measuring and shooting.
+    // Let the scroll and any repaint settle before shooting.
     await browser.pause(150);
-    const m = await step(covered);
 
-    if (m.shownTo <= covered) {
+    const y = covered - m.shownFrom;
+    const height = Math.min(m.shotHeight - y, contentHeight - covered);
+    if (height <= 0) {
       throw new Error(
-        `Could not scroll ${anchor} past ${covered}px of ${m.scrollHeight}px`
+        `Could not scroll ${anchor} past ${covered}px of ${contentHeight}px`
       );
     }
 
@@ -595,12 +614,8 @@ async function shotScrolled(anchor: string, label: string): Promise<string> {
       scrollerSelector,
       `${label}-${slices.length}`
     );
-    const y = covered - m.shownFrom;
-
-    slices.push({ data, cssWidth: m.shotWidth, y, height: m.shotHeight - y });
-    covered = m.shownTo;
-
-    if (covered >= m.scrollHeight - 1) break;
+    slices.push({ data, cssWidth: m.shotWidth, y, height });
+    covered += height;
   }
 
   await browser.execute(
@@ -608,6 +623,7 @@ async function shotScrolled(anchor: string, label: string): Promise<string> {
       const el = document.querySelector<HTMLElement>(selector);
       el.scrollTop = 0;
       el.style.removeProperty('scrollbar-width');
+      el.style.removeProperty('padding-bottom');
       el.removeAttribute(attr);
     },
     scrollerSelector,
@@ -801,14 +817,6 @@ describe('README screenshots', function () {
       // Collapse both sidebars so the editor fills the captured area.
       (app as any).workspace.leftSplit?.collapse?.();
       (app as any).workspace.rightSplit?.collapse?.();
-
-      // The status bar (backlink and word counts) floats over the editor's
-      // bottom corner. It is not part of the editor's layout, so hiding it
-      // costs nothing and keeps it out of every scrolled slice -- where it
-      // would otherwise be stitched into the middle of a tall capture.
-      document
-        .querySelector<HTMLElement>('.status-bar')
-        ?.style.setProperty('display', 'none', 'important');
 
       // Bump the base font size rather than the window zoom: zoom leaves the
       // element's CSS box unchanged, so the screenshot ends up cropped to the
