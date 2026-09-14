@@ -487,6 +487,7 @@ export class NewCalloutModal extends Modal {
     let submit: ButtonComponent;
 
     new Setting(this.contentEl)
+      .setClass('lc-modal-buttons')
       .addButton((btn) =>
         btn.setButtonText('Cancel').onClick(() => this.close())
       )

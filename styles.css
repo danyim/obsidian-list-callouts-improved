@@ -429,3 +429,13 @@ settings:
   min-height: 1.5em;
   margin: 6px 0;
 }
+
+/* The Add callout dialog's Cancel/Add row is a Setting, and Obsidian rules
+   a line above every setting row in a dialog but the first. In a dialog
+   this short it only cuts the form off from its own buttons. Four classes
+   deep to match the specificity of Obsidian's own
+   `.modal:not(.mod-settings) .setting-item:not(.setting-item-heading)`,
+   where each :not() counts as the class inside it. */
+.modal .modal-content .setting-item.lc-modal-buttons {
+  border-top: none;
+}

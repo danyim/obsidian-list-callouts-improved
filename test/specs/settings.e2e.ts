@@ -28,6 +28,7 @@ import {
   iconTooltip,
   iconTooltipDelay,
   isMobile,
+  modalButtonRowBorder,
   modalSubmitDisabled,
   modalText,
   openIconMenuInModal,
@@ -101,6 +102,13 @@ describe('Adding a callout', function () {
     await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
 
     expect(added).toMatchObject({ char: '(', color: '201, 180, 88' });
+  });
+
+  // The Cancel/Add row is a Setting, and Obsidian rules a line above every
+  // setting row but the first. In a dialog this short it only cuts the form
+  // off from its buttons.
+  it('draws no separator above its buttons', async function () {
+    expect(await modalButtonRowBorder('Add')).toBe('none');
   });
 
   describe('the icon picker inside the modal', function () {

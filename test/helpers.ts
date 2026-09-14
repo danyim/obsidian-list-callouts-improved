@@ -288,7 +288,14 @@ export async function legacyDataFileExists(): Promise<boolean> {
  * like "Add callout".
  */
 function inTopmostModal<T>(
-  op: 'text' | 'settled' | 'type' | 'click' | 'cancel' | 'disabled',
+  op:
+    | 'text'
+    | 'settled'
+    | 'type'
+    | 'click'
+    | 'cancel'
+    | 'disabled'
+    | 'buttonRowBorder',
   arg = ''
 ): Promise<T> {
   return browser.executeObsidian(
@@ -345,11 +352,24 @@ function inTopmostModal<T>(
         }
         case 'disabled':
           return !!button()?.disabled;
+        case 'buttonRowBorder': {
+          const row = button()?.closest('.setting-item');
+          if (!row) throw new Error(`No button row holding "${value}"`);
+          return getComputedStyle(row).borderTopStyle;
+        }
       }
     },
     op,
     arg
   ) as Promise<T>;
+}
+
+/**
+ * The computed border-top style of the dialog row holding the button with
+ * this label: 'none' when nothing separates it from the form above.
+ */
+export function modalButtonRowBorder(label: string): Promise<string> {
+  return inTopmostModal<string>('buttonRowBorder', label);
 }
 
 /** Text of the topmost dialog, or '' when none is open. */
