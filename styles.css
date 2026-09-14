@@ -283,15 +283,14 @@ settings:
   height: auto !important;
 }
 
-.lc-setting input {
+/* The character input holds a single character, in the settings row and
+   the Add callout dialog alike; at Obsidian's default width it would push
+   the dialog's marker color dropdown onto a line of its own. Typed so the
+   color inputs keep Obsidian's own width, which is what keeps their swatch
+   a circle rather than a pill, and a direct child so the icon picker's
+   search box, which opens inside this same container, keeps its own. */
+.lc-input-container > input[type="text"] {
   width: 4em;
-}
-
-/* The width above is for the character input; on the color inputs it
-   stretches Obsidian's square swatch into a pill. Restore Obsidian's own
-   width so the swatch stays a circle. */
-.lc-setting input[type="color"] {
-  width: calc(var(--swatch-width) + 4px);
 }
 
 .lc-callout-container {
@@ -423,9 +422,8 @@ settings:
 
 /* The callout's color sits first, set apart from the marker controls that
    follow it (character, icon, marker color) by a gap wider than the one
-   between those. Only in the settings row: the Add callout modal keeps its
-   controls evenly spaced. */
-.setting-item.lc-setting .lc-input-container > .lc-color {
+   between those. In the settings row and the Add callout modal alike. */
+.lc-input-container > .lc-color {
   margin-right: 10px;
 }
 
@@ -442,7 +440,7 @@ settings:
    plus the list's delete and drag buttons into eight lines per callout.
    Instead, two lines:
 
-     [color] [char] [ Set icon ] [ Clear icon ]
+     [color] [char] [ Set icon              ] [trash]
      [ Default marker color     ] [marker] [x] [=]
 
    The list's delete and drag buttons are siblings of .lc-input-container,
@@ -469,12 +467,27 @@ settings:
   margin-right: 0;
 }
 
-.is-phone .setting-item.lc-setting .setting-item-control input[type="text"] {
+.is-phone .setting-item.lc-setting .lc-input-container > input[type="text"] {
   flex: 0 0 3.5em;
 }
 
+/* The icon button takes what the first line has left. A basis of auto
+   rather than 0: Obsidian's ButtonComponent marks a button mod-loading
+   (overflow: hidden, so no automatic minimum width) for as long as its
+   click handler runs, and with a basis of 0 the button's hypothetical size
+   then falls to its padding -- room enough for the select below to jump
+   up a line for exactly the moment the icon picker measures the button
+   to position itself. auto defers to width, which Obsidian sets to 100%
+   on a phone; put back to its content so that is what the basis is. */
 .is-phone .setting-item.lc-setting .setting-item-control button {
-  flex: 1 1 0;
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* The trash that clears the icon keeps its size; the icon button next to
+   it takes the rest of the line. */
+.is-phone .setting-item.lc-setting .lc-clear-icon {
+  flex: 0 0 auto;
 }
 
 /* Flex breaks lines by each item's flex-basis, before any shrinking, so

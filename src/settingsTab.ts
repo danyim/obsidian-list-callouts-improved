@@ -127,14 +127,20 @@ function attachIconMenu(
           ? b.bottom + GAP
           : Math.max(b.top - GAP - height, 0);
 
-        // Same left-or-right choice as below, bounded by the dialog's edge.
-        const fitsToTheRight =
-          b.left + menuRef.offsetWidth <= (bound?.right ?? Infinity);
-        const side = fitsToTheRight
-          ? `left: ${b.left}px;`
-          : `right: ${root.clientWidth - b.right}px;`;
+        // Same left-or-right choice as below, bounded by the dialog's edge,
+        // then kept on screen regardless: on a phone the button can sit
+        // where the menu overruns the screen from either of its edges.
+        const width = menuRef.offsetWidth;
+        const fitsToTheRight = b.left + width <= (bound?.right ?? Infinity);
+        const left = Math.max(
+          Math.min(
+            fitsToTheRight ? b.left : b.right - width,
+            root.clientWidth - width
+          ),
+          0
+        );
 
-        menuRef.style.cssText = `position: fixed; top: ${top}px; ${side}`;
+        menuRef.style.cssText = `position: fixed; top: ${top}px; left: ${left}px;`;
         return;
       }
 
@@ -370,6 +376,52 @@ function buildMarkerColorControls(
 }
 
 /**
+ * The icon controls of a callout: a button that opens the icon picker and
+ * shows the chosen icon (or "Set icon" while there is none), and a trash
+ * button after it that clears the icon. The trash is only shown while there
+ * is an icon to clear. Edits `callout` in place and calls `onChange` after
+ * each change.
+ */
+function buildIconControls(
+  container: HTMLElement,
+  callout: Callout,
+  onChange: () => void
+) {
+  const iconBtn = new ButtonComponent(container);
+  const clearBtn = new ExtraButtonComponent(container)
+    .setIcon('trash')
+    .setTooltip('Clear icon')
+    .onClick(() => {
+      delete callout.icon;
+      render();
+      onChange();
+    });
+  clearBtn.extraSettingsEl.addClass('lc-clear-icon');
+
+  const render = () => {
+    iconBtn.buttonEl.empty();
+    if (callout.icon) {
+      iconBtn.setIcon(callout.icon);
+    } else {
+      iconBtn.setButtonText('Set icon');
+    }
+    clearBtn.extraSettingsEl.toggle(!!callout.icon);
+  };
+
+  attachIconMenu(iconBtn, (icon) => {
+    if (icon == null) {
+      delete callout.icon;
+    } else {
+      callout.icon = icon;
+    }
+    render();
+    onChange();
+  });
+
+  render();
+}
+
+/**
  * Fill `containerEl` with one callout's preview and controls, rendered into
  * the control element of a declarative `list` setting definition.
  */
@@ -410,37 +462,7 @@ export function buildCalloutRow(
         redrawPreview();
       });
 
-    // Icon select menu
-    const iconBtn = new ButtonComponent(inputContainer).then((btn) => {
-      if (callout.icon) {
-        btn.setIcon(callout.icon);
-      } else {
-        btn.setButtonText('Set icon');
-      }
-
-      attachIconMenu(btn, (icon) => {
-        if (icon == null) {
-          delete plugin.settings[index].icon;
-        } else {
-          plugin.settings[index].icon = icon;
-        }
-
-        void plugin.saveSettings();
-        redrawPreview();
-      });
-    });
-
-    new ButtonComponent(inputContainer).then((btn) => {
-      btn.setButtonText('Clear icon');
-      btn.onClick(() => {
-        delete plugin.settings[index].icon;
-        iconBtn.buttonEl.empty();
-        iconBtn.setButtonText('Set icon');
-        void plugin.saveSettings();
-        redrawPreview();
-      });
-    });
-
+    buildIconControls(inputContainer, plugin.settings[index], onChange);
     buildMarkerColorControls(inputContainer, plugin.settings[index], onChange);
   });
 }
@@ -476,6 +498,10 @@ export class NewCalloutModal extends Modal {
       cls: 'lc-input-container',
     });
 
+    // The same order as a row in the settings tab: the callout's color, then
+    // everything about the marker.
+    buildColorPicker(inputContainer, this.callout, () => redraw());
+
     const char = new TextComponent(inputContainer)
       .setPlaceholder('...')
       .onChange((value) => {
@@ -483,20 +509,7 @@ export class NewCalloutModal extends Modal {
         redraw();
       });
 
-    const iconBtn = new ButtonComponent(inputContainer).setButtonText(
-      'Set icon'
-    );
-
-    attachIconMenu(iconBtn, (icon) => {
-      if (icon == null) {
-        delete this.callout.icon;
-      } else {
-        this.callout.icon = icon;
-      }
-      redraw();
-    });
-
-    buildColorPicker(inputContainer, this.callout, () => redraw());
+    buildIconControls(inputContainer, this.callout, () => redraw());
     buildMarkerColorControls(inputContainer, this.callout, () => redraw());
 
     const errorEl = this.contentEl.createDiv({ cls: 'lc-error' });
