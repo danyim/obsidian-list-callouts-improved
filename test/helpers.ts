@@ -1148,13 +1148,21 @@ export interface MarkerColorControls {
   picker: string | null;
 }
 
+/** How the highlight band behind a callout preview is painted. */
+export interface PreviewBackgroundPaint {
+  /** The band's computed z-index. */
+  zIndex: string;
+  /** The computed background color of the band's tinted ::after layer. */
+  tint: string;
+}
+
 /**
- * Drive the marker color controls inside `root`: the callout row at `index`
- * in the settings tab, or the add-callout dialog when `index` is null.
+ * Drive the controls inside one callout form: the callout row at `index` in
+ * the settings tab, or the add-callout dialog when `index` is null.
  */
-function inMarkerColorControls<T>(
+function inCalloutForm<T>(
   index: number | null,
-  op: 'read' | 'mode' | 'pick',
+  op: 'read' | 'mode' | 'pick' | 'color' | 'paint',
   arg = ''
 ): Promise<T> {
   return browser.executeObsidian(
@@ -1189,8 +1197,25 @@ function inMarkerColorControls<T>(
       const picker = root.querySelector<HTMLInputElement>(
         '.lc-marker-color input'
       );
+      const colorInput =
+        root.querySelector<HTMLInputElement>('.lc-color input');
 
       switch (what) {
+        case 'color':
+          if (!colorInput) throw new Error('No color picker');
+          colorInput.value = value;
+          colorInput.dispatchEvent(new Event('change'));
+          return null;
+        case 'paint': {
+          const bg = root.querySelector<HTMLElement>(
+            '.lc-callout-container .lc-list-bg'
+          );
+          if (!bg) throw new Error('No preview background');
+          return {
+            zIndex: getComputedStyle(bg).zIndex,
+            tint: getComputedStyle(bg, '::after').backgroundColor,
+          };
+        }
         case 'read':
           return { mode: select?.value ?? '', picker: picker?.value ?? null };
         case 'mode':
@@ -1215,7 +1240,7 @@ function inMarkerColorControls<T>(
 export function markerColorControls(
   index: number
 ): Promise<MarkerColorControls> {
-  return inMarkerColorControls(index, 'read');
+  return inCalloutForm(index, 'read');
 }
 
 /** Pick 'default' or 'custom' in the row's marker color dropdown. */
@@ -1223,7 +1248,7 @@ export async function setMarkerColorMode(
   index: number,
   mode: 'default' | 'custom'
 ): Promise<void> {
-  await inMarkerColorControls(index, 'mode', mode);
+  await inCalloutForm(index, 'mode', mode);
 }
 
 /** Choose `hex` (e.g. '#010203') in the row's marker color picker. */
@@ -1231,24 +1256,39 @@ export async function pickMarkerColor(
   index: number,
   hex: string
 ): Promise<void> {
-  await inMarkerColorControls(index, 'pick', hex);
+  await inCalloutForm(index, 'pick', hex);
 }
 
 /** The marker color controls of the open add-callout dialog. */
 export function modalMarkerColorControls(): Promise<MarkerColorControls> {
-  return inMarkerColorControls(null, 'read');
+  return inCalloutForm(null, 'read');
 }
 
 /** Pick 'default' or 'custom' in the add-callout dialog's dropdown. */
 export async function setModalMarkerColorMode(
   mode: 'default' | 'custom'
 ): Promise<void> {
-  await inMarkerColorControls(null, 'mode', mode);
+  await inCalloutForm(null, 'mode', mode);
 }
 
 /** Choose `hex` in the add-callout dialog's marker color picker. */
 export async function pickModalMarkerColor(hex: string): Promise<void> {
-  await inMarkerColorControls(null, 'pick', hex);
+  await inCalloutForm(null, 'pick', hex);
+}
+
+/** Choose `hex` in the add-callout dialog's callout color picker. */
+export async function pickModalColor(hex: string): Promise<void> {
+  await inCalloutForm(null, 'color', hex);
+}
+
+/**
+ * How the preview background of the settings row at `index`, or of the
+ * add-callout dialog when `index` is null, is painted.
+ */
+export function previewBackgroundPaint(
+  index: number | null
+): Promise<PreviewBackgroundPaint> {
+  return inCalloutForm(index, 'paint');
 }
 
 /**
