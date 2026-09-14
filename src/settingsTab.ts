@@ -303,16 +303,10 @@ function colorPicker(
 }
 
 /**
- * The color controls of a callout: its color, and a dropdown that either
- * leaves the marker on that color or opens a second picker for it. Edits
- * `callout` in place and calls `onChange` after each one.
- *
- * Switching to "custom" stores the callout's current color as the marker
- * color straight away, so the preview does not change until a color is
- * picked -- and so the dropdown reads "custom" again when the tab is reopened
- * even if none ever is.
+ * The picker for a callout's color. Edits `callout` in place and calls
+ * `onChange` after each pick.
  */
-function buildColorControls(
+function buildColorPicker(
   container: HTMLElement,
   callout: Callout,
   onChange: () => void
@@ -321,7 +315,23 @@ function buildColorControls(
     callout.color = color;
     onChange();
   });
+}
 
+/**
+ * The marker color controls of a callout: a dropdown that either leaves the
+ * marker on the callout's color or opens a second picker for it. Edits
+ * `callout` in place and calls `onChange` after each change.
+ *
+ * Switching to "custom" stores the callout's current color as the marker
+ * color straight away, so the preview does not change until a color is
+ * picked -- and so the dropdown reads "custom" again when the tab is reopened
+ * even if none ever is.
+ */
+function buildMarkerColorControls(
+  container: HTMLElement,
+  callout: Callout,
+  onChange: () => void
+) {
   let markerPicker: HTMLElement | null = null;
 
   const showMarkerPicker = () => {
@@ -378,6 +388,15 @@ export function buildCalloutRow(
   containerEl.createDiv({ cls: 'lc-input-container' }, (inputContainer) => {
     const redrawPreview = () =>
       buildSettingCallout(calloutContainer, plugin.settings[index]);
+    const onChange = () => {
+      void plugin.saveSettings();
+      redrawPreview();
+    };
+
+    // Left to right: the callout's color on its own, then everything about
+    // the marker (its character, icon and color), then the list's own delete
+    // and drag buttons, which Obsidian appends after this container.
+    buildColorPicker(inputContainer, plugin.settings[index], onChange);
 
     // Character input
     new TextComponent(inputContainer)
@@ -422,10 +441,7 @@ export function buildCalloutRow(
       });
     });
 
-    buildColorControls(inputContainer, plugin.settings[index], () => {
-      void plugin.saveSettings();
-      redrawPreview();
-    });
+    buildMarkerColorControls(inputContainer, plugin.settings[index], onChange);
   });
 }
 
@@ -480,7 +496,8 @@ export class NewCalloutModal extends Modal {
       redraw();
     });
 
-    buildColorControls(inputContainer, this.callout, () => redraw());
+    buildColorPicker(inputContainer, this.callout, () => redraw());
+    buildMarkerColorControls(inputContainer, this.callout, () => redraw());
 
     const errorEl = this.contentEl.createDiv({ cls: 'lc-error' });
 
