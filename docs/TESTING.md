@@ -46,4 +46,6 @@ an Insiders account with 2FA disabled.
 On Linux, Obsidian needs a display. `npm test` handles this itself: `scripts/xvfb-wm.sh`
 starts Xvfb with a window manager (matching CI's "Set up virtual graphics" step) whenever
 `DISPLAY` isn't already set, then runs the suite under it. Nothing extra to run -- just
-`npm test`.
+`npm test`. The window manager is told to float windows rather than tile them: tiled, the
+four workers' Obsidian windows end up 256px tall and are all resized every time one opens
+or closes, which moves pickers, dialogs and hover targets under the tests as they run.

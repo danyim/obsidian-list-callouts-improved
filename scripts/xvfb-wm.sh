@@ -43,5 +43,12 @@ sleep 1
 herbstluftwm &
 wm_pid=$!
 sleep 1
+# Float the windows rather than tile them. Tiled, four workers' Obsidian
+# windows share the screen in a vertical stack 256px tall each, and every one
+# is resized whenever another opens or closes -- with the picker, dialogs and
+# hover targets moving under the tests as they run. Floating windows keep the
+# size Obsidian asked for and stay put; they overlap, which nothing in the
+# suite minds.
+herbstclient floating on
 
 "$@"

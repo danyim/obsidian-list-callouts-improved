@@ -292,6 +292,13 @@ settings:
   width: 4em;
 }
 
+/* The width above is for the character input; on the color inputs it
+   stretches Obsidian's square swatch into a pill. Restore Obsidian's own
+   width so the swatch stays a circle. */
+.lc-setting input[type="color"] {
+  width: calc(var(--swatch-width) + 4px);
+}
+
 .lc-callout-container {
   background-color: var(--background-primary);
   padding: 10px 15px 15px;
