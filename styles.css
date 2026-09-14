@@ -328,15 +328,14 @@ settings:
    input, "Set icon" button and color swatch flush against each other with
    no spacing at all. A flex gap here applies uniformly regardless of
    container context or child element type, including the marker-color
-   controls' own <select>. row-gap is separate and smaller: it only ever
-   shows once wrapped, between rows of controls rather than between
+   controls' own <select>. The row gap is separate and smaller: it only
+   ever shows once wrapped, between rows of controls rather than between
    controls sitting side by side. */
 .lc-input-container {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: 10px;
-  row-gap: 6px;
+  gap: 6px 10px;
 }
 
 .lc-menu {
@@ -443,24 +442,16 @@ settings:
      [color] [char] [ Set icon              ] [trash]
      [ Default marker color     ] [marker] [x] [=]
 
-   The list's delete and drag buttons are siblings of .lc-input-container,
-   not children, so for them to share the second line the container gives
-   up its box (display: contents) and its controls become the control
-   column's own flex items. The select's flex-basis is what starts the
-   second line: more than half the width, which the first line never leaves
-   free. From there it grows to fill whatever the marker picker and the two
-   list buttons leave, so those always sit at the right edge.
-
-   With the container no longer a box it can't be the icon picker's
-   positioning context either (see above), so the control column is. */
+   The list's delete and drag buttons are appended to the control column
+   after the marker controls, so for them to share the second line the
+   controls have to be the column's own flex items: on a phone the column
+   itself is the .lc-input-container (see buildCalloutRow) rather than a
+   child of it. The select's flex-basis is what starts the second line:
+   more than half the width, which the first line never leaves free. From
+   there it grows to fill whatever the marker picker and the two list
+   buttons leave, so those always sit at the right edge. */
 .is-phone .setting-item.lc-setting .setting-item-control {
-  position: relative;
-  column-gap: 10px;
   row-gap: 8px;
-}
-
-.is-phone .setting-item.lc-setting .lc-input-container {
-  display: contents;
 }
 
 .is-phone .setting-item.lc-setting .lc-input-container > .lc-color {
