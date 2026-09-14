@@ -433,9 +433,11 @@ export function buildCalloutRow(
  * Collects the character, icon and color for a new custom callout.
  */
 export class NewCalloutModal extends Modal {
+  // A muted yellow rather than the gray of the built-in `%` callout, so a
+  // callout added without touching the picker still stands apart from it.
   private callout: Callout = {
     char: '',
-    color: '158, 158, 158',
+    color: '201, 180, 88',
     custom: true,
   };
 
@@ -485,6 +487,7 @@ export class NewCalloutModal extends Modal {
     let submit: ButtonComponent;
 
     new Setting(this.contentEl)
+      .setClass('lc-modal-buttons')
       .addButton((btn) =>
         btn.setButtonText('Cancel').onClick(() => this.close())
       )
