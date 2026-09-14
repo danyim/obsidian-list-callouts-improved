@@ -145,6 +145,17 @@ export const calloutDecoration = (callout: Callout) =>
     },
   });
 
+/**
+ * The mark over a highlight callout's content. Goes to
+ * `EditorView.outerDecorations` rather than `decorations`, so that its span
+ * wraps Obsidian's own `span.cm-highlight` instead of sitting inside it. That
+ * is what lets a plain descendant selector in styles.css cancel Obsidian's
+ * yellow underneath ours; the other way round, only `:has()` could reach the
+ * parent. Obsidian's token highlighter is a `Prec.lowest` regular decoration
+ * placed after every plugin's, so no precedence on ours would get it outside
+ * (CodeMirror nests higher-precedence marks inside lower ones), but outer
+ * decorations wrap around all regular ones by definition.
+ */
 export const highlightDecoration = (callout: Callout) =>
   Decoration.mark({
     class: 'lc-highlight-callout',
@@ -152,6 +163,8 @@ export const highlightDecoration = (callout: Callout) =>
     // position with the widget sorted first, which puts the widget's DOM node
     // before the mark's span rather than inside it -- and the marker's color
     // is set via a custom property on the mark, so it has to be a descendant.
+    // Between outer marks, it is also what puts ours before Obsidian's, and
+    // so outside it, when the two cover exactly the same range.
     inclusiveStart: true,
     attributes: {
       style: calloutColorStyle(callout),
@@ -237,6 +250,14 @@ export interface BuildStats {
   highlights: number;
 }
 
+/** The two decoration sets one build produces, one per facet. */
+export interface CalloutDecorations {
+  /** Line classes, background and marker widgets: `EditorView.decorations`. */
+  decorations: DecorationSet;
+  /** Highlight marks: `EditorView.outerDecorations`, see highlightDecoration. */
+  outerDecorations: DecorationSet;
+}
+
 /**
  * Where the highlight open at `pos` closes: the start of the next `==` token,
  * which may sit on a later line. Null when the parser has not reached the
@@ -267,6 +288,7 @@ function highlightEndAfter(state: EditorState, pos: number): number | null {
  */
 function addHighlightDeco(
   builder: RangeSetBuilder<Decoration>,
+  outer: RangeSetBuilder<Decoration>,
   state: EditorState,
   callout: Callout,
   contentFrom: number,
@@ -276,10 +298,7 @@ function addHighlightDeco(
 ) {
   if (stats) stats.highlights++;
 
-  // Added before the replacement: both start at contentFrom, and the mark's
-  // inclusiveStart makes it sort first, which is what nests the marker widget
-  // inside the mark's span rather than putting it before as a sibling.
-  builder.add(contentFrom, contentTo, highlightDecoration(callout));
+  outer.add(contentFrom, contentTo, highlightDecoration(callout));
 
   const livePreview = state.field(editorLivePreviewField, false) ?? false;
 
@@ -304,6 +323,7 @@ function addHighlightDeco(
  */
 function addHighlightDecos(
   builder: RangeSetBuilder<Decoration>,
+  outer: RangeSetBuilder<Decoration>,
   line: Line,
   config: CalloutConfig,
   state: EditorState,
@@ -329,6 +349,7 @@ function addHighlightDecos(
 
     addHighlightDeco(
       builder,
+      outer,
       state,
       callout,
       contentFrom,
@@ -356,6 +377,7 @@ function addHighlightDecos(
 
   addHighlightDeco(
     builder,
+    outer,
     state,
     callout,
     contentFrom,
@@ -377,12 +399,13 @@ export function buildCalloutDecos(
   view: EditorView,
   state: EditorState,
   stats?: BuildStats
-) {
+): CalloutDecorations {
   const config = state.field(calloutsConfigField);
   if ((!config?.re && !config?.highlightRe) || !view.visibleRanges.length)
-    return Decoration.none;
+    return { decorations: Decoration.none, outerDecorations: Decoration.none };
 
   const builder = new RangeSetBuilder<Decoration>();
+  const outer = new RangeSetBuilder<Decoration>();
   const { doc } = state;
 
   // Visible ranges can start partway through a line, so consecutive ranges can
@@ -432,7 +455,7 @@ export function buildCalloutDecos(
 
       // `includes` is the whole cost for a line without highlights.
       if (config.highlightRe && line.text.includes('==')) {
-        addHighlightDecos(builder, line, config, state, stats);
+        addHighlightDecos(builder, outer, line, config, state, stats);
       }
 
       if (line.to >= to || line.number >= doc.lines) break;
@@ -440,7 +463,7 @@ export function buildCalloutDecos(
     }
   }
 
-  return builder.finish();
+  return { decorations: builder.finish(), outerDecorations: outer.finish() };
 }
 
 /**
@@ -522,6 +545,7 @@ function alignCalloutBackgrounds(view: EditorView) {
 export const calloutExtension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    outerDecorations: DecorationSet;
     hasHighlights = false;
 
     constructor(view: EditorView) {
@@ -531,7 +555,9 @@ export const calloutExtension = ViewPlugin.fromClass(
 
     build(view: EditorView, state: EditorState) {
       const stats: BuildStats = { highlights: 0 };
-      this.decorations = buildCalloutDecos(view, state, stats);
+      const built = buildCalloutDecos(view, state, stats);
+      this.decorations = built.decorations;
+      this.outerDecorations = built.outerDecorations;
       this.hasHighlights = stats.highlights > 0;
     }
 
@@ -572,5 +598,9 @@ export const calloutExtension = ViewPlugin.fromClass(
   },
   {
     decorations: (v) => v.decorations,
+    provide: (plugin) =>
+      EditorView.outerDecorations.of(
+        (view) => view.plugin(plugin)?.outerDecorations ?? Decoration.none
+      ),
   }
 );

@@ -139,12 +139,13 @@ describe('Highlight rendering in live preview', function () {
     expect(spans.find((s) => s.text === 'second')?.char).toBe('!');
   });
 
-  // CodeMirror renders one highlight as two of our spans: one around the
-  // marker widget on its own, and one around the text nested inside the span
-  // Obsidian paints its own yellow on. If that yellow is not canceled, the
-  // text is blended over it (cyan came out green) while the marker is not, so
-  // an icon sat on a different color from its text -- and nothing else in
-  // this file notices, because classes and attributes are all still right.
+  // Our span wraps the marker widget and, inside the span Obsidian paints its
+  // own yellow on, the text. If that yellow is not canceled, the text is
+  // blended over it (cyan came out green) while the marker is not, so an icon
+  // sat on a different color from its text -- and nothing else in this file
+  // notices, because classes and attributes are all still right. Checked on
+  // every element between the line and the text, so it holds whichever span
+  // ends up the outer one.
   it('paints the callout color and nothing else', async function () {
     const paint = await browser.executeObsidian(({ app }) => {
       return Array.from(
@@ -152,23 +153,34 @@ describe('Highlight rendering in live preview', function () {
           '.markdown-source-view .lc-highlight-callout[data-callout="@"]'
         )
       ).map((el) => {
-        const above: string[] = [];
+        const others: string[] = [];
         for (
           let n = el.parentElement;
           n && !n.classList.contains('cm-line');
           n = n.parentElement
         ) {
-          above.push(getComputedStyle(n).backgroundColor);
+          others.push(getComputedStyle(n).backgroundColor);
         }
-        return { own: getComputedStyle(el).backgroundColor, above };
+        for (const n of Array.from(el.querySelectorAll('*'))) {
+          others.push(getComputedStyle(n).backgroundColor);
+        }
+        return {
+          own: getComputedStyle(el).backgroundColor,
+          others,
+          hasMarker: !!el.querySelector('.lc-highlight-marker'),
+          text: el.textContent,
+        };
       });
     });
 
-    // Marker span and text span, at least.
-    expect(paint.length).toBeGreaterThanOrEqual(2);
-    for (const { own, above } of paint) {
+    expect(paint.length).toBeGreaterThanOrEqual(1);
+    // The marker and the text share one span, so they cannot differ in color.
+    const whole = paint.find((p) => p.text.includes('Note'));
+    expect(whole?.hasMarker).toBe(true);
+    for (const { own, others } of paint) {
       expect(own.startsWith('rgba(0, 184, 212, ')).toBe(true);
-      expect(above.every((c) => c === 'rgba(0, 0, 0, 0)')).toBe(true);
+      expect(others.length).toBeGreaterThan(0);
+      expect(others.every((c) => c === 'rgba(0, 0, 0, 0)')).toBe(true);
     }
   });
 
