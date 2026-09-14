@@ -283,11 +283,6 @@ settings:
   height: auto !important;
 }
 
-.lc-setting .lc-list-bg {
-  background-color: transparent;
-  z-index: 0;
-}
-
 .lc-setting input {
   width: 4em;
 }
@@ -303,6 +298,17 @@ settings:
   background-color: var(--background-primary);
   padding: 10px 15px 15px;
   margin-bottom: 10px;
+}
+
+/* In the editor the tinted band sits at z-index -1 so it slides under the
+   line's text. Neither preview container is a stacking context, so left
+   there the band paints behind the container's own background and is never
+   seen. Scoped to the container, not the settings row (.lc-setting), because
+   the Add callout dialog builds the same preview outside any row -- scoped
+   to the row, its band stayed hidden and only the marker took the color. */
+.lc-callout-container .lc-list-bg {
+  background-color: transparent;
+  z-index: 0;
 }
 
 /* The preview is a single mocked-up list line, but it carries Obsidian's

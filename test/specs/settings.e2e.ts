@@ -34,6 +34,8 @@ import {
   openIconMenuInModal,
   openIconMenuInTab,
   openPluginSettings,
+  pickModalColor,
+  previewBackgroundPaint,
   reloadPlugin,
   reorderCallout,
   runReset,
@@ -109,6 +111,21 @@ describe('Adding a callout', function () {
   // off from its buttons.
   it('draws no separator above its buttons', async function () {
     expect(await modalButtonRowBorder('Add')).toBe('none');
+  });
+
+  // The preview's tinted band sits at z-index -1 so that, in the editor, it
+  // slides under the line's text. The settings tab lifts it back up so it
+  // shows above the row's own background; in the dialog nothing did, so the
+  // band was painted behind the dialog and only the marker took the color.
+  it('shows the chosen color behind the example text, as the tab does', async function () {
+    await pickModalColor('#010203');
+
+    const modal = await previewBackgroundPaint(null);
+    const tab = await previewBackgroundPaint(0);
+
+    expect(modal.tint.startsWith('rgba(1, 2, 3, ')).toBe(true);
+    expect(modal.zIndex).toBe(tab.zIndex);
+    expect(Number(modal.zIndex)).toBeGreaterThanOrEqual(0);
   });
 
   describe('the icon picker inside the modal', function () {
