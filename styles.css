@@ -437,6 +437,58 @@ settings:
   position: relative;
 }
 
+/* Phone. Obsidian makes every input, button and select in a setting's
+   control column full width there, which stacked the row's six controls
+   plus the list's delete and drag buttons into eight lines per callout.
+   Instead, two lines:
+
+     [color] [char] [ Set icon ] [ Clear icon ]
+     [ Default marker color     ] [marker] [x] [=]
+
+   The list's delete and drag buttons are siblings of .lc-input-container,
+   not children, so for them to share the second line the container gives
+   up its box (display: contents) and its controls become the control
+   column's own flex items. The select's flex-basis is what starts the
+   second line: more than half the width, which the first line never leaves
+   free. From there it grows to fill whatever the marker picker and the two
+   list buttons leave, so those always sit at the right edge.
+
+   With the container no longer a box it can't be the icon picker's
+   positioning context either (see above), so the control column is. */
+.is-phone .setting-item.lc-setting .setting-item-control {
+  position: relative;
+  column-gap: 10px;
+  row-gap: 8px;
+}
+
+.is-phone .setting-item.lc-setting .lc-input-container {
+  display: contents;
+}
+
+.is-phone .setting-item.lc-setting .lc-input-container > .lc-color {
+  margin-right: 0;
+}
+
+.is-phone .setting-item.lc-setting .setting-item-control input[type="text"] {
+  flex: 0 0 3.5em;
+}
+
+.is-phone .setting-item.lc-setting .setting-item-control button {
+  flex: 1 1 0;
+}
+
+/* Flex breaks lines by each item's flex-basis, before any shrinking, so
+   the basis has to leave room on the second line for the marker picker and
+   both list buttons at their full size. min-width: 0 then lets the select
+   actually give up width below its label's once all three are there;
+   otherwise it would overflow the line instead. The label is cut short
+   with an ellipsis in that one case. */
+.is-phone .setting-item.lc-setting .setting-item-control select {
+  flex: 1 1 50%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
 .lc-error {
   color: var(--text-error);
   font-size: var(--font-ui-smaller);
