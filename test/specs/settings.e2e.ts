@@ -26,6 +26,7 @@ import {
   iconMenuCount,
   iconMenuGeometry,
   iconTooltip,
+  iconTooltipDelay,
   isMobile,
   modalSubmitDisabled,
   modalText,
@@ -98,6 +99,22 @@ describe('Adding a callout', function () {
     // Guards both the anchoring and that no part of it is cut off, by the
     // dialog's edge or the screen's.
     it('opens anchored to its button, on screen and unclipped', async function () {
+      // Polled rather than read once: measured the instant the picker
+      // appeared, this came back off screen now and then on CI's emulated
+      // mobile instances, where the dialog is still settling on a loaded
+      // runner. A picker that is truly misplaced stays misplaced, and the
+      // assertions below still catch it.
+      const settled = async (): Promise<boolean> => {
+        const g = await iconMenuGeometry();
+        return (
+          !!g &&
+          g.insideViewport &&
+          g.horizontallyAnchored &&
+          (!g.roomToShow || g.fullyVisible) &&
+          (!g.roomToAnchor || g.verticallyAnchored)
+        );
+      };
+      await browser.waitUntil(settled).catch((): void => undefined);
       const geo = await iconMenuGeometry();
 
       expect(geo).not.toBeNull();
@@ -166,9 +183,19 @@ describe('Adding a callout', function () {
       // Hover is a pointer thing; the emulated mobile UI has none.
       if (await isMobile()) this.skip();
 
-      // Half of Obsidian's default tooltip delay, so this only passes if the
-      // picker asks for an instant one, with room for a loaded machine.
-      expect(await iconTooltip('lucide-activity', 500)).toBe('lucide-activity');
+      // The picker asks for a near-instant tooltip rather than Obsidian's
+      // default second of hover. That is checked on the element instead of
+      // with a stopwatch: a real hover is not dependable in the tiled CI
+      // display (see iconTooltip), so the tooltip's timing there is not
+      // either.
+      const delay = await iconTooltipDelay('lucide-activity');
+      expect(delay).not.toBeNull();
+      expect(delay).toBeLessThan(100);
+
+      // And hovering does show one, naming the icon.
+      expect(await iconTooltip('lucide-activity', 5000)).toBe(
+        'lucide-activity'
+      );
     });
 
     it('applies a chosen icon to the new callout', async function () {

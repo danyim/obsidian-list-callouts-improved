@@ -662,44 +662,93 @@ export async function searchIconMenuFor(
 }
 
 /**
- * Move the pointer over an icon in the open picker and return the text of
- * the tooltip that shows for it, or null if none appears within `timeout`.
+ * The hover delay, in ms, that the picker asked Obsidian for on an icon, or
+ * null when it asked for none (and gets Obsidian's default second of hover).
+ * setTooltip records the delay on the element as data-tooltip-delay, which is
+ * what Obsidian's global hover handler reads back.
+ */
+export function iconTooltipDelay(id: string): Promise<number | null> {
+  return browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    const el = [root?.ownerDocument, document]
+      .map((d) =>
+        d?.querySelector<HTMLElement>(
+          `.lc-menu-icons .clickable-icon[data-icon="${wanted}"]`
+        )
+      )
+      .find((e) => !!e);
+    if (!el) throw new Error(`Icon "${wanted}" not in the picker`);
+    const delay = el.getAttribute('data-tooltip-delay');
+    return delay === null ? null : parseInt(delay, 10);
+  }, id);
+}
+
+/**
+ * Hover an icon in the open picker and return the text of the tooltip that
+ * shows for it, or null if none appears within `timeout`.
  *
- * A real pointer move, since that is what a tooltip answers to, in whichever
- * window the picker lives (the settings tab is a popout on 1.13 desktop).
- * The driver is switched back afterwards so the rest of the suite is
- * unaffected.
+ * The hover is dispatched in-page rather than with the WebDriver pointer.
+ * Obsidian's tooltip handler answers a pointerover once it has seen two
+ * mouse pointermoves (its guard against touch-faked hovers), and that is what
+ * this sends. A real pointer proved unusable in the full suite: CI tiles
+ * every worker's Obsidian window onto one screen and re-tiles them whenever
+ * one opens or closes, so the icon moved out from under the pointer mid-move
+ * and the hover landed on a neighbor, on nothing, or out of bounds.
+ *
+ * The picker may live in either window (the settings tab is a popout on 1.13
+ * desktop), so both documents are searched, for the icon and the tooltip.
  */
 export async function iconTooltip(
   id: string,
   timeout = 2000
 ): Promise<string | null> {
-  const original = await browser.getWindowHandle();
-  const selector = `.lc-menu-icons .clickable-icon[data-icon="${id}"]`;
+  const hovered = await browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    const el = [root?.ownerDocument, document]
+      .map((d) =>
+        d?.querySelector<HTMLElement>(
+          `.lc-menu-icons .clickable-icon[data-icon="${wanted}"]`
+        )
+      )
+      .find((e) => !!e);
+    if (!el) return false;
 
+    // The pointermove count Obsidian keeps is global, but the listener that
+    // keeps it is on the main window's document only; the picker may be in
+    // a popout, whose pointermoves it never sees. So the warm-up goes to
+    // the main document, and the hover to the icon wherever it lives.
+    const init = { pointerType: 'mouse', bubbles: true };
+    document.dispatchEvent(new PointerEvent('pointermove', init));
+    document.dispatchEvent(new PointerEvent('pointermove', init));
+    el.dispatchEvent(new PointerEvent('pointerover', init));
+    return true;
+  }, id);
+  if (!hovered) throw new Error(`Icon "${id}" not in the picker`);
+
+  // Read in-page as well: WebDriver's getText returns only text on screen,
+  // and a tooltip can hang past the edge of a tiled CI window.
+  const tooltipText = () =>
+    browser.executeObsidian(({ app }) => {
+      const root = (app as any).setting.activeTab?.containerEl as
+        HTMLElement | undefined;
+      const tip = [root?.ownerDocument, document]
+        .map((d) => d?.querySelector<HTMLElement>('.tooltip'))
+        .find((t) => !!t);
+      return tip ? (tip.textContent ?? '').trim() : null;
+    });
+
+  let text: string | null = null;
   try {
-    for (const handle of await browser.getWindowHandles()) {
-      await browser.switchToWindow(handle);
-      const icon = browser.$(selector);
-      if (!(await icon.isExisting())) continue;
-
-      await icon.moveTo();
-
-      const tooltip = browser.$('.tooltip');
-      try {
-        // Polled tightly: the bound is on how fast the tooltip shows, so the
-        // suite's default interval would decide the answer, not the tooltip.
-        await tooltip.waitForExist({ timeout, interval: 50 });
-      } catch {
-        return null;
-      }
-      return (await tooltip.getText()).trim();
-    }
-
-    throw new Error(`Icon "${id}" not in the picker`);
-  } finally {
-    await browser.switchToWindow(original);
+    await browser.waitUntil(async () => (text = await tooltipText()) !== null, {
+      timeout,
+      interval: 50,
+    });
+  } catch {
+    return null;
   }
+  return text;
 }
 
 /** Click an icon in the open picker by its id. */
