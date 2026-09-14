@@ -80,6 +80,9 @@ function attachIconMenu(
 
   btn.onClick((e) => {
     e.preventDefault();
+    // The settings tab has a scrolling pane around the row; a dialog
+    // (NewCalloutModal) does not, and the two position the menu differently.
+    const inDialog = !btnEl.closest('.vertical-tab-content');
     const destroyEventHandlers = () => {
       btnEl.win.removeEventListener('click', clickOutside);
     };
@@ -101,6 +104,40 @@ function attachIconMenu(
     // settings tab, and the menu along with it -- there is nothing to
     // correct for the tab's scroll position, and no need to follow it.
     const calcMenuPos = () => {
+      if (inDialog) {
+        // A dialog clips whatever overflows it (.modal is overflow: auto),
+        // and the menu is taller than what sits under the button in one. So
+        // in a dialog the menu is fixed to the viewport instead, which
+        // nothing between it and the window can clip, and positioned from
+        // the button's on-screen rect rather than its offsets. (Not in the
+        // settings tab: on a phone its pane has will-change: transform,
+        // which would make the pane the containing block for fixed too.)
+        const b = btnEl.getBoundingClientRect();
+        const bound = btnEl.closest('.modal')?.getBoundingClientRect();
+        const root = btnEl.doc.documentElement;
+        const GAP = 2;
+
+        // Under the button when the screen has room there, else over it:
+        // fixed to the viewport, the menu can no longer be scrolled into
+        // view, so off the bottom edge would mean unreachable. A window too
+        // short for either side gets it at the top, whole, over the button.
+        const height = menuRef.offsetHeight;
+        const fitsBelow = b.bottom + GAP + height <= root.clientHeight;
+        const top = fitsBelow
+          ? b.bottom + GAP
+          : Math.max(b.top - GAP - height, 0);
+
+        // Same left-or-right choice as below, bounded by the dialog's edge.
+        const fitsToTheRight =
+          b.left + menuRef.offsetWidth <= (bound?.right ?? Infinity);
+        const side = fitsToTheRight
+          ? `left: ${b.left}px;`
+          : `right: ${root.clientWidth - b.right}px;`;
+
+        menuRef.style.cssText = `position: fixed; top: ${top}px; ${side}`;
+        return;
+      }
+
       let pos = `top: ${btnEl.offsetTop + btnEl.offsetHeight + 2}px;`;
       // Hang the menu from the button's left edge when it fits, else from its
       // right edge. Which one that is depends on where the button landed in

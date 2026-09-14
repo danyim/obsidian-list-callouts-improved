@@ -17,6 +17,7 @@ import * as path from 'path';
 import type { Callout } from '../../src/settings';
 import {
   editorText,
+  isMobile,
   openNote,
   openPluginSettings,
   reloadPlugin,
@@ -397,6 +398,10 @@ async function settingsPane(): Promise<string> {
 async function enterSettingsWindow(): Promise<{
   pane: string;
   original: string;
+  /** Height of whatever floats over the top of the pane: on a phone, the
+   * tab's header (back button, title, close) is laid over the scrolling
+   * pane rather than above it. 0 on desktop. */
+  topInset: number;
 }> {
   // The note captures use a larger font so the text reads well when scaled
   // down; the settings tab looks oversized at that size, so put it back.
@@ -440,18 +445,32 @@ async function enterSettingsWindow(): Promise<{
   // leave the image mostly empty background. Narrow the pane to the column --
   // or to what the window can show, if that is less: anything past the
   // window's edge is simply absent from a screenshot.
-  await browser.execute((selector: string) => {
+  const topInset = await browser.execute((selector: string) => {
     const el = document.querySelector<HTMLElement>(selector);
-    if (!el) return;
-    el.style.setProperty('padding', '16px', 'important');
+    if (!el) return 0;
+
+    // The phone header is absolutely positioned over the pane's top, and
+    // the pane's own padding is what keeps its content out from under it;
+    // replacing that padding has to keep the clearance.
+    const header = el
+      .closest('.modal')
+      ?.querySelector<HTMLElement>(':scope > .modal-header');
+    const inset =
+      header && getComputedStyle(header).position === 'absolute'
+        ? Math.ceil(header.getBoundingClientRect().bottom)
+        : 0;
+
+    el.style.setProperty('padding', `${inset + 16}px 16px 16px`, 'important');
 
     const room = window.innerWidth - el.getBoundingClientRect().left - 16;
     const width = Math.min(720, room);
     el.style.setProperty('width', `${width}px`, 'important');
     el.style.setProperty('max-width', `${width}px`, 'important');
+
+    return inset;
   }, pane);
 
-  return { pane, original };
+  return { pane, original, topInset };
 }
 
 /** A pixel rect, relative to a capture's own top-left corner. */
@@ -593,8 +612,16 @@ const SLICE_INSET = 48;
  * padded by a window's worth at the bottom first, so scrolling never clamps
  * short of the content and there is no overlap to subtract -- a seam a pixel
  * off doubles a line of text. The padding is trimmed from the result.
+ *
+ * `topInset` is how much of the container's top something else covers (the
+ * phone header): left out of every slice, like the bottom inset, and never
+ * scrolled into view -- the first slice starts below it.
  */
-async function shotScrolled(anchor: string, label: string): Promise<string> {
+async function shotScrolled(
+  anchor: string,
+  label: string,
+  topInset = 0
+): Promise<string> {
   const contentHeight = await browser.execute(
     (selector: string, attr: string) => {
       const scrolls = (el: HTMLElement) =>
@@ -635,40 +662,46 @@ async function shotScrolled(anchor: string, label: string): Promise<string> {
   const scrollerSelector = `[${SCROLLER_ATTR}]`;
 
   const slices: PaneSlice[] = [];
-  let covered = 0;
+  // What the inset covers is only ever padding, added by enterSettingsWindow
+  // to keep the content clear of the header, so skipping it loses nothing.
+  let covered = topInset;
 
   while (covered < contentHeight) {
     const m = await browser.execute(
-      (selector: string, target: number, inset: number) => {
+      (selector: string, target: number, top: number, bottom: number) => {
         const el = document.querySelector<HTMLElement>(selector);
 
         // Put content offset `target` at the top of the on-screen part of the
-        // box, which is the box's own top unless that sits above the window.
-        const above = Math.max(0, -el.getBoundingClientRect().top);
+        // box, which is the box's own top unless that sits above the window
+        // or under the inset.
+        const above = Math.max(0, top - el.getBoundingClientRect().top);
         el.scrollTop = target - above;
 
         const r = el.getBoundingClientRect();
-        const visTop = Math.max(r.top, 0);
-        const visBottom = Math.min(r.bottom, window.innerHeight - inset);
+        // The shot is of the box's on-screen part, insets included: they are
+        // trimmed from the slice afterward, not from the shot.
+        const shotTop = Math.max(r.top, 0);
+        const usableBottom = Math.min(r.bottom, window.innerHeight - bottom);
         const visLeft = Math.max(r.left, 0);
         const visRight = Math.min(r.right, window.innerWidth);
 
         // Rects are fractional; the screenshot is not.
         return {
-          shownFrom: Math.round(el.scrollTop + (visTop - r.top)),
-          shotHeight: Math.round(visBottom - visTop),
+          shownFrom: Math.round(el.scrollTop + (shotTop - r.top)),
+          usableHeight: Math.round(usableBottom - shotTop),
           shotWidth: Math.round(visRight - visLeft),
         };
       },
       scrollerSelector,
       covered,
+      topInset,
       SLICE_INSET
     );
     // Let the scroll and any repaint settle before shooting.
     await browser.pause(150);
 
     const y = covered - m.shownFrom;
-    const height = Math.min(m.shotHeight - y, contentHeight - covered);
+    const height = Math.min(m.usableHeight - y, contentHeight - covered);
     if (height <= 0) {
       throw new Error(
         `Could not scroll ${anchor} past ${covered}px of ${contentHeight}px`
@@ -737,13 +770,13 @@ async function stackVertically(slices: PaneSlice[]): Promise<string> {
 async function captureSettingsPage(name: string): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
 
-  const { pane, original } = await enterSettingsWindow();
+  const { pane, original, topInset } = await enterSettingsWindow();
 
   await setColorScheme(false);
-  const light = await shotScrolled(pane, 'settings-light');
+  const light = await shotScrolled(pane, 'settings-light', topInset);
 
   await setColorScheme(true);
-  const dark = await shotScrolled(pane, 'settings-dark');
+  const dark = await shotScrolled(pane, 'settings-dark', topInset);
 
   await setColorScheme(false);
 
@@ -899,6 +932,19 @@ const COLOR_POPUP = { width: 236, height: 254, gap: 2 };
 type ColorInput = 'lc-color' | 'lc-marker-color';
 
 /**
+ * Fullscreen the window the session is currently on, or undo that.
+ *
+ * Through @electron/remote, which Obsidian exposes to its renderer: the
+ * driver's own window commands are not implemented for Electron popouts.
+ */
+function setFullScreen(on: boolean): Promise<void> {
+  return browser.execute((flag: boolean) => {
+    const remote = (window as any).require('@electron/remote');
+    remote.getCurrentWindow().setFullScreen(flag);
+  }, on);
+}
+
+/**
  * Capture the first callout's row with one of its color pickers open.
  *
  * The picker is a separate window, so the display is grabbed rather than
@@ -914,14 +960,6 @@ async function captureColorPicker(
   await fs.mkdir(OUT_DIR, { recursive: true });
 
   const { original } = await enterSettingsWindow();
-
-  // Through @electron/remote, which Obsidian exposes to its renderer: the
-  // driver's own window commands are not implemented for Electron popouts.
-  const setFullScreen = (on: boolean) =>
-    browser.execute((flag: boolean) => {
-      const remote = (window as any).require('@electron/remote');
-      remote.getCurrentWindow().setFullScreen(flag);
-    }, on);
 
   await setFullScreen(true);
   await browser.pause(500);
@@ -1124,12 +1162,8 @@ async function dismissModalInWindow(): Promise<void> {
   });
 }
 
-/** Capture the "Add callout" modal on its own. */
-async function captureAddCalloutModal(name: string): Promise<void> {
-  await fs.mkdir(OUT_DIR, { recursive: true });
-
-  const { pane, original } = await enterSettingsWindow();
-
+/** Click the settings tab's "Add callout" control and wait for its dialog. */
+async function openAddCalloutModal(pane: string): Promise<void> {
   const clicked = await browser.execute((selector: string) => {
     const root = document.querySelector<HTMLElement>(selector);
     const target =
@@ -1142,6 +1176,14 @@ async function captureAddCalloutModal(name: string): Promise<void> {
   if (!clicked) throw new Error('Could not find the "Add callout" control');
 
   await waitForModalInWindow('Add callout');
+}
+
+/** Capture the "Add callout" modal on its own. */
+async function captureAddCalloutModal(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+  await openAddCalloutModal(pane);
 
   const settingsWindow = await browser.getWindowHandle();
   const crop = await modalCropRect();
@@ -1156,6 +1198,156 @@ async function captureAddCalloutModal(name: string): Promise<void> {
   await browser.switchToWindow(settingsWindow);
   await dismissModalInWindow();
   await browser.switchToWindow(original);
+}
+
+/** The open dialog, as a selector the driver can click inside of. Only ever
+ * one is up at a time in these captures, so the first match is it. */
+const TOP_MODAL = '.modal-container .modal:not(.mod-settings)';
+
+/**
+ * Capture the "Add callout" modal with its color picker open.
+ *
+ * Same display grab and fullscreen as captureColorPicker, for the same
+ * reasons. The crop covers the dialog and the popup together, so the picture
+ * shows where the popup lands relative to the dialog's edges.
+ */
+async function captureAddCalloutColorPicker(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+  await setFullScreen(true);
+  await browser.pause(500);
+
+  const settingsWindow = await browser.getWindowHandle();
+
+  try {
+    await openAddCalloutModal(pane);
+
+    const { crop, screen } = await browser.execute(
+      (modalSel: string, popup: typeof COLOR_POPUP) => {
+        const modal = document.querySelector<HTMLElement>(modalSel);
+        const el = modal?.querySelector<HTMLElement>('.lc-color input');
+        if (!modal || !el) throw new Error('No color input in the dialog');
+
+        const PAD = 16;
+        const m = modal.getBoundingClientRect();
+        const i = el.getBoundingClientRect();
+        const popupTop = i.bottom + popup.gap;
+
+        const left = Math.max(Math.min(m.left, i.left) - PAD, 0);
+        const top = Math.max(m.top - PAD, 0);
+        const right = Math.min(
+          Math.max(m.right, i.left + popup.width) + PAD,
+          window.innerWidth
+        );
+        const bottom = Math.min(
+          Math.max(m.bottom, popupTop + popup.height) + PAD,
+          window.innerHeight
+        );
+
+        return {
+          crop: { x: left, y: top, width: right - left, height: bottom - top },
+          screen: { width: window.innerWidth, height: window.innerHeight },
+        };
+      },
+      TOP_MODAL,
+      COLOR_POPUP
+    );
+
+    const shotWithPickerOpen = async (label: string) => {
+      // A driver click, not a DOM one: the popup only opens on a real user
+      // gesture.
+      await browser.$(`${TOP_MODAL} .lc-color input`).click();
+      await browser.pause(750);
+
+      const data = await shotDisplay(label, screen.width, screen.height);
+
+      // Any click in the page closes the popup; the title sits at the top
+      // of the dialog, well clear of a popup hanging from the swatch.
+      await browser.$(`${TOP_MODAL} .modal-title`).click();
+      await browser.pause(250);
+
+      return cropToRect(data, crop);
+    };
+
+    await setColorScheme(false);
+    const light = await shotWithPickerOpen('add-callout-color-light');
+
+    await setColorScheme(true);
+    const dark = await shotWithPickerOpen('add-callout-color-dark');
+
+    await setColorScheme(false);
+
+    await browser.switchToWindow(original);
+    await fs.writeFile(path.join(OUT_DIR, name), await sideBySide(light, dark));
+  } finally {
+    // Back the way the other settings captures expect the window: no
+    // dialog, not fullscreen, session on the main window.
+    await browser.switchToWindow(settingsWindow);
+    await dismissModalInWindow();
+    await setFullScreen(false);
+    await browser.switchToWindow(original);
+  }
+}
+
+/**
+ * Capture the "Add callout" modal with its icon picker open.
+ *
+ * The picker is an overlay in the page, so a plain viewport shot has it; the
+ * crop covers the dialog and wherever the picker ended up, so the picture
+ * shows how the two relate.
+ */
+async function captureAddCalloutIconPicker(name: string): Promise<void> {
+  await fs.mkdir(OUT_DIR, { recursive: true });
+
+  const { pane, original } = await enterSettingsWindow();
+  await openAddCalloutModal(pane);
+
+  const settingsWindow = await browser.getWindowHandle();
+
+  try {
+    const opened = await browser.execute((modalSel: string) => {
+      const modal = document.querySelector<HTMLElement>(modalSel);
+      const btn = Array.from(modal?.querySelectorAll('button') ?? []).find(
+        (b) => (b.textContent ?? '').trim() === 'Set icon'
+      );
+      if (!btn) return false;
+      btn.click();
+      return true;
+    }, TOP_MODAL);
+    if (!opened) throw new Error('No "Set icon" button in the dialog');
+
+    await browser.waitUntil(
+      () => browser.$(`${TOP_MODAL} .lc-menu .clickable-icon`).isExisting(),
+      { timeout: 5000, timeoutMsg: 'icon picker did not open in the dialog' }
+    );
+
+    const crop = await browser.execute((modalSel: string) => {
+      const modal = document.querySelector<HTMLElement>(modalSel);
+      const menu = modal?.querySelector<HTMLElement>('.lc-menu');
+      if (!modal || !menu) throw new Error('No icon picker in the dialog');
+
+      const PAD = 16;
+      const m = modal.getBoundingClientRect();
+      const p = menu.getBoundingClientRect();
+
+      const left = Math.max(Math.min(m.left, p.left) - PAD, 0);
+      const top = Math.max(Math.min(m.top, p.top) - PAD, 0);
+      const right = Math.min(Math.max(m.right, p.right) + PAD, window.innerWidth);
+      const bottom = Math.min(
+        Math.max(m.bottom, p.bottom) + PAD,
+        window.innerHeight
+      );
+
+      return { x: left, y: top, width: right - left, height: bottom - top };
+    }, TOP_MODAL);
+
+    await captureBothSchemes(name, 'add-callout-icon', original, crop);
+  } finally {
+    await browser.switchToWindow(settingsWindow);
+    await dismissModalInWindow();
+    await browser.switchToWindow(original);
+  }
 }
 
 /** Capture the "Reset to defaults" confirmation modal on its own. */
@@ -1303,8 +1495,34 @@ async function captureDragState(name: string): Promise<void> {
   });
 }
 
+/**
+ * The vault asks for Inter so the images do not depend on whatever the
+ * capturing machine happens to default to. Fail loudly rather than quietly
+ * producing screenshots in a different typeface. Checked on `selector`, or
+ * the body (the interface font) when it is not on screen.
+ */
+async function assertInterFont(selector: string): Promise<void> {
+  const font = await browser.executeObsidian((_obsidian, sel: string) => {
+    const el = document.querySelector(sel);
+    return {
+      installed: document.fonts.check('16px Inter'),
+      family: getComputedStyle(el ?? document.body).fontFamily,
+    };
+  }, selector);
+
+  if (!font.installed || !/inter/i.test(font.family)) {
+    throw new Error(
+      `Screenshots need the Inter font. Resolved family: ${font.family}. ` +
+        'Install it with: sudo apt-get install fonts-inter'
+    );
+  }
+}
+
 describe('README screenshots', function () {
   before(async function () {
+    // The desktop set; the emulated phone gets the suite below instead.
+    if (await isMobile()) this.skip();
+
     await browser.executeObsidian(({ app }) => {
       // Collapse both sidebars so the editor fills the captured area.
       (app as any).workspace.leftSplit?.collapse?.();
@@ -1324,23 +1542,7 @@ describe('README screenshots', function () {
     // the capturing vault last saved.
     await setHighlights({ enabled: true, requireSpace: true });
 
-    // The vault asks for Inter so the images do not depend on whatever the
-    // capturing machine happens to default to. Fail loudly rather than
-    // quietly producing screenshots in a different typeface.
-    const font = await browser.executeObsidian(() => {
-      const line = document.querySelector('.markdown-source-view .cm-line');
-      return {
-        installed: document.fonts.check('16px Inter'),
-        family: getComputedStyle(line ?? document.body).fontFamily,
-      };
-    });
-
-    if (!font.installed || !/inter/i.test(font.family)) {
-      throw new Error(
-        `Screenshots need the Inter font. Resolved family: ${font.family}. ` +
-          'Install it with: sudo apt-get install fonts-inter'
-      );
-    }
+    await assertInterFont('.markdown-source-view .cm-line');
   });
 
   it('captures the character rendering', async function () {
@@ -1414,6 +1616,14 @@ describe('README screenshots', function () {
     await captureAddCalloutModal('settings-add-callout.png');
   });
 
+  it('captures the add callout modal with the color picker open', async function () {
+    await captureAddCalloutColorPicker('settings-add-callout-color-picker.png');
+  });
+
+  it('captures the add callout modal with the icon picker open', async function () {
+    await captureAddCalloutIconPicker('settings-add-callout-icon-picker.png');
+  });
+
   it('captures the reset confirmation modal', async function () {
     await captureResetConfirmModal('settings-reset-confirm.png');
   });
@@ -1443,5 +1653,27 @@ describe('README screenshots', function () {
   // reloading the plugin leaves behind.
   it('captures the import offer', async function () {
     await captureImportRow('settings-import.png');
+  });
+});
+
+/**
+ * The settings tab as a phone lays it out: one narrow column, with each
+ * callout's controls wrapping onto more than one row. A picture of its own,
+ * since the desktop one says nothing about how that wrapping reads.
+ */
+describe('README screenshots (mobile)', function () {
+  before(async function () {
+    if (!(await isMobile())) this.skip();
+
+    // Pinned for the same reason as on desktop: the images never depend on
+    // whatever the capturing vault last saved.
+    await setHighlights({ enabled: true, requireSpace: true });
+    await setSettings(callouts(false));
+
+    await assertInterFont('body');
+  });
+
+  it('captures the whole settings tab', async function () {
+    await captureSettingsPage('settings-mobile.png');
   });
 });

@@ -288,7 +288,7 @@ export async function legacyDataFileExists(): Promise<boolean> {
  * like "Add callout".
  */
 function inTopmostModal<T>(
-  op: 'text' | 'type' | 'click' | 'cancel' | 'disabled',
+  op: 'text' | 'settled' | 'type' | 'click' | 'cancel' | 'disabled',
   arg = ''
 ): Promise<T> {
   return browser.executeObsidian(
@@ -320,6 +320,10 @@ function inTopmostModal<T>(
       switch (what) {
         case 'text':
           return (modal?.textContent ?? '').trim();
+        case 'settled':
+          // On a phone the dialog slides in, and until it has arrived it
+          // is not where a tap would find it.
+          return !!modal && modal.getAnimations({ subtree: true }).length === 0;
         case 'type': {
           const input =
             modal?.querySelector<HTMLInputElement>('input[type="text"]');
@@ -370,7 +374,9 @@ function modalWhereabouts(): Promise<string> {
 export async function waitForModal(containing: string): Promise<void> {
   try {
     await browser.waitUntil(
-      async () => (await modalText()).includes(containing),
+      async () =>
+        (await modalText()).includes(containing) &&
+        (await inTopmostModal<boolean>('settled')),
       {
         timeout: 10000,
         interval: 200,
@@ -429,9 +435,22 @@ export function modalSubmitDisabled(label: string): Promise<boolean> {
 export function iconMenuGeometry(): Promise<null | {
   width: number;
   height: number;
-  belowButton: boolean;
+  /** Hangs from the button's bottom edge, or stands on its top edge. */
+  verticallyAnchored: boolean;
+  /** Whether the screen has room for the picker on either side of the button.
+   * A window too short for both (the tiled test popout can be) gets it
+   * clamped to the top edge instead: still whole, no longer touching. */
+  roomToAnchor: boolean;
   horizontallyAnchored: boolean;
   insideViewport: boolean;
+  /** Every corner of the picker is what a click there would land on: nothing
+   * between it and the window (a dialog's overflow, say) clips it, and it is
+   * not off the edge of the screen. */
+  fullyVisible: boolean;
+  /** Whether the window is big enough to show the whole picker anywhere.
+   * Several test windows tiled into one virtual display can leave one that
+   * is not; the emulated phone's viewport is fixed and always is. */
+  roomToShow: boolean;
 }> {
   return browser.executeObsidian(({ app }) => {
     const root = (app as any).setting.activeTab?.containerEl as
@@ -455,10 +474,29 @@ export function iconMenuGeometry(): Promise<null | {
     const m = menu.getBoundingClientRect();
     const b = btn?.getBoundingClientRect();
 
+    // Just inside each corner: the layout rect says nothing about clipping,
+    // but hit testing does -- a clipped corner resolves to whatever shows
+    // through there instead, and one off the screen to nothing at all. Inset
+    // past the picker's rounded corners, which a hit test also respects.
+    const INSET = 12;
+    const corners: [number, number][] = [
+      [m.left + INSET, m.top + INSET],
+      [m.right - INSET, m.top + INSET],
+      [m.left + INSET, m.bottom - INSET],
+      [m.right - INSET, m.bottom - INSET],
+    ];
+
     return {
       width: m.width,
       height: m.height,
-      belowButton: !!b && m.top >= b.top,
+      verticallyAnchored:
+        !!b &&
+        Math.min(Math.abs(m.top - b.bottom), Math.abs(m.bottom - b.top)) < 10,
+      // With the couple of pixels the picker keeps from the button.
+      roomToAnchor:
+        !!b &&
+        (b.bottom + 2 + m.height <= win.innerHeight ||
+          b.top - 2 - m.height >= 0),
       // The picker anchors to the button's left edge on desktop and its right
       // edge on mobile, so either one being close counts as anchored.
       horizontallyAnchored:
@@ -469,6 +507,10 @@ export function iconMenuGeometry(): Promise<null | {
         m.top >= -1 &&
         m.left < win.innerWidth &&
         m.top < win.innerHeight,
+      fullyVisible: corners.every(([x, y]) =>
+        menu.contains(doc.elementFromPoint(x, y))
+      ),
+      roomToShow: m.width <= win.innerWidth && m.height <= win.innerHeight,
     };
   });
 }

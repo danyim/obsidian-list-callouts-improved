@@ -408,11 +408,10 @@ settings:
   flex: 0 0 auto;
 }
 
-/* The icon picker is placed from its button's offsets, so the row has to be
-   the positioning context for both of them -- otherwise the two are measured
-   against different ancestors. Unscoped: attachIconMenu counts on this in the
-   settings tab as much as in the Add callout modal (and on 1.13+ the tab is
-   itself inside a .modal, so a .modal-scoped rule quietly applied to both). */
+/* In the settings tab the icon picker is placed from its button's offsets,
+   so the row has to be the positioning context for both of them -- otherwise
+   the two are measured against different ancestors. (In the Add callout
+   modal the picker is fixed to the viewport instead; see attachIconMenu.) */
 .lc-input-container {
   position: relative;
 }

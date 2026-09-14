@@ -93,17 +93,25 @@ describe('Adding a callout', function () {
       await openIconMenuInModal();
     });
 
-    // The picker positions itself from the button's offsets, so this guards
-    // the styling that gives both elements the same positioning context.
-    it('opens anchored to its button and on screen', async function () {
+    // The modal clips whatever overflows it, so in there the picker floats
+    // over the page, above the button when the screen has no room under it.
+    // Guards both the anchoring and that no part of it is cut off, by the
+    // dialog's edge or the screen's.
+    it('opens anchored to its button, on screen and unclipped', async function () {
       const geo = await iconMenuGeometry();
 
       expect(geo).not.toBeNull();
       expect(geo.width).toBeGreaterThan(0);
       expect(geo.height).toBeGreaterThan(0);
       expect(geo.insideViewport).toBe(true);
-      expect(geo.belowButton).toBe(true);
       expect(geo.horizontallyAnchored).toBe(true);
+      // Tiled alongside the other workers' windows, a desktop test window
+      // can be too small for the picker at all, or too short for it on
+      // either side of the button -- and then staying whole matters more
+      // than touching the button. The emulated phone's viewport is fixed,
+      // so both always hold there.
+      if (geo.roomToShow) expect(geo.fullyVisible).toBe(true);
+      if (geo.roomToAnchor) expect(geo.verticallyAnchored).toBe(true);
     });
 
     it('lists icons and narrows them by search', async function () {
