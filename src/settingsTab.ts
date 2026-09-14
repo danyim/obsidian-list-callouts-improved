@@ -6,6 +6,7 @@ import {
   ExtraButtonComponent,
   Modal,
   Notice,
+  Platform,
   PluginSettingTab,
   Setting,
   SettingDefinitionItem,
@@ -248,7 +249,7 @@ function attachIconMenu(
             },
           },
           (input) => {
-            activeWindow.setTimeout(() => {
+            window.setTimeout(() => {
               input.focus();
             });
             const handler = debounce(
@@ -437,34 +438,41 @@ export function buildCalloutRow(
 
   buildSettingCallout(calloutContainer, callout);
 
-  containerEl.createDiv({ cls: 'lc-input-container' }, (inputContainer) => {
-    const redrawPreview = () =>
-      buildSettingCallout(calloutContainer, plugin.settings[index]);
-    const onChange = () => {
-      void plugin.saveSettings();
-      redrawPreview();
-    };
+  // On a phone the list's delete and drag buttons, which Obsidian appends to
+  // the control column after this, share a line with the marker controls (see
+  // styles.css), so there the controls go straight into the column rather
+  // than into a container of their own that would keep the buttons out.
+  let inputContainer = containerEl;
+  if (Platform.isPhone) {
+    containerEl.addClass('lc-input-container');
+  } else {
+    inputContainer = containerEl.createDiv({ cls: 'lc-input-container' });
+  }
 
-    // Left to right: the callout's color on its own, then everything about
-    // the marker (its character, icon and color), then the list's own delete
-    // and drag buttons, which Obsidian appends after this container.
-    buildColorPicker(inputContainer, plugin.settings[index], onChange);
+  const redrawPreview = () =>
+    buildSettingCallout(calloutContainer, plugin.settings[index]);
+  const onChange = () => {
+    void plugin.saveSettings();
+    redrawPreview();
+  };
 
-    // Character input
-    new TextComponent(inputContainer)
-      .setValue(callout.char)
-      .onChange((value) => {
-        if (!value) return;
+  // Left to right: the callout's color on its own, then everything about
+  // the marker (its character, icon and color), then the list's own delete
+  // and drag buttons.
+  buildColorPicker(inputContainer, plugin.settings[index], onChange);
 
-        plugin.settings[index].char = value;
-        void plugin.saveSettings();
+  // Character input
+  new TextComponent(inputContainer).setValue(callout.char).onChange((value) => {
+    if (!value) return;
 
-        redrawPreview();
-      });
+    plugin.settings[index].char = value;
+    void plugin.saveSettings();
 
-    buildIconControls(inputContainer, plugin.settings[index], onChange);
-    buildMarkerColorControls(inputContainer, plugin.settings[index], onChange);
+    redrawPreview();
   });
+
+  buildIconControls(inputContainer, plugin.settings[index], onChange);
+  buildMarkerColorControls(inputContainer, plugin.settings[index], onChange);
 }
 
 /**
