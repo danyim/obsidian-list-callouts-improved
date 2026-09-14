@@ -36,23 +36,31 @@ export function legacyDataAvailable(): Promise<boolean> {
  * Run the import the way the settings button does, returning either the number
  * of callouts imported or the error message the user would be shown.
  *
- * The rejection is caught here rather than inside the browser: a promise that
- * rejects in Obsidian surfaces as a WebDriverError carrying the same message,
- * and catching on this side keeps the assertion close to the failure.
+ * The rejection is caught inside the browser and handed back as a value. Left
+ * to reject, it reaches WebdriverIO as a script error, and a script error is
+ * retried `connectionRetryCount` times before it surfaces -- three WARNs, an
+ * ERROR and about a second and a half of backoff per negative-path test.
+ *
+ * The browser-side key is `failure` rather than `error` on purpose: WebdriverIO
+ * reads any returned object carrying a truthy `error` property as a WebDriver
+ * error response and rejects with it, which puts the retries straight back.
  */
 export async function runImport(): Promise<{
   count?: number;
   error?: string;
 }> {
-  try {
-    const count = await browser.executeObsidian(async ({ app }) => {
-      const p = (app as any).plugins.plugins['list-callouts-improved'];
-      return (await p.importLegacySettings()) as number;
-    });
-    return { count };
-  } catch (e) {
-    return { error: (e as Error).message };
-  }
+  const result = await browser.executeObsidian(async ({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    try {
+      return { count: (await p.importLegacySettings()) as number };
+    } catch (e) {
+      return { failure: (e as Error).message };
+    }
+  });
+
+  return 'failure' in result && result.failure
+    ? { error: result.failure }
+    : { count: (result as { count: number }).count };
 }
 
 export async function writeLegacyData(contents: string): Promise<void> {
