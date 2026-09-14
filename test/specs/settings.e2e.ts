@@ -89,6 +89,20 @@ describe('Adding a callout', function () {
     expect(await modalSubmitDisabled('Add')).toBe(false);
   });
 
+  // The form starts on a muted yellow rather than the gray the built-in `%`
+  // callout already uses, so a callout added without touching the picker
+  // still reads as its own.
+  it('starts on a muted yellow', async function () {
+    await typeInModal('(');
+    await clickModalButton('Add');
+
+    const added = (await getSettings())[BUILT_IN_COUNT];
+    // Put the built-ins back: the icon picker tests below add "(" too.
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+
+    expect(added).toMatchObject({ char: '(', color: '201, 180, 88' });
+  });
+
   describe('the icon picker inside the modal', function () {
     beforeEach(async function () {
       await openIconMenuInModal();
