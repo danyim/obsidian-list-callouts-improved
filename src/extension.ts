@@ -544,13 +544,48 @@ function alignCalloutBackgrounds(view: EditorView) {
 
 export const calloutExtension = ViewPlugin.fromClass(
   class {
-    decorations: DecorationSet;
-    outerDecorations: DecorationSet;
+    decorations: DecorationSet = Decoration.none;
+    outerDecorations: DecorationSet = Decoration.none;
     hasHighlights = false;
 
+    /** Whether a failed build has been logged for this editor already. */
+    private reported = false;
+
     constructor(view: EditorView) {
-      this.build(view, view.state);
+      this.rebuild(view, view.state);
       alignCalloutBackgrounds(view);
+    }
+
+    /**
+     * Build the decorations, or clear them if the build throws.
+     *
+     * CodeMirror answers an exception from a view plugin's constructor or
+     * update by disabling the plugin for the rest of that editor's life, with
+     * nothing but a console error to show for it. The plugin this one was
+     * forked from went down that way whenever its parse budget ran out --
+     * opening a vault with a long note restored, jumping deep into a large
+     * document -- and every callout in the note stayed gone until the plugin
+     * was toggled off and on (mgmeyers/obsidian-list-callouts#73, #75, #80).
+     * Catching here keeps a failure to a single update: the next document,
+     * viewport or parse-tree change runs the build again.
+     */
+    rebuild(view: EditorView, state: EditorState) {
+      try {
+        this.build(view, state);
+      } catch (e) {
+        this.decorations = Decoration.none;
+        this.outerDecorations = Decoration.none;
+        this.hasHighlights = false;
+
+        if (!this.reported) {
+          this.reported = true;
+          console.error(
+            'List Callouts, Improved: failed to build decorations, ' +
+              'leaving this update undecorated:',
+            e
+          );
+        }
+      }
     }
 
     build(view: EditorView, state: EditorState) {
@@ -582,7 +617,7 @@ export const calloutExtension = ViewPlugin.fromClass(
           tr.effects.some((e) => e.is(setConfig))
         )
       ) {
-        this.build(update.view, update.state);
+        this.rebuild(update.view, update.state);
       }
 
       // Nesting depth -- and so where each on-screen callout's own

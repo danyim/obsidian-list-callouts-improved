@@ -44,6 +44,13 @@ export default class ListCalloutsPlugin extends Plugin {
   /** Icon ids registered from the vault's icon folder, to unregister on unload. */
   customIconIds: string[] = [];
 
+  /**
+   * The editor's view plugin, exposed so a test can hand it to
+   * `EditorView.plugin()` and ask whether CodeMirror still has it running in a
+   * given editor: it comes back null once a plugin has thrown.
+   */
+  readonly editorViewPlugin = calloutExtension;
+
   async onload() {
     await this.loadSettings();
     this.buildPostProcessorConfig();
