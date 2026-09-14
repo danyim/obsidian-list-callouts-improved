@@ -85,6 +85,8 @@ jobs:
           sleep 1
           herbstluftwm &
           sleep 1
+          # Floating, not tiled: see scripts/xvfb-wm.sh.
+          herbstclient floating on
 
       - name: Run e2e tests
         run: npm run test:e2e
