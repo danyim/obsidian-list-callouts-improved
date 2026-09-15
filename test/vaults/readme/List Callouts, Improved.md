@@ -6,7 +6,7 @@
 - $ Felsic lava is rich in silicon, oxygen and aluminium
 	- % giving these flows a high silica content
 		- & and with it a high viscosity
-			2. ? which holds back crystal nucleation
+			1. ? which holds back crystal nucleation
 				- [x] ! so a natural glass forms as the lava cools
 - ~ Obsidian is hard, brittle, and amorphous
 	- A nested item with no callout of its own

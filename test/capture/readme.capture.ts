@@ -3,7 +3,9 @@
  *
  * Run with `npm run screenshots`. Writes straight into screenshots/, so the
  * images in the README are always something the current code actually
- * produced rather than a picture inherited from the original plugin.
+ * produced rather than a picture inherited from the original plugin. A few
+ * captures there are not in the README and exist for comparing the
+ * renderers against each other; the suite says which.
  *
  * Each image is a composite: the same view rendered in light mode on the left
  * and dark mode on the right.
@@ -23,6 +25,7 @@ import {
   reloadPlugin,
   setEditorText,
   setHighlights,
+  setRendering,
   setSettings,
   writeLegacyData,
 } from '../helpers';
@@ -145,39 +148,69 @@ async function sideBySide(light: string, dark: string): Promise<Buffer> {
 }
 
 /** Where the sizer sits in the scroller, and where the note's content ends. */
-interface EditorFrame {
+interface PaneFrame {
   /** Sizer's box, in CSS px, relative to the scroller. */
   left: number;
   top: number;
   width: number;
-  /** Bottom of the last block, in CSS px from the top of the sizer. */
+  /** Bottom of the lowest block, in CSS px from the top of the sizer. */
   contentBottom: number;
 }
 
-/** Prepare the editor for capture and report how to frame it. */
-async function prepareEditor(hideTitle = false): Promise<EditorFrame> {
+/**
+ * The elements a markdown view lays its note out with, for framing a capture
+ * of it. The editor and the reading view build the same shape from different
+ * elements.
+ */
+interface Pane {
+  /** The element that scrolls. */
+  scroller: string;
+  /** The readable column inside it; the capture is framed to this. */
+  sizer: string;
+  /** Holds the note's blocks, one child each. */
+  content: string;
+  /** The note's filename, shown above its content. */
+  title: string;
+}
+
+const EDITOR: Pane = {
+  scroller: '.markdown-source-view .cm-scroller',
+  sizer: '.markdown-source-view .cm-sizer',
+  content: '.markdown-source-view .cm-content',
+  title: '.markdown-source-view .inline-title',
+};
+
+/** The reading view's sizer and the section holding its blocks are one element. */
+const READER: Pane = {
+  scroller: '.markdown-reading-view .markdown-preview-view',
+  sizer: '.markdown-reading-view .markdown-preview-sizer',
+  content: '.markdown-reading-view .markdown-preview-section',
+  title: '.markdown-reading-view .inline-title',
+};
+
+/** Prepare a pane for capture and report how to frame it. */
+async function preparePane(
+  hideTitle = false,
+  pane: Pane = EDITOR
+): Promise<PaneFrame> {
   return browser.executeObsidian(
-    (_obsidian, shouldHideTitle: boolean, padding: number) => {
+    (_obsidian, shouldHideTitle: boolean, padding: number, pane: Pane) => {
       // Drop the caret: in live preview the line holding it renders as raw
       // markdown, which would show the callout character unstyled.
       (document.activeElement as HTMLElement)?.blur();
       window.getSelection()?.removeAllRanges();
 
-      const scroller = document.querySelector<HTMLElement>(
-        '.markdown-source-view .cm-scroller'
-      );
-      const sizer = document.querySelector<HTMLElement>(
-        '.markdown-source-view .cm-sizer'
-      );
+      const scroller = document.querySelector<HTMLElement>(pane.scroller);
+      const sizer = document.querySelector<HTMLElement>(pane.sizer);
       if (!scroller || !sizer) {
-        throw new Error('No editor on screen to capture');
+        throw new Error(`No ${pane.scroller} on screen to capture`);
       }
 
       // Some captures crop tightly to a couple of list items, and the note's
       // filename sitting above them would be a distraction.
       if (shouldHideTitle) {
         document
-          .querySelector<HTMLElement>('.markdown-source-view .inline-title')
+          .querySelector<HTMLElement>(pane.title)
           ?.style.setProperty('display', 'none');
       }
 
@@ -189,24 +222,27 @@ async function prepareEditor(hideTitle = false): Promise<EditorFrame> {
       const scrollerRect = scroller.getBoundingClientRect();
       const sizerRect = sizer.getBoundingClientRect();
 
-      // The last block, not the last .cm-line: a table or callout at the end
-      // of the note is a widget, not a line.
-      const last = document.querySelector(
-        '.markdown-source-view .cm-content'
-      )?.lastElementChild;
-      if (!last) throw new Error('The note has no content to capture');
+      // The lowest block, not the last .cm-line: a table or callout at the
+      // end of the note is a widget, not a line. Nor simply the last child:
+      // the reading view closes its section with an empty footer element.
+      const blocks = Array.from(
+        document.querySelector(pane.content)?.children ?? []
+      );
+      if (!blocks.length) throw new Error('The note has no content to capture');
+      const bottom = Math.max(
+        ...blocks.map((b) => b.getBoundingClientRect().bottom)
+      );
 
       return {
         left: Math.floor(sizerRect.left - scrollerRect.left),
         top: Math.floor(sizerRect.top - scrollerRect.top),
         width: Math.ceil(sizerRect.width),
-        contentBottom: Math.ceil(
-          last.getBoundingClientRect().bottom - sizerRect.top
-        ),
+        contentBottom: Math.ceil(bottom - sizerRect.top),
       };
     },
     hideTitle,
-    EDITOR_PADDING
+    EDITOR_PADDING,
+    pane
   );
 }
 
@@ -249,10 +285,9 @@ async function shotViewport(label: string): Promise<string> {
   }
 }
 
-const EDITOR_SCROLLER = '.markdown-source-view .cm-scroller';
-
 /**
- * Capture the editor, optionally cropped to the note's own content height.
+ * Capture the editor, or the reading view, optionally cropped to the note's
+ * own content height.
  *
  * The scroller is shot in scrolled slices, so a note taller than the window
  * still comes out whole. The sizer CodeMirror measures against is never
@@ -265,30 +300,32 @@ async function captureEditor(
   name: string,
   hideTitle = false,
   cropToContent = false,
-  readySelector = '.lc-list-callout'
+  readySelector = '.lc-list-callout',
+  pane: Pane = EDITOR
 ): Promise<void> {
   await fs.mkdir(OUT_DIR, { recursive: true });
   await fs.writeFile(
     path.join(OUT_DIR, name),
-    await editorComposite(hideTitle, cropToContent, readySelector)
+    await editorComposite(hideTitle, cropToContent, readySelector, pane)
   );
 }
 
-/** The light/dark composite of the editor, for `captureEditor` or stacking. */
+/** The light/dark composite of a pane, for `captureEditor` or stacking. */
 async function editorComposite(
   hideTitle: boolean,
   cropToContent: boolean,
-  readySelector: string
+  readySelector: string,
+  pane: Pane = EDITOR
 ): Promise<Buffer> {
   await browser.$(readySelector).waitForExist({ timeout: 10000 });
 
-  const frame = await prepareEditor(hideTitle);
+  const frame = await preparePane(hideTitle, pane);
 
   await setColorScheme(false);
-  let light = await shotScrolled(EDITOR_SCROLLER, 'light');
+  let light = await shotScrolled(pane.scroller, 'light');
 
   await setColorScheme(true);
-  let dark = await shotScrolled(EDITOR_SCROLLER, 'dark');
+  let dark = await shotScrolled(pane.scroller, 'dark');
 
   await setColorScheme(false);
 
@@ -1548,6 +1585,33 @@ describe('README screenshots', function () {
   it('captures the character rendering', async function () {
     await setSettings(callouts(false));
     await captureEditor('callout-characters.png', false, true);
+  });
+
+  it('captures the character rendering in reading view and source mode', async function () {
+    // The same note through the other two renderings, so a change to one
+    // renderer can be compared against the others without opening Obsidian.
+    // Not in the README, which shows live preview alone.
+    await setRendering('reading');
+    await captureEditor(
+      'callout-characters-reading.png',
+      false,
+      true,
+      // The paragraph is the last block to render.
+      '.markdown-reading-view .lc-highlight-callout',
+      READER
+    );
+
+    await setRendering('source');
+    await captureEditor(
+      'callout-characters-source.png',
+      false,
+      true,
+      '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
+    );
+
+    // The leaf keeps its rendering across notes, and the rest of the set is
+    // of live preview.
+    await setRendering('live-preview');
   });
 
   it('captures the icon rendering', async function () {
