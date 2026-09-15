@@ -136,10 +136,23 @@ export class HighlightMarker extends WidgetType {
   }
 }
 
-export const calloutDecoration = (callout: Callout) =>
+/**
+ * The line class for a callout's own line, or for one of the lines its item
+ * wraps onto (`continuation`). `continued` marks any line of the run that
+ * has another after it, which is what lets the stylesheet join the bands
+ * end to end instead of leaving the per-line spacing between them.
+ */
+export const calloutDecoration = (
+  callout: Callout,
+  continuation = false,
+  continued = false
+) =>
   Decoration.line({
     attributes: {
-      class: 'lc-list-callout',
+      class: [
+        continuation ? 'lc-list-callout-continuation' : 'lc-list-callout',
+        ...(continued ? ['lc-list-callout-continued'] : []),
+      ].join(' '),
       style: calloutColorStyle(callout),
       'data-callout': callout.char,
     },
@@ -220,6 +233,71 @@ function isListLine(state: EditorState, line: Line): boolean {
   });
 
   return isList;
+}
+
+/** Indented text with no list marker of its own: what a continuation line
+ * looks like before the parser has said what it is. */
+const INDENTED_TEXT = /^\s+(?![-*+] |\d+[.)] )\S/;
+
+/**
+ * Whether `line` is one a list item wraps onto: indented to the item's
+ * content and carrying no marker of its own, the way Obsidian lays out a
+ * hard or soft line break inside an item (#43). Anything else, a blank line
+ * or the next item included, ends the item's run.
+ *
+ * Obsidian's parser names such a line node `HyperMD-list-line-nobullet`,
+ * with nothing on its token class prop to go by, so the name is the signal.
+ * A fenced code block or a quote inside the item is a nobullet line too,
+ * which keeps the run whole, as reading mode's <li> is. Taken on trust from
+ * the text alone when the parser has not reached the line, as isListLine is:
+ * indented text with no list marker of its own, under an item that already
+ * passed, and the next update after the parser catches up corrects a false
+ * positive.
+ */
+function isContinuationLine(state: EditorState, line: Line): boolean {
+  if (!INDENTED_TEXT.test(line.text)) return false;
+  if (!syntaxTreeAvailable(state, line.to)) return true;
+
+  let isContinuation = false;
+
+  syntaxTree(state).iterate({
+    from: line.from,
+    to: line.to,
+    enter(node): false | void {
+      if (isContinuation) return false;
+
+      if (node.name.includes('HyperMD-list-line-nobullet')) {
+        isContinuation = true;
+        return false;
+      }
+    },
+  });
+
+  return isContinuation;
+}
+
+/**
+ * The callout whose item `line` continues, when `line` is a continuation
+ * line and the item's own line sits above it: walked back to from the first
+ * line of a visible range, which is the one place the builder meets a
+ * continuation line without having just passed its item's own line.
+ */
+function calloutContinuedAt(
+  state: EditorState,
+  config: CalloutConfig,
+  line: Line
+): Callout | null {
+  if (!config.re) return null;
+
+  while (line.number > 1 && isContinuationLine(state, line)) {
+    line = state.doc.line(line.number - 1);
+
+    const match = line.text.match(config.re);
+    const callout = match ? config.callouts[match[2]] : null;
+    if (callout) return isListLine(state, line) ? callout : null;
+  }
+
+  return null;
 }
 
 /**
@@ -415,6 +493,13 @@ export function buildCalloutDecos(
   // every callout off the screen rather than duplicating one.
   let lastLine = 0;
 
+  // The callout whose item the current line continues, carried from one
+  // line to the next; null outside a run. `nextContinues` is the answer for
+  // the line after the current one, which deciding the current line's
+  // `continued` class already had to compute.
+  let run: Callout | null = null;
+  let nextContinues = false;
+
   for (const { from, to } of view.visibleRanges) {
     let line = doc.lineAt(from);
 
@@ -425,16 +510,34 @@ export function buildCalloutDecos(
         continue;
       }
 
+      // A range can open partway down an item, with the line that names the
+      // callout above it. The carried state is only right for the line after
+      // the last one processed, so anywhere else look back for the item.
+      if (line.number !== lastLine + 1) {
+        run = calloutContinuedAt(state, config, line);
+        nextContinues = run !== null;
+      }
+
       lastLine = line.number;
 
       const match = config.re ? line.text.match(config.re) : null;
       const callout = match ? config.callouts[match[2]] : null;
+      const isHead = !!callout && isListLine(state, line);
+      const continuation = !isHead && nextContinues ? run : null;
 
-      if (callout && isListLine(state, line)) {
-        const labelPos = line.from + match[1].length;
+      run = isHead ? callout : continuation;
+
+      if (run) {
+        nextContinues =
+          line.number < doc.lines &&
+          isContinuationLine(state, doc.line(line.number + 1));
 
         // Set the line class and callout color
-        builder.add(line.from, line.from, calloutDecoration(callout));
+        builder.add(
+          line.from,
+          line.from,
+          calloutDecoration(run, !!continuation, nextContinues)
+        );
 
         // Add the callout background element
         builder.add(
@@ -443,14 +546,20 @@ export function buildCalloutDecos(
           Decoration.widget({ widget: new CalloutBackground(), side: -1 })
         );
 
-        // Decorate the callout marker
-        builder.add(
-          labelPos,
-          labelPos + callout.char.length,
-          Decoration.replace({
-            widget: new CalloutMarker(callout.char, callout.icon),
-          })
-        );
+        if (!continuation) {
+          const labelPos = line.from + match[1].length;
+
+          // Decorate the callout marker
+          builder.add(
+            labelPos,
+            labelPos + run.char.length,
+            Decoration.replace({
+              widget: new CalloutMarker(run.char, run.icon),
+            })
+          );
+        }
+      } else {
+        nextContinues = false;
       }
 
       // `includes` is the whole cost for a line without highlights.
@@ -496,20 +605,23 @@ const DECORATIVE_MARKER_GLYPH_SELECTOR = '.list-bullet, .task-list-label';
  * (covered). A top-level line has no ancestors and so no such element,
  * which is also the case in which the background should reach the line's
  * own left edge, hence the 0 fallback.
+ *
+ * A continuation line's own indent element runs on past the ancestors'
+ * indentation, through the item's content indent too, so its right edge
+ * sits at the text, not at the marker. Its band takes the item's own line's
+ * offset instead, which is what makes the two one band. That line is a
+ * sibling above it, through any continuation lines in between; when the
+ * viewport has scrolled it out of the DOM altogether, the ancestors'
+ * indentation is measured off the continuation line itself: the start of
+ * its content indent (`.cm-indent-spacing`), or the whole indent element
+ * for a code block line inside the item, which has no such breakdown.
  */
 function alignCalloutBackgrounds(view: EditorView) {
   view.requestMeasure<{ el: HTMLElement; indent: number }[]>({
     read(view) {
-      return Array.from(
-        view.dom.querySelectorAll<HTMLElement>('.lc-list-bg')
-      ).flatMap((el) => {
-        // Always a direct child by construction -- this widget is the one
-        // inserted at line.from -- so this is parentElement in substance,
-        // just without asking getBoundingClientRect's neighbor, closest, to
-        // walk and re-match a selector for an answer already known.
-        const line = el.parentElement;
-        if (!line) return [];
+      const measured = new Map<HTMLElement, number>();
 
+      const ownIndent = (line: HTMLElement) => {
         const indentGuide = line.querySelector<HTMLElement>(
           '.cm-hmd-list-indent'
         );
@@ -526,7 +638,56 @@ function alignCalloutBackgrounds(view: EditorView) {
             (line.getBoundingClientRect().left + nestingIndent)
           : 0;
 
-        return [{ el, indent: Math.max(0, nestingIndent + glyphInset / 2) }];
+        return Math.max(0, nestingIndent + glyphInset / 2);
+      };
+
+      const continuedIndent = (line: HTMLElement) => {
+        let head = line.previousElementSibling as HTMLElement | null;
+        while (head?.classList.contains('lc-list-callout-continuation')) {
+          head = head.previousElementSibling as HTMLElement | null;
+        }
+        // Visited before this line, in document order, so already measured.
+        if (head?.classList.contains('lc-list-callout')) {
+          const indent = measured.get(head);
+          if (indent !== undefined) return indent;
+        }
+
+        const spacing = line.querySelector<HTMLElement>('.cm-indent-spacing');
+        if (spacing) {
+          return Math.max(
+            0,
+            spacing.getBoundingClientRect().left -
+              line.getBoundingClientRect().left
+          );
+        }
+        const indentGuide = line.querySelector<HTMLElement>(
+          '.cm-hmd-list-indent'
+        );
+        return indentGuide
+          ? Math.max(
+              0,
+              indentGuide.getBoundingClientRect().right -
+                line.getBoundingClientRect().left
+            )
+          : 0;
+      };
+
+      return Array.from(
+        view.dom.querySelectorAll<HTMLElement>('.lc-list-bg')
+      ).flatMap((el) => {
+        // Always a direct child by construction -- this widget is the one
+        // inserted at line.from -- so this is parentElement in substance,
+        // just without asking getBoundingClientRect's neighbor, closest, to
+        // walk and re-match a selector for an answer already known.
+        const line = el.parentElement;
+        if (!line) return [];
+
+        const indent = line.classList.contains('lc-list-callout-continuation')
+          ? continuedIndent(line)
+          : ownIndent(line);
+        measured.set(line, indent);
+
+        return [{ el, indent }];
       });
     },
     write(results) {
