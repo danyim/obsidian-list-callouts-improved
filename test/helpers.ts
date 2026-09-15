@@ -1148,6 +1148,29 @@ async function setViewMode(mode: 'preview' | 'source'): Promise<void> {
   }
 }
 
+/** The three ways a markdown view can render its note. */
+export type Rendering = 'live-preview' | 'source' | 'reading';
+
+/**
+ * Put the active markdown view into one particular rendering. Set as view
+ * state rather than through the toggle commands: those flip between reading
+ * and whichever editing mode the vault last used, so neither can ask for
+ * source mode outright.
+ */
+export async function setRendering(rendering: Rendering): Promise<void> {
+  await browser.executeObsidian(async ({ app, obsidian }, rendering) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    await view.setState(
+      {
+        ...view.getState(),
+        mode: rendering === 'reading' ? 'preview' : 'source',
+        source: rendering === 'source',
+      },
+      { history: false }
+    );
+  }, rendering);
+}
+
 /** What the marker color controls of one callout form currently show. */
 export interface MarkerColorControls {
   /** The dropdown's value: 'default' or 'custom'. */

@@ -130,14 +130,31 @@ settings:
    indentation to exclude in the first place). CodeMirror renders that
    indentation as a real, measurable element (`.cm-hmd-list-indent`) with no
    equivalent for "this item's own marker width," which is why the fix
-   measures the former rather than computing the latter. */
+   measures the former rather than computing the latter.
+
+   Vertically the box still spans the whole line, but the paint stays out
+   of the line's own top and bottom padding: Obsidian spaces list items
+   with padding on the line (--list-spacing), and a band covering it left
+   consecutive callouts as one unbroken block of color (#41), where
+   reading mode's band sits inside the item's padding and the original
+   plugin's inherited the line's. Inherited rather than read from the
+   variable, so a theme that spaces its lists some other way is still
+   matched. The ::after below is what actually carries the color, sized
+   to the content box, and content-box clipping keeps the opaque base
+   layer to the same area. Only the vertical padding is inherited: the
+   horizontal is the marker indent the left offset above already handles,
+   and with it inherited too the band stopped short of the marker (see
+   the numbered-list history above). */
 .lc-list-bg {
   background-color: var(--background-primary);
+  background-clip: content-box;
   position: absolute;
   top: calc(-1 * var(--lc-bg-top));
   right: calc(-1 * var(--lc-bg-right));
   bottom: calc(-1 * var(--lc-bg-bottom));
   left: 0;
+  padding-block: inherit;
+  padding-inline: 0;
   display: block;
   z-index: -1;
   pointer-events: none;
