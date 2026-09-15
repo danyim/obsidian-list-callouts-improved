@@ -173,6 +173,37 @@ settings:
   background-color: rgba(var(--lc-callout-color), var(--lc-bg-opacity-dark));
 }
 
+/* An item that wraps onto further lines is one band in reading mode, and
+   here too (#43): each of its lines carries a band of its own, joined end
+   to end. The line's own vertical padding, kept clear of the band above
+   so consecutive items stay apart, is exactly the gap that would show
+   between the lines of one item, so within a run it is covered after all:
+   a line with another after it (`continued`) paints down through its
+   bottom padding and squares off its bottom corners, and a continuation
+   line paints up through its top padding and squares off its top ones.
+   The run's first and last lines keep their outer corners and padding, so
+   the whole still reads as one rounded band spaced from its neighbors.
+   The Style Settings padding sliders go with the outer edges as well. */
+.lc-list-callout-continued > .lc-list-bg {
+  bottom: 0;
+  padding-bottom: 0;
+}
+
+.lc-list-callout-continued > .lc-list-bg::after {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.lc-list-callout-continuation > .lc-list-bg {
+  top: 0;
+  padding-top: 0;
+}
+
+.lc-list-callout-continuation > .lc-list-bg::after {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
 /* A callout may override its marker's color on its own; without one the
    marker falls back to the callout color the background uses. */
 .lc-list-marker {
