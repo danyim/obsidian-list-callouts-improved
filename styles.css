@@ -221,40 +221,56 @@ settings:
 }
 
 /* "Hide bullets and numbers" (mgmeyers/obsidian-list-callouts#59): the
-   callout marker stands in for the bullet, the way a checkbox does. main.ts
-   keeps the body class in step with the setting, and everything the
-   setting changes is here, so every open editor, rendered note and settings
-   preview follows it at once with nothing re-decorated.
+   callout marker is drawn where the bullet or number would be, the way a
+   checkbox stands in for a bullet. main.ts keeps the body class in step
+   with the setting, and everything the setting changes is here, so every
+   open editor, rendered note and settings preview follows it at once.
+   Scoped to callout lines: a plain list item keeps its bullet. A checkbox
+   is left alone in both renderers (.task-list-label in the editor, a
+   task-list-item <li> that already sets list-style: none in reading
+   view): it is the one marker that can be clicked.
 
-   Scoped to callout lines: a plain list item keeps its bullet. Removed
-   from flow rather than made invisible, so the marker slides into the
-   bullet's place instead of sitting after an empty gap; the line's own
-   indent is left alone, so nested items still line up under their parent.
-   The editor draws a bullet as .list-bullet and a number as .list-number,
-   both inside the line's formatting span; reading view draws a bullet as
-   .list-bullet too but a number as the <li>'s own ::marker, which only
-   list-style can take away. A checkbox is neither (.task-list-label in the
-   editor, a task-list-item <li> that already sets list-style: none in
-   reading view), which is what leaves it in place. */
+   Editor. Obsidian draws a bullet as .list-bullet and a number as
+   .list-number, both inside the line's formatting span, after its own
+   inline-start padding. Both are removed from flow rather than made
+   invisible, so the marker slides forward to exactly where they began.
+   The bullet's span differs from the number's in one detail: its space
+   is a text node beside the glyph, where a number's sits inside
+   .list-number, so hiding the glyph alone left the bullet line's marker a
+   space further along than the numbered line's. As a flex container the
+   span drops a whitespace-only text node from layout, which evens the
+   two out, while the raw "- " Obsidian reveals in the span when the
+   caret enters it is a real text run and still renders. The band's own
+   inset for a bullet (alignCalloutBackgrounds in extension.ts) goes with
+   the bullet, so the two lines get one band as well. */
 .lc-hide-bullets .lc-list-callout .list-bullet,
 .lc-hide-bullets .lc-list-callout .list-number {
   display: none;
 }
 
+.lc-hide-bullets .cm-line.lc-list-callout .cm-formatting-list-ul {
+  display: inline-flex;
+}
+
+/* Reading view. Obsidian's bullet is a zero-width float, 0.8em into the
+   item's own margin, with the dot centered on it (`.markdown-rendered
+   .list-bullet`), and a number is the <li>'s own ::marker out there too,
+   which only list-style can take away. Taking either away frees no room,
+   so the marker mirrors the bullet instead: the same float at the same
+   offset, zero width, its content centered. That puts its center on the
+   dot's, and within a pixel of a number's, and leaves the item's text
+   where every plain item's is. The text starts with the space that
+   followed the callout character; at the start of a line it collapses.
+   Not on a task item, where the marker stays inline after the checkbox. */
 .lc-hide-bullets li.lc-list-callout {
   list-style-type: none;
 }
 
-/* In the editor the bullet is in the line's flow, so with it gone the
-   marker slides into its place on its own. Reading view floats the bullet
-   out of flow, 0.8em into the item's own margin (Obsidian's
-   `.markdown-rendered .list-bullet`), and draws a number as the ::marker
-   out there too, so taking either away frees no room: the marker stays put
-   at the text column, a bullet's width to the right of where the editor
-   shows it. The same offset on the marker is what lines the two up, and
-   the text after it follows, as it does in the editor. Not on a task item,
-   whose checkbox is still there in front of the marker. */
-.lc-hide-bullets li.lc-list-callout:not(.task-list-item) .lc-list-marker {
+.lc-hide-bullets li.lc-list-callout:not(.task-list-item) > .lc-li-wrapper > .lc-list-marker {
+  float: inline-start;
+  display: inline-flex;
+  justify-content: center;
+  width: 0;
   margin-inline-start: -0.8em;
 }
 

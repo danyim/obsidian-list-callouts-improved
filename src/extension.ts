@@ -630,13 +630,18 @@ function alignCalloutBackgrounds(view: EditorView) {
             line.getBoundingClientRect().left
           : 0;
 
+        // A glyph with no box is one the bullets preference has taken out
+        // of flow (styles.css, .lc-hide-bullets), and its rect would read as
+        // the viewport's origin. Without it the line is laid out like a
+        // numbered one, so it gets a numbered line's band: no inset.
         const glyph = line.querySelector<HTMLElement>(
           DECORATIVE_MARKER_GLYPH_SELECTOR
         );
-        const glyphInset = glyph
-          ? glyph.getBoundingClientRect().left -
-            (line.getBoundingClientRect().left + nestingIndent)
-          : 0;
+        const glyphInset =
+          glyph && glyph.getClientRects().length
+            ? glyph.getBoundingClientRect().left -
+              (line.getBoundingClientRect().left + nestingIndent)
+            : 0;
 
         return Math.max(0, nestingIndent + glyphInset / 2);
       };
@@ -786,8 +791,14 @@ export const calloutExtension = ViewPlugin.fromClass(
       // or its viewport. A bare selection change or a setConfig effect
       // (recoloring, say) rebuilds decorations above but never moves a
       // marker, so re-measuring for either would just confirm nothing
-      // changed at DOM-read cost.
-      if (layoutMayHaveChanged) {
+      // changed at DOM-read cost. The one config change that does move
+      // one is the bullets preference: a bullet line's band is inset for
+      // its bullet, and that bullet has just been drawn or taken away.
+      const hideBulletsChanged =
+        update.startState.field(calloutsConfigField).hideBullets !==
+        update.state.field(calloutsConfigField).hideBullets;
+
+      if (layoutMayHaveChanged || hideBulletsChanged) {
         alignCalloutBackgrounds(update.view);
       }
     }

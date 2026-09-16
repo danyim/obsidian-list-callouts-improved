@@ -105,6 +105,12 @@ export interface CalloutConfig {
    * the search can start past the highlights the line has already matched.
    */
   highlightOpenRe?: RegExp | null;
+  /**
+   * Editor only: the bullets preference, so a toggle reaches the view plugin
+   * as a config change and it re-measures the callout bands, whose left edge
+   * depends on whether the line's bullet is drawn.
+   */
+  hideBullets?: boolean;
 }
 
 export type ListCalloutsSettings = Callout[];

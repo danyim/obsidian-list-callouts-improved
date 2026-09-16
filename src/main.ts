@@ -132,7 +132,13 @@ export default class ListCalloutsPlugin extends Plugin {
    * re-render, and the settings tab's previews with it.
    */
   private applyHideBullets(): void {
+    if (document.body.hasClass(HIDE_BULLETS_CLASS) === this.hideBullets) return;
+
     document.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
+    // Straight away, not through the debounced update: the bullets vanish
+    // the moment the class flips, and the bands that were inset for them
+    // should move in the same frame rather than two seconds later.
+    this.dispatchUpdate();
   }
 
   /**
@@ -239,6 +245,7 @@ export default class ListCalloutsPlugin extends Plugin {
         : null,
       highlightRe: this.highlightPattern(chars, 'whole'),
       highlightOpenRe: this.highlightPattern(chars, 'opener'),
+      hideBullets: this.hideBullets,
     };
   }
 

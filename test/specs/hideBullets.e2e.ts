@@ -4,6 +4,7 @@ import { obsidianPage } from 'wdio-obsidian-service';
 
 import { DEFAULT_SETTINGS } from '../../src/settings';
 import {
+  ListItemGeometry,
   ListMarkerVisibility,
   bodyHidesBullets,
   calloutPreviewCount,
@@ -13,6 +14,7 @@ import {
   ensureEditingMode,
   ensureReadingMode,
   getHideBullets,
+  listItemGeometry,
   listMarkerVisibility,
   openNote,
   openPluginSettings,
@@ -194,6 +196,206 @@ describe('Hide bullets and numbers', function () {
     it('shows the bullets again when turned off, with no re-render', async function () {
       await setHideBullets(false);
       expectEveryMarkerShown(await markersUntil(READING));
+    });
+  });
+
+  /**
+   * The callout marker is drawn where the list's own marker would be, and
+   * a bullet callout and a numbered callout in one list come out the same.
+   * The editor's bullet span carries its space as a text node beside the
+   * glyph where a number's is inside .list-number, which once left the
+   * bullet line's marker a space further along; and the band's inset for
+   * a bullet (alignCalloutBackgrounds) has to go with the bullet, and go
+   * the moment the setting flips rather than on the next edit.
+   */
+  describe('alignment', function () {
+    const ALIGNMENT_NOTE = [
+      '- & Bullet callout',
+      '- Plain bullet',
+      '1. & Numbered callout',
+      '2. Plain numbered',
+      '- [ ] & Task callout',
+      '- [ ] Plain task',
+      '- Parent',
+      '\t- & Nested bullet callout',
+      '\t- Nested plain bullet',
+      '\t1. & Nested numbered callout',
+      '\t2. Nested plain numbered',
+    ].join('\n');
+
+    /** Within a pixel: layout can land on a subpixel either side. */
+    const expectNear = (actual: number | null, wanted: number | null) => {
+      expect(actual).not.toBeNull();
+      expect(wanted).not.toBeNull();
+      expect(Math.abs(actual - wanted)).toBeLessThanOrEqual(1);
+    };
+
+    const item = (rows: ListItemGeometry[], suffix: string) => {
+      const found = rows.find((r) => r.text.endsWith(suffix));
+      if (!found) throw new Error(`No list item ending "${suffix}"`);
+      return found;
+    };
+
+    const geometryUntil = async (
+      root: string,
+      ready: (rows: ListItemGeometry[]) => boolean
+    ) => {
+      let rows: ListItemGeometry[] = [];
+      await browser.waitUntil(
+        async () => {
+          rows = await listItemGeometry(root);
+          return rows.length === 11 && ready(rows);
+        },
+        {
+          timeout: 10000,
+          interval: 200,
+          timeoutMsg: `list geometry under ${root} did not settle: ${JSON.stringify(rows)}`,
+        }
+      );
+      return rows;
+    };
+
+    before(async function () {
+      await browser.executeObsidian(async ({ app }, text) => {
+        await app.vault.create('Alignment.md', `${text}\n`);
+      }, ALIGNMENT_NOTE);
+      await openNote('Alignment.md');
+      await browser.$('.lc-list-callout').waitForExist({ timeout: 10000 });
+      await placeCursor(ALIGNMENT_NOTE.split('\n').length, 0);
+      await setHideBullets(false);
+    });
+
+    after(async function () {
+      await ensureEditingMode();
+      await setHideBullets(false);
+    });
+
+    describe('in the editor', function () {
+      before(async function () {
+        await ensureEditingMode();
+        await setHideBullets(true);
+      });
+
+      it('draws the marker where the bullet or number began, alike on both lines', async function () {
+        const rows = await geometryUntil(EDITOR, () => true);
+        const bullet = item(rows, BULLET_CALLOUT);
+        const numbered = item(rows, NUMBERED_CALLOUT);
+
+        // Where the hidden glyphs would have started: the plain items' own
+        // glyphs, which sit in the same place on every line of the list.
+        expectNear(bullet.markerLeft, item(rows, 'Plain bullet').glyphLeft);
+        expectNear(numbered.markerLeft, item(rows, 'Plain numbered').glyphLeft);
+        expectNear(bullet.markerLeft, numbered.markerLeft);
+      });
+
+      it("gives the bullet line a numbered line's band once its bullet is gone, without waiting for an edit", async function () {
+        const rows = await geometryUntil(
+          EDITOR,
+          (r) =>
+            Math.abs(
+              item(r, BULLET_CALLOUT).bandLeft -
+                item(r, NUMBERED_CALLOUT).bandLeft
+            ) < 0.5
+        );
+        expectNear(
+          item(rows, BULLET_CALLOUT).bandLeft,
+          item(rows, NUMBERED_CALLOUT).bandLeft
+        );
+      });
+
+      it('holds for nested callouts, whose bands start at their own indent', async function () {
+        const rows = await geometryUntil(EDITOR, () => true);
+        const bullet = item(rows, 'Nested bullet callout');
+        const numbered = item(rows, 'Nested numbered callout');
+
+        expectNear(
+          bullet.markerLeft,
+          item(rows, 'Nested plain bullet').glyphLeft
+        );
+        expectNear(
+          numbered.markerLeft,
+          item(rows, 'Nested plain numbered').glyphLeft
+        );
+        expectNear(bullet.markerLeft, numbered.markerLeft);
+        expectNear(bullet.bandLeft, numbered.bandLeft);
+        // Nested: not the line's own edge, where a top-level band starts.
+        expect(bullet.bandLeft).toBeGreaterThan(
+          item(rows, BULLET_CALLOUT).bandLeft + 8
+        );
+      });
+
+      it('puts the bullet and its band inset back when turned off', async function () {
+        await setHideBullets(false);
+        // The bullet is back the moment the class goes; its band's inset
+        // follows on the re-measure, so wait for that rather than the bullet.
+        const rows = await geometryUntil(
+          EDITOR,
+          (r) =>
+            item(r, BULLET_CALLOUT).bandLeft >
+            item(r, NUMBERED_CALLOUT).bandLeft + 2
+        );
+        const bullet = item(rows, BULLET_CALLOUT);
+        expectNear(bullet.glyphLeft, item(rows, 'Plain bullet').glyphLeft);
+        // The inset that a bullet line has always had, see #91's history.
+        expect(bullet.bandLeft).toBeGreaterThan(
+          item(rows, NUMBERED_CALLOUT).bandLeft + 2
+        );
+      });
+    });
+
+    describe('in reading view', function () {
+      before(async function () {
+        await setHideBullets(true);
+        await ensureReadingMode();
+        await browser
+          .$(`${READING} .lc-list-callout`)
+          .waitForExist({ timeout: 10000 });
+      });
+
+      after(async function () {
+        await ensureEditingMode();
+      });
+
+      it("centers the marker on the bullet's dot and keeps the text column", async function () {
+        const rows = await geometryUntil(READING, () => true);
+        const bullet = item(rows, BULLET_CALLOUT);
+        const numbered = item(rows, NUMBERED_CALLOUT);
+        const plainBullet = item(rows, 'Plain bullet');
+
+        // A plain item's bullet float is zero width, so its left is the
+        // dot's center; the marker's center lands on it, and a numbered
+        // callout's marker on the same point.
+        expectNear(bullet.markerCenter, plainBullet.glyphLeft);
+        expectNear(numbered.markerCenter, plainBullet.glyphLeft);
+
+        expectNear(bullet.textLeft, plainBullet.textLeft);
+        expectNear(numbered.textLeft, item(rows, 'Plain numbered').textLeft);
+      });
+
+      it('holds for nested callouts, against a plain item of their own list', async function () {
+        // Obsidian lays a nested ol out at a different column from a nested
+        // ul, plain items included, so each callout is held to its own
+        // list's column rather than to the other callout.
+        const rows = await geometryUntil(READING, () => true);
+        const bullet = item(rows, 'Nested bullet callout');
+        const plainBullet = item(rows, 'Nested plain bullet');
+        const numbered = item(rows, 'Nested numbered callout');
+        const plainNumbered = item(rows, 'Nested plain numbered');
+
+        expectNear(bullet.markerCenter, plainBullet.glyphLeft);
+        expectNear(bullet.textLeft, plainBullet.textLeft);
+        expectNear(numbered.textLeft, plainNumbered.textLeft);
+        // A number's own glyph is a ::marker with no box to measure, so the
+        // numbered marker is held to the same offset from its text as the
+        // bullet one has from its own.
+        expectNear(
+          numbered.textLeft - numbered.markerCenter,
+          bullet.textLeft - bullet.markerCenter
+        );
+        expect(bullet.markerCenter).toBeGreaterThan(
+          item(rows, BULLET_CALLOUT).markerCenter + 8
+        );
+      });
     });
   });
 
