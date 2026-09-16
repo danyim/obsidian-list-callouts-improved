@@ -358,11 +358,11 @@ function highlightEndAfter(state: EditorState, pos: number): number | null {
 }
 
 /**
- * Decorate one highlight callout: a mark over the content plus, in Live
- * Preview, a replacement showing the marker -- the character, or the icon
- * when one is set -- in place of the raw character and space. The
- * replacement is dropped while the selection touches the highlight, so the
- * raw `==& ` is there to edit, which is what Obsidian does with `==`.
+ * Decorate one highlight callout: a mark over the content plus a replacement
+ * showing the marker -- the character, or the icon when one is set -- in
+ * place of the raw character and space. The replacement is dropped while the
+ * selection touches the highlight, so the raw `==& ` is there to edit, which
+ * is what Obsidian does with `==`.
  */
 function addHighlightDeco(
   builder: RangeSetBuilder<Decoration>,
@@ -378,9 +378,7 @@ function addHighlightDeco(
 
   outer.add(contentFrom, contentTo, highlightDecoration(callout));
 
-  const livePreview = state.field(editorLivePreviewField, false) ?? false;
-
-  if (livePreview && !selectionTouches(state, contentFrom - 2, contentTo + 2)) {
+  if (!selectionTouches(state, contentFrom - 2, contentTo + 2)) {
     builder.add(
       contentFrom,
       markerTo,
@@ -465,8 +463,18 @@ function addHighlightDecos(
   );
 }
 
+/** Whether the editor is in Live Preview, as opposed to source mode. */
+function isLivePreview(state: EditorState): boolean {
+  return state.field(editorLivePreviewField, false) ?? false;
+}
+
 /**
  * Build the callout decorations for everything on screen.
+ *
+ * Nothing at all in source mode: that is the rendering Obsidian keeps as raw
+ * markdown, and a callout there shows as the `- & text` the user typed, with
+ * no marker, band or highlight color drawn over it, so the character is
+ * there to see and edit (mgmeyers/obsidian-list-callouts#35).
  *
  * Walks the visible lines and tests each against the callout pattern, rather
  * than walking every syntax node in the viewport. The viewport holds a few
@@ -479,7 +487,11 @@ export function buildCalloutDecos(
   stats?: BuildStats
 ): CalloutDecorations {
   const config = state.field(calloutsConfigField);
-  if ((!config?.re && !config?.highlightRe) || !view.visibleRanges.length)
+  if (
+    !isLivePreview(state) ||
+    (!config?.re && !config?.highlightRe) ||
+    !view.visibleRanges.length
+  )
     return { decorations: Decoration.none, outerDecorations: Decoration.none };
 
   const builder = new RangeSetBuilder<Decoration>();
@@ -776,6 +788,10 @@ export const calloutExtension = ViewPlugin.fromClass(
 
       if (
         layoutMayHaveChanged ||
+        // Switching between Live Preview and source mode reconfigures the
+        // editor in place, with the document, viewport and tree as they
+        // were; the decorations are drawn in one and not the other.
+        isLivePreview(update.state) !== isLivePreview(update.startState) ||
         // A highlight's marker is hidden or revealed by where the caret is,
         // so caret movement matters -- but only on a screen that has one.
         (update.selectionSet && this.hasHighlights) ||

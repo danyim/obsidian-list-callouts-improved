@@ -1594,7 +1594,9 @@ describe('README screenshots', function () {
   it('captures the character rendering in reading view and source mode', async function () {
     // The same note through the other two renderings, so a change to one
     // renderer can be compared against the others without opening Obsidian.
-    // Not in the README, which shows live preview alone.
+    // Source mode is left as raw markdown (upstream #35), so its companion
+    // shows what the plugin does not draw. Not in the README, which shows
+    // live preview alone.
     await setRendering('reading');
     await captureEditor(
       'callout-characters.reading.png',
@@ -1610,7 +1612,7 @@ describe('README screenshots', function () {
       'callout-characters.source.png',
       false,
       true,
-      '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
+      '.markdown-source-view:not(.is-live-preview) .cm-line'
     );
 
     // The leaf keeps its rendering across notes, and the rest of the set is
@@ -1669,7 +1671,7 @@ describe('README screenshots', function () {
       'callout-multiline.source.png',
       true,
       true,
-      '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
+      '.markdown-source-view:not(.is-live-preview) .cm-line'
     );
 
     await setRendering('live-preview');

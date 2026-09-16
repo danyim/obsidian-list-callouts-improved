@@ -35,6 +35,8 @@ The previews in the settings tab follow the toggle, so each callout shows how it
 
 ![The settings tab with Hide bullets and numbers turned on: every callout's preview line shows its marker in place of the bullet, in light and dark mode](screenshots/settings-hidden-bullets.png)
 
+Callouts are drawn in Live Preview and reading view. Source mode shows the raw markdown, `- & Important` and so on, with no marker, band or highlight color over it, so the callout character is there to see and edit.
+
 Callout padding and background intensity can be adjusted with the Style Settings plugin.
 
 ## Highlights
