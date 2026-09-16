@@ -17,6 +17,8 @@ import { buildPostProcessor } from './postProcessor';
 import {
   Callout,
   CalloutConfig,
+  DEFAULT_HIDE_BULLETS,
+  HIDE_BULLETS_CLASS,
   HighlightSettings,
   ListCalloutsSettings,
   PluginData,
@@ -28,6 +30,7 @@ import { ListCalloutSettingTab } from './settingsTab';
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
   highlights: HighlightSettings;
+  hideBullets: boolean;
   postProcessorConfig: CalloutConfig;
 
   /**
@@ -54,6 +57,7 @@ export default class ListCalloutsPlugin extends Plugin {
   async onload() {
     await this.loadSettings();
     this.buildPostProcessorConfig();
+    this.applyHideBullets();
 
     this.legacyDataAvailable = await legacySettingsExist(this.app);
 
@@ -97,6 +101,14 @@ export default class ListCalloutsPlugin extends Plugin {
       calloutExtension,
     ]);
 
+    // A popout window starts with a body of its own, so it is told the
+    // preference as it opens; the main window's was told during load.
+    this.registerEvent(
+      this.app.workspace.on('window-open', (win) => {
+        win.doc.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
+      })
+    );
+
     this.app.workspace.trigger('parse-style-settings');
   }
 
@@ -118,6 +130,41 @@ export default class ListCalloutsPlugin extends Plugin {
     // These are registered globally, so hand them back when the plugin goes.
     unloadCustomIcons(this.customIconIds);
     this.customIconIds = [];
+    for (const doc of this.documents()) {
+      doc.body.removeClass(HIDE_BULLETS_CLASS);
+    }
+  }
+
+  /**
+   * The document of every window a note can be shown in: the main one and
+   * each popout, which has a body of its own.
+   */
+  private documents(): Document[] {
+    const docs = new Set<Document>([document]);
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      docs.add(leaf.getContainer().doc);
+    });
+    return Array.from(docs);
+  }
+
+  /**
+   * Put the body class the stylesheet keys on in step with the preference.
+   * A class on the body rather than on each callout line: it reaches every
+   * open editor and rendered note at once, with nothing to re-decorate or
+   * re-render, and the settings tab's previews with it.
+   */
+  private applyHideBullets(): void {
+    let changed = false;
+    for (const doc of this.documents()) {
+      if (doc.body.hasClass(HIDE_BULLETS_CLASS) === this.hideBullets) continue;
+      doc.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
+      changed = true;
+    }
+
+    // Straight away, not through the debounced update: the bullets vanish
+    // the moment the class flips, and the bands that were inset for them
+    // should move in the same frame rather than two seconds later.
+    if (changed) this.dispatchUpdate();
   }
 
   /**
@@ -224,6 +271,7 @@ export default class ListCalloutsPlugin extends Plugin {
         : null,
       highlightRe: this.highlightPattern(chars, 'whole'),
       highlightOpenRe: this.highlightPattern(chars, 'opener'),
+      hideBullets: this.hideBullets,
     };
   }
 
@@ -276,16 +324,19 @@ export default class ListCalloutsPlugin extends Plugin {
       // Written before highlight settings existed.
       this.settings = stored;
       this.highlights = defaultHighlightSettings();
+      this.hideBullets = DEFAULT_HIDE_BULLETS;
     } else if (stored && Array.isArray(stored.callouts)) {
       // A vault that has saved is taken at its word, empty included --
       // reconstructing the built-ins here is what used to make deleting them
-      // impossible. Missing highlight keys come from a version that did not
-      // know them, so they take the defaults.
+      // impossible. Missing highlight and bullet keys come from a version
+      // that did not know them, so they take the defaults.
       this.settings = stored.callouts;
       this.highlights = { ...defaultHighlightSettings(), ...stored.highlights };
+      this.hideBullets = stored.hideBullets ?? DEFAULT_HIDE_BULLETS;
     } else {
       this.settings = defaultCallouts();
       this.highlights = defaultHighlightSettings();
+      this.hideBullets = DEFAULT_HIDE_BULLETS;
     }
   }
 
@@ -293,10 +344,12 @@ export default class ListCalloutsPlugin extends Plugin {
     const data: PluginData = {
       callouts: this.settings,
       highlights: this.highlights,
+      hideBullets: this.hideBullets,
     };
 
     await this.saveData(data);
     this.emitSettingsUpdate();
     this.buildPostProcessorConfig();
+    this.applyHideBullets();
   }
 }

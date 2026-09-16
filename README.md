@@ -27,6 +27,14 @@ A callout's color paints both its marker and its background. If the marker is ha
 
 ![A callout's settings row with the marker color dropdown on "Custom marker color", its preview showing a dark amber star on the callout's yellow background, and the marker color picker open below the second swatch, in light and dark mode](screenshots/settings-marker-color-picker.png)
 
+A callout line shows two markers by default: the list's own bullet or number, then the callout's. Turn on **Hide bullets and numbers** in the settings tab and the callout marker stands in for the bullet, the way a checkbox does. A checkbox stays, since it can be clicked, and plain list items keep their bullets:
+
+![Six list items with the setting on: a star callout above a plain bullet item, a question-mark callout above a plain numbered item, and a warning callout keeping its checkbox above a plain task, shown in light and dark mode](screenshots/callout-hidden-bullets.png)
+
+The previews in the settings tab follow the toggle, so each callout shows how it will look:
+
+![The settings tab with Hide bullets and numbers turned on: every callout's preview line shows its marker in place of the bullet, in light and dark mode](screenshots/settings-hidden-bullets.png)
+
 Callout padding and background intensity can be adjusted with the Style Settings plugin.
 
 ## Highlights

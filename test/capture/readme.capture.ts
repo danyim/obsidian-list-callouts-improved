@@ -28,6 +28,7 @@ import {
   openPluginSettings,
   reloadPlugin,
   setEditorText,
+  setHideBullets,
   setHighlights,
   setRendering,
   setSettings,
@@ -359,11 +360,7 @@ async function editorComposite(
  * carries its own breathing room top and bottom, which would double up where
  * they meet, so `trim` shaves that many pixels off the top of the lower one.
  */
-async function stacked(
-  top: Buffer,
-  bottom: Buffer,
-  trim = 0
-): Promise<Buffer> {
+async function stacked(top: Buffer, bottom: Buffer, trim = 0): Promise<Buffer> {
   const encoded = await browser.executeObsidian(
     async (_obsidian, topData: string, bottomData: string, trim: number) => {
       const load = (data: string) =>
@@ -1374,7 +1371,10 @@ async function captureAddCalloutIconPicker(name: string): Promise<void> {
 
       const left = Math.max(Math.min(m.left, p.left) - PAD, 0);
       const top = Math.max(Math.min(m.top, p.top) - PAD, 0);
-      const right = Math.min(Math.max(m.right, p.right) + PAD, window.innerWidth);
+      const right = Math.min(
+        Math.max(m.right, p.right) + PAD,
+        window.innerWidth
+      );
       const bottom = Math.min(
         Math.max(m.bottom, p.bottom) + PAD,
         window.innerHeight
@@ -1627,6 +1627,21 @@ describe('README screenshots', function () {
     await captureEditor('callout-icons.png', true, true);
   });
 
+  it('captures the rendering with bullets hidden', async function () {
+    // Each kind of list marker next to a plain item of the same kind, with
+    // the "Hide bullets and numbers" setting on: the callout's icon stands
+    // in for its bullet or number, the checkbox stays, and the plain items
+    // keep theirs.
+    await openNote('Hidden bullets.md');
+    await setSettings(callouts(true));
+    await setHideBullets(true);
+    try {
+      await captureEditor('callout-hidden-bullets.png', true, true);
+    } finally {
+      await setHideBullets(false);
+    }
+  });
+
   it('captures the multi-line item rendering', async function () {
     // Items whose text runs onto further lines, one of them nested: how far
     // down the item the band reaches in the editor (#43).
@@ -1672,11 +1687,17 @@ describe('README screenshots', function () {
 
     await setSettings(callouts(false));
     await setEditorText(`### Callouts without icons\n\n${paragraph}`);
-    const characters = await editorComposite(true, true, '.lc-highlight-callout');
+    const characters = await editorComposite(
+      true,
+      true,
+      '.lc-highlight-callout'
+    );
 
     await setSettings(callouts(true));
     await setEditorText(`### Callouts with icons\n\n${paragraph}`);
-    await browser.$('.lc-highlight-marker svg').waitForExist({ timeout: 10000 });
+    await browser
+      .$('.lc-highlight-marker svg')
+      .waitForExist({ timeout: 10000 });
     const icons = await editorComposite(true, true, '.lc-highlight-callout');
 
     await fs.writeFile(
@@ -1706,6 +1727,18 @@ describe('README screenshots', function () {
   it('captures the whole settings tab', async function () {
     await setSettings(callouts(false));
     await captureSettingsPage('settings.png');
+  });
+
+  it('captures the whole settings tab with bullets hidden', async function () {
+    // The same tab with "Hide bullets and numbers" on: every row's preview
+    // follows the toggle, its bullet gone and the marker in its place.
+    await setSettings(callouts(false));
+    await setHideBullets(true);
+    try {
+      await captureSettingsPage('settings-hidden-bullets.png');
+    } finally {
+      await setHideBullets(false);
+    }
   });
 
   it('captures the settings tab with the icon picker open', async function () {
