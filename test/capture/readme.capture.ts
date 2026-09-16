@@ -1729,6 +1729,18 @@ describe('README screenshots', function () {
     await captureSettingsPage('settings.png');
   });
 
+  it('captures the whole settings tab with bullets hidden', async function () {
+    // The same tab with "Hide bullets and numbers" on: every row's preview
+    // follows the toggle, its bullet gone and the marker in its place.
+    await setSettings(callouts(false));
+    await setHideBullets(true);
+    try {
+      await captureSettingsPage('settings-hidden-bullets.png');
+    } finally {
+      await setHideBullets(false);
+    }
+  });
+
   it('captures the settings tab with the icon picker open', async function () {
     await setSettings(callouts(false));
     await captureIconPicker('settings-icon-picker.png', 'lucide-activity');

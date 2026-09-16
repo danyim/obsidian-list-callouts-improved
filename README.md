@@ -31,6 +31,10 @@ A callout line shows two markers by default: the list's own bullet or number, th
 
 ![Six list items with the setting on: a star callout above a plain bullet item, a question-mark callout above a plain numbered item, and a warning callout keeping its checkbox above a plain task, shown in light and dark mode](screenshots/callout-hidden-bullets.png)
 
+The previews in the settings tab follow the toggle, so each callout shows how it will look:
+
+![The settings tab with Hide bullets and numbers turned on: every callout's preview line shows its marker in place of the bullet, in light and dark mode](screenshots/settings-hidden-bullets.png)
+
 Callout padding and background intensity can be adjusted with the Style Settings plugin.
 
 ## Highlights
