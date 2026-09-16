@@ -9,6 +9,10 @@
  *
  * Each image is a composite: the same view rendered in light mode on the left
  * and dark mode on the right.
+ *
+ * A note captured through more than one renderer is one image per renderer,
+ * told apart by the suffix before the extension: `name.png` is Live Preview,
+ * `name.reading.png` the reading view, `name.source.png` source mode.
  */
 import { browser } from '@wdio/globals';
 import { execFileSync } from 'child_process';
@@ -1593,7 +1597,7 @@ describe('README screenshots', function () {
     // Not in the README, which shows live preview alone.
     await setRendering('reading');
     await captureEditor(
-      'callout-characters-reading.png',
+      'callout-characters.reading.png',
       false,
       true,
       // The paragraph is the last block to render.
@@ -1603,7 +1607,7 @@ describe('README screenshots', function () {
 
     await setRendering('source');
     await captureEditor(
-      'callout-characters-source.png',
+      'callout-characters.source.png',
       false,
       true,
       '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
@@ -1638,7 +1642,7 @@ describe('README screenshots', function () {
     // compare. Not in the README.
     await setRendering('reading');
     await captureEditor(
-      'callout-multiline-reading.png',
+      'callout-multiline.reading.png',
       true,
       true,
       '.markdown-reading-view .lc-list-callout',
@@ -1647,7 +1651,7 @@ describe('README screenshots', function () {
 
     await setRendering('source');
     await captureEditor(
-      'callout-multiline-source.png',
+      'callout-multiline.source.png',
       true,
       true,
       '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
