@@ -1623,6 +1623,14 @@ describe('README screenshots', function () {
     await captureEditor('callout-icons.png', true, true);
   });
 
+  it('captures the multi-line item rendering', async function () {
+    // Items whose text runs onto further lines, one of them nested: how far
+    // down the item the band reaches in the editor (#43).
+    await openNote('Multi-line items.md');
+    await setSettings(callouts(false));
+    await captureEditor('callout-multiline.png', true, true);
+  });
+
   it('captures the highlight rendering', async function () {
     // One prose paragraph, cropped to its height, rendered twice: with the
     // built-ins as shipped, so each highlight is led by its character, and
