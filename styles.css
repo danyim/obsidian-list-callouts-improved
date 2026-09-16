@@ -220,6 +220,44 @@ settings:
   top: 0.125em;
 }
 
+/* "Hide bullets and numbers" (mgmeyers/obsidian-list-callouts#59): the
+   callout marker stands in for the bullet, the way a checkbox does. main.ts
+   keeps the body class in step with the setting, and everything the
+   setting changes is here, so every open editor, rendered note and settings
+   preview follows it at once with nothing re-decorated.
+
+   Scoped to callout lines: a plain list item keeps its bullet. Removed
+   from flow rather than made invisible, so the marker slides into the
+   bullet's place instead of sitting after an empty gap; the line's own
+   indent is left alone, so nested items still line up under their parent.
+   The editor draws a bullet as .list-bullet and a number as .list-number,
+   both inside the line's formatting span; reading view draws a bullet as
+   .list-bullet too but a number as the <li>'s own ::marker, which only
+   list-style can take away. A checkbox is neither (.task-list-label in the
+   editor, a task-list-item <li> that already sets list-style: none in
+   reading view), which is what leaves it in place. */
+.lc-hide-bullets .lc-list-callout .list-bullet,
+.lc-hide-bullets .lc-list-callout .list-number {
+  display: none;
+}
+
+.lc-hide-bullets li.lc-list-callout {
+  list-style-type: none;
+}
+
+/* In the editor the bullet is in the line's flow, so with it gone the
+   marker slides into its place on its own. Reading view floats the bullet
+   out of flow, 0.8em into the item's own margin (Obsidian's
+   `.markdown-rendered .list-bullet`), and draws a number as the ::marker
+   out there too, so taking either away frees no room: the marker stays put
+   at the text column, a bullet's width to the right of where the editor
+   shows it. The same offset on the marker is what lines the two up, and
+   the text after it follows, as it does in the editor. Not on a task item,
+   whose checkbox is still there in front of the marker. */
+.lc-hide-bullets li.lc-list-callout:not(.task-list-item) .lc-list-marker {
+  margin-inline-start: -0.8em;
+}
+
 .lc-li-wrapper {
   z-index: 1;
   position: relative;

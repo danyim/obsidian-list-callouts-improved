@@ -1347,3 +1347,88 @@ export function markerPaint(
     return out;
   }, selector);
 }
+
+export function getHideBullets(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return p.hideBullets as boolean;
+  });
+}
+
+/** Flip the bullets preference, as the toggle would. */
+export async function setHideBullets(on: boolean): Promise<void> {
+  await browser.executeObsidian(async ({ app }, next) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.hideBullets = next;
+    await p.saveSettings();
+    p.settingTab?.refresh?.();
+  }, on);
+}
+
+/** Whether the body carries the class the bullets preference paints from. */
+export function bodyHidesBullets(): Promise<boolean> {
+  return browser.executeObsidian(() =>
+    document.body.classList.contains('lc-hide-bullets')
+  );
+}
+
+export interface ListMarkerVisibility {
+  text: string;
+  callout: boolean;
+  marker: 'bullet' | 'number' | 'checkbox';
+  /** Whether the marker takes up space: what hiding removes and a checkbox keeps. */
+  shown: boolean;
+}
+
+/**
+ * How each list item under `root` shows its list marker: the editor's bullet
+ * or number span, reading view's bullet span or ::marker, or a task item's
+ * checkbox.
+ */
+export function listMarkerVisibility(
+  root: string
+): Promise<ListMarkerVisibility[]> {
+  return browser.executeObsidian((_, selector) => {
+    const scope = document.querySelector<HTMLElement>(selector);
+    if (!scope) return [];
+
+    const items = Array.from(
+      scope.querySelectorAll<HTMLElement>('.cm-line, li')
+    );
+
+    return items.flatMap((el): ListMarkerVisibility[] => {
+      // The checkbox first: reading view gives a task item a (hidden) bullet
+      // span as well, ahead of the checkbox in document order.
+      const glyph =
+        el.querySelector<HTMLElement>('.task-list-item-checkbox') ??
+        el.querySelector<HTMLElement>('.list-bullet, .list-number');
+      const isLi = el.tagName === 'LI';
+      const listStyle = isLi ? getComputedStyle(el).listStyleType : '';
+      const text = (el.textContent ?? '').trim();
+      const callout = el.classList.contains('lc-list-callout');
+
+      if (glyph) {
+        const marker = glyph.classList.contains('task-list-item-checkbox')
+          ? 'checkbox'
+          : glyph.classList.contains('list-number')
+            ? 'number'
+            : 'bullet';
+        return [
+          { text, callout, marker, shown: glyph.getClientRects().length > 0 },
+        ];
+      }
+
+      // Reading view's numbered items have no glyph element; the number is
+      // the <li>'s ::marker, there unless list-style takes it away. Bullet
+      // items set list-style to a zero-width space, which is neither.
+      if (isLi && (listStyle === 'decimal' || listStyle === 'none')) {
+        return [
+          { text, callout, marker: 'number', shown: listStyle !== 'none' },
+        ];
+      }
+
+      // A paragraph's cm-line, or an <li> holding a nested list.
+      return [];
+    });
+  }, root);
+}

@@ -68,7 +68,22 @@ export function defaultHighlightSettings(): HighlightSettings {
 export interface PluginData {
   callouts: Callout[];
   highlights: HighlightSettings;
+  /**
+   * Show only the callout marker on a callout line, without the bullet or
+   * number in front of it. A checkbox stays, since it can be clicked
+   * (mgmeyers/obsidian-list-callouts#59).
+   */
+  hideBullets: boolean;
 }
+
+export const DEFAULT_HIDE_BULLETS = false;
+
+/**
+ * The class `hideBullets` puts on the document body. Everything the
+ * preference changes is done in styles.css under this class, so the editor,
+ * reading view and settings previews all follow it the moment it flips.
+ */
+export const HIDE_BULLETS_CLASS = 'lc-hide-bullets';
 
 export interface CalloutConfig {
   callouts: Record<string, Callout>;

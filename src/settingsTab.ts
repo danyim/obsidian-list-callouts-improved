@@ -20,7 +20,12 @@ import {
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
-import { Callout, HighlightSettings, calloutColorStyle } from './settings';
+import {
+  Callout,
+  DEFAULT_HIDE_BULLETS,
+  HighlightSettings,
+  calloutColorStyle,
+} from './settings';
 
 // Build a static CM6 list line with callout markup applied
 export function buildSettingCallout(root: HTMLElement, callout: Callout) {
@@ -656,14 +661,31 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     });
   }
 
+  private hideBulletsDesc(): DocumentFragment {
+    return createFragment((f) => {
+      f.appendText(
+        'Show only the callout marker on a callout line, without the bullet or number in front of it. '
+      );
+      f.appendText(
+        'A checkbox stays, since it can be clicked. Plain list items keep their bullets.'
+      );
+    });
+  }
+
   // The default implementations read and write `plugin.settings[key]`, which
-  // here is the callout array; the toggles live on `plugin.highlights`.
+  // here is the callout array; the toggles live on `plugin.highlights` and,
+  // for the bullets, straight on the plugin.
   getControlValue(key: string): unknown {
+    if (key === 'hideBullets') return this.plugin.hideBullets;
     return this.plugin.highlights[key as keyof HighlightSettings];
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
-    this.plugin.highlights[key as keyof HighlightSettings] = value as boolean;
+    if (key === 'hideBullets') {
+      this.plugin.hideBullets = value as boolean;
+    } else {
+      this.plugin.highlights[key as keyof HighlightSettings] = value as boolean;
+    }
     await this.plugin.saveSettings();
   }
 
@@ -803,6 +825,18 @@ export class ListCalloutSettingTab extends PluginSettingTab {
               }),
         ],
         items: [
+          {
+            // The row previews below carry a bullet of their own, hidden by
+            // the same stylesheet rule as the editor's, so they follow this
+            // toggle as it flips.
+            name: 'Hide bullets and numbers',
+            desc: this.hideBulletsDesc(),
+            control: {
+              type: 'toggle',
+              key: 'hideBullets',
+              defaultValue: DEFAULT_HIDE_BULLETS,
+            },
+          },
           {
             name: 'Style settings',
             desc: this.styleSettingsDesc(),
