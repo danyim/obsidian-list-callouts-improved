@@ -1631,6 +1631,31 @@ describe('README screenshots', function () {
     await captureEditor('callout-multiline.png', true, true);
   });
 
+  it('captures the multi-line item rendering in reading view and source mode', async function () {
+    // The same note through the other two renderings, as for the first
+    // note: upstream #48 was reported as reading view covering the whole
+    // item where Live Preview did not, so the three sit side by side to
+    // compare. Not in the README.
+    await setRendering('reading');
+    await captureEditor(
+      'callout-multiline-reading.png',
+      true,
+      true,
+      '.markdown-reading-view .lc-list-callout',
+      READER
+    );
+
+    await setRendering('source');
+    await captureEditor(
+      'callout-multiline-source.png',
+      true,
+      true,
+      '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
+    );
+
+    await setRendering('live-preview');
+  });
+
   it('captures the highlight rendering', async function () {
     // One prose paragraph, cropped to its height, rendered twice: with the
     // built-ins as shipped, so each highlight is led by its character, and
