@@ -101,6 +101,14 @@ export default class ListCalloutsPlugin extends Plugin {
       calloutExtension,
     ]);
 
+    // A popout window starts with a body of its own, so it is told the
+    // preference as it opens; the main window's was told during load.
+    this.registerEvent(
+      this.app.workspace.on('window-open', (win) => {
+        win.doc.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
+      })
+    );
+
     this.app.workspace.trigger('parse-style-settings');
   }
 
@@ -122,7 +130,21 @@ export default class ListCalloutsPlugin extends Plugin {
     // These are registered globally, so hand them back when the plugin goes.
     unloadCustomIcons(this.customIconIds);
     this.customIconIds = [];
-    document.body.removeClass(HIDE_BULLETS_CLASS);
+    for (const doc of this.documents()) {
+      doc.body.removeClass(HIDE_BULLETS_CLASS);
+    }
+  }
+
+  /**
+   * The document of every window a note can be shown in: the main one and
+   * each popout, which has a body of its own.
+   */
+  private documents(): Document[] {
+    const docs = new Set<Document>([document]);
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      docs.add(leaf.getContainer().doc);
+    });
+    return Array.from(docs);
   }
 
   /**
@@ -132,13 +154,17 @@ export default class ListCalloutsPlugin extends Plugin {
    * re-render, and the settings tab's previews with it.
    */
   private applyHideBullets(): void {
-    if (document.body.hasClass(HIDE_BULLETS_CLASS) === this.hideBullets) return;
+    let changed = false;
+    for (const doc of this.documents()) {
+      if (doc.body.hasClass(HIDE_BULLETS_CLASS) === this.hideBullets) continue;
+      doc.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
+      changed = true;
+    }
 
-    document.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
     // Straight away, not through the debounced update: the bullets vanish
     // the moment the class flips, and the bands that were inset for them
     // should move in the same frame rather than two seconds later.
-    this.dispatchUpdate();
+    if (changed) this.dispatchUpdate();
   }
 
   /**

@@ -14,6 +14,7 @@ import {
   ensureEditingMode,
   ensureReadingMode,
   getHideBullets,
+  isMobile,
   listItemGeometry,
   listMarkerVisibility,
   openNote,
@@ -459,6 +460,86 @@ describe('Hide bullets and numbers', function () {
 
       expect(await bodyHidesBullets()).toBe(true);
       expect((await previewBulletsShown()).every((s) => !s)).toBe(true);
+    });
+  });
+
+  describe('in a popout window', function () {
+    /**
+     * The popout's body class and whether the bullet of its first callout
+     * line takes up space, read through the app rather than by switching
+     * the driver's window: the popout has no wdio bridge of its own.
+     */
+    function popoutState(): Promise<{
+      classed: boolean;
+      bulletShown: boolean | null;
+    }> {
+      return browser.executeObsidian(({ app }) => {
+        const leaf = (app as any).__lcPopoutLeaf;
+        const doc: Document = leaf.getContainer().doc;
+        const bullet = doc.querySelector<HTMLElement>(
+          '.markdown-source-view .cm-line.lc-list-callout .list-bullet'
+        );
+        return {
+          classed: doc.body.classList.contains('lc-hide-bullets'),
+          bulletShown: bullet ? bullet.getClientRects().length > 0 : null,
+        };
+      });
+    }
+
+    before(async function () {
+      // Popout windows are a desktop feature.
+      if (await isMobile()) this.skip();
+
+      await setHideBullets(true);
+      await browser.executeObsidian(async ({ app, obsidian }) => {
+        const file = app.vault.getAbstractFileByPath('Markers.md');
+        if (!(file instanceof obsidian.TFile)) throw new Error('No Markers.md');
+        const leaf = app.workspace.openPopoutLeaf();
+        await leaf.openFile(file);
+        (app as any).__lcPopoutLeaf = leaf;
+      });
+      await browser.waitUntil(
+        async () => (await popoutState()).bulletShown !== null,
+        { timeout: 10000, timeoutMsg: 'the popout did not render the note' }
+      );
+    });
+
+    after(async function () {
+      await browser.executeObsidian(({ app }) => {
+        (app as any).__lcPopoutLeaf?.detach();
+        delete (app as any).__lcPopoutLeaf;
+      });
+      await ensureEditingMode();
+    });
+
+    /**
+     * Polled: the toggle also re-dispatches the editor config, and for a
+     * frame the popout's line is being redecorated, bullet and all.
+     */
+    async function expectPopout(classed: boolean, bulletShown: boolean) {
+      await browser.waitUntil(
+        async () => {
+          const state = await popoutState();
+          return state.classed === classed && state.bulletShown === bulletShown;
+        },
+        {
+          timeout: 5000,
+          interval: 100,
+          timeoutMsg: `the popout did not reach classed=${classed}, bulletShown=${bulletShown}`,
+        }
+      );
+    }
+
+    it('carries the preference into a window opened while it is on', async function () {
+      await expectPopout(true, false);
+    });
+
+    it('follows the toggle while the window is open', async function () {
+      await setHideBullets(false);
+      await expectPopout(false, true);
+
+      await setHideBullets(true);
+      await expectPopout(true, false);
     });
   });
 
