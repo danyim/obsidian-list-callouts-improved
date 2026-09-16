@@ -280,6 +280,15 @@ settings:
   display: block;
 }
 
+/* Obsidian pulls a task item's checkbox into the bullet column with a
+   direct-child rule (`ul > li.task-list-item > .task-list-item-checkbox`),
+   and the wrapper now sits between the two, which left a task callout's
+   checkbox at the text column, an em and a half to the right of every
+   other task's. The same margin from the wrapper's side. */
+li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
+  margin-inline-start: calc(var(--checkbox-size) * -1.5);
+}
+
 .lc-li-wrapper::after {
   z-index: -1;
   position: absolute;

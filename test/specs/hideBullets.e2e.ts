@@ -396,6 +396,17 @@ describe('Hide bullets and numbers', function () {
           item(rows, BULLET_CALLOUT).markerCenter + 8
         );
       });
+
+      it("keeps a task callout's checkbox in the column every other task's is in", async function () {
+        const rows = await geometryUntil(READING, () => true);
+        const task = item(rows, TASK_CALLOUT);
+        const plainTask = item(rows, 'Plain task');
+        expectNear(task.glyphLeft, plainTask.glyphLeft);
+        // The marker follows the checkbox inline, so the text after it
+        // starts a marker further along than a plain task's.
+        expect(task.markerLeft).toBeGreaterThan(task.glyphLeft);
+        expect(task.textLeft).toBeGreaterThan(plainTask.textLeft);
+      });
     });
   });
 
