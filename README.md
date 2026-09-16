@@ -15,6 +15,10 @@ The characters can be replaced with icons:
 
 ![The same note with each callout character replaced by an icon, shown in light and dark mode](screenshots/callout-icons.png)
 
+An item whose text runs onto further lines is one callout: the band covers every line of the item, in the editor as in reading view, nested items included:
+
+![Three list items, two of them running onto further lines and one of those nested, each painted as a single band covering all of its lines, shown in light and dark mode](screenshots/callout-multiline.png)
+
 Characters, icons, and colors are all configurable, and you can add your own callouts:
 
 ![The plugin settings tab with the icon picker open and a tooltip naming the hovered icon, in light and dark mode](screenshots/settings-icon-picker.png)
