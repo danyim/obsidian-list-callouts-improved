@@ -35,6 +35,10 @@ The previews in the settings tab follow the toggle, so each callout shows how it
 
 ![The settings tab with Hide bullets and numbers turned on: every callout's preview line shows its marker in place of the bullet, in light and dark mode](screenshots/settings-hidden-bullets.png)
 
+By default a callout colors its own list item only. Turn on **Color nested items** and the items nested under it take its color too, all the way down. A nested item that starts a callout of its own colors the items under it instead, and the items under a plain item stay plain:
+
+![Three lists with the setting on: a star callout whose nested items and their children share its yellow, a question-mark callout whose first nested item is a red warning callout with its own child in red while the next nested item is orange again, and a plain item whose nested item is plain, shown in light and dark mode](screenshots/callout-nested-items.png)
+
 Callouts are drawn in Live Preview and reading view. Source mode shows the raw markdown, `- & Important` and so on, with the callout character there to see and edit: no marker or icon stands in for it. The band behind the line and a highlight's color are kept, and the character is tinted in the callout's color, so a callout is still told apart at a glance in either mode:
 
 ![The same four callouts twice: in Live Preview, each led by its icon, and below it in source mode, each led by its raw character in the callout's color on the same band, shown in light and dark mode](screenshots/callout-source-mode.png)

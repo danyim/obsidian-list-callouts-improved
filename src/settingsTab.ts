@@ -22,6 +22,7 @@ import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
 import {
   Callout,
+  DEFAULT_COLOR_NESTED_ITEMS,
   DEFAULT_HIDE_BULLETS,
   HighlightSettings,
   calloutColorStyle,
@@ -672,17 +673,31 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     });
   }
 
+  private colorNestedItemsDesc(): DocumentFragment {
+    return createFragment((f) => {
+      f.appendText(
+        "Items nested under a callout take the callout's color, all the way down. "
+      );
+      f.appendText(
+        'A nested item that starts a callout of its own colors the items under it instead.'
+      );
+    });
+  }
+
   // The default implementations read and write `plugin.settings[key]`, which
   // here is the callout array; the toggles live on `plugin.highlights` and,
-  // for the bullets, straight on the plugin.
+  // for the bullets and nested items, straight on the plugin.
   getControlValue(key: string): unknown {
     if (key === 'hideBullets') return this.plugin.hideBullets;
+    if (key === 'colorNestedItems') return this.plugin.colorNestedItems;
     return this.plugin.highlights[key as keyof HighlightSettings];
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
     if (key === 'hideBullets') {
       this.plugin.hideBullets = value as boolean;
+    } else if (key === 'colorNestedItems') {
+      this.plugin.colorNestedItems = value as boolean;
     } else {
       this.plugin.highlights[key as keyof HighlightSettings] = value as boolean;
     }
@@ -835,6 +850,15 @@ export class ListCalloutSettingTab extends PluginSettingTab {
               type: 'toggle',
               key: 'hideBullets',
               defaultValue: DEFAULT_HIDE_BULLETS,
+            },
+          },
+          {
+            name: 'Color nested items',
+            desc: this.colorNestedItemsDesc(),
+            control: {
+              type: 'toggle',
+              key: 'colorNestedItems',
+              defaultValue: DEFAULT_COLOR_NESTED_ITEMS,
             },
           },
           {
