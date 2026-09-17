@@ -74,9 +74,17 @@ export interface PluginData {
    * (mgmeyers/obsidian-list-callouts#59).
    */
   hideBullets: boolean;
+  /**
+   * Give the items nested under a callout the callout's color, and so on
+   * down, until an item that starts a callout of its own takes over for
+   * what is nested under it (mgmeyers/obsidian-list-callouts#1, #85).
+   */
+  colorNestedItems: boolean;
 }
 
 export const DEFAULT_HIDE_BULLETS = false;
+
+export const DEFAULT_COLOR_NESTED_ITEMS = false;
 
 /**
  * The class `hideBullets` puts on the document body. Everything the
@@ -111,6 +119,12 @@ export interface CalloutConfig {
    * depends on whether the line's bullet is drawn.
    */
   hideBullets?: boolean;
+  /**
+   * Whether the items nested under a callout take its color. Both renderers
+   * read it: the editor to carry a callout down the lines nested under its
+   * item, the post-processor to color an <li> from the callout <li> above it.
+   */
+  colorNestedItems?: boolean;
 }
 
 export type ListCalloutsSettings = Callout[];

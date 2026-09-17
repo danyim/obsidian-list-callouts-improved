@@ -27,6 +27,7 @@ import {
   openNote,
   openPluginSettings,
   reloadPlugin,
+  setColorNestedItems,
   setEditorText,
   setHideBullets,
   setHighlights,
@@ -1641,6 +1642,21 @@ describe('README screenshots', function () {
       await captureEditor('callout-hidden-bullets.png', true, true);
     } finally {
       await setHideBullets(false);
+    }
+  });
+
+  it('captures the rendering with nested items colored', async function () {
+    // Items nested under callouts, two levels deep, with the "Color nested
+    // items" setting on: each takes the color of the callout above it, a
+    // nested callout takes over for what is under it, and the items under
+    // a plain item stay plain.
+    await openNote('Nested items.md');
+    await setSettings(callouts(true));
+    await setColorNestedItems(true);
+    try {
+      await captureEditor('callout-nested-items.png', true, true);
+    } finally {
+      await setColorNestedItems(false);
     }
   });
 

@@ -1365,6 +1365,35 @@ export async function setHideBullets(on: boolean): Promise<void> {
   }, on);
 }
 
+export function getColorNestedItems(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return p.colorNestedItems as boolean;
+  });
+}
+
+/** Flip the nested items preference, as the toggle would. */
+export async function setColorNestedItems(on: boolean): Promise<void> {
+  await browser.executeObsidian(async ({ app }, next) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.colorNestedItems = next;
+    await p.saveSettings();
+    p.settingTab?.refresh?.();
+  }, on);
+}
+
+/**
+ * Render the active note's reading view again from scratch. A preference
+ * that changes what the post-processor does is only seen by a fresh render;
+ * Obsidian keeps the sections it has already rendered otherwise.
+ */
+export async function rerenderReading(): Promise<void> {
+  await browser.executeObsidian(({ app, obsidian }) => {
+    const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    (view as any).previewMode.rerender(true);
+  });
+}
+
 /** Whether the body carries the class the bullets preference paints from. */
 export function bodyHidesBullets(): Promise<boolean> {
   return browser.executeObsidian(() =>
