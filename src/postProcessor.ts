@@ -144,13 +144,11 @@ export function buildPostProcessor(
       await Promise.all(pending);
     }
 
+    // Document order, so by the time a nested item is reached the callout
+    // item it sits under has been marked and can be found by walking up.
     el.findAll('li').forEach((li) => {
       const node = getFirstTextNode(li);
-      if (!node) return;
-
-      const text = node.textContent;
-      if (!text) return;
-
+      const text = node?.textContent ?? '';
       const match = text.match(config.re);
       const callout = match ? config.callouts[match[1]] : null;
 
@@ -179,7 +177,25 @@ export function buildPostProcessor(
         );
 
         wrapLiContent(li);
+        return;
       }
+
+      if (!config.colorNestedItems) return;
+
+      // The nearest colored item above, callout or nested alike, so a
+      // callout deeper in the tree takes over for everything under it.
+      const above = li.parentElement?.closest<HTMLElement>(
+        'li.lc-list-callout, li.lc-list-callout-nested'
+      );
+      const inherited = above
+        ? config.callouts[above.getAttribute('data-callout')]
+        : null;
+      if (!inherited) return;
+
+      li.addClass('lc-list-callout-nested');
+      li.setAttribute('data-callout', inherited.char);
+      applyCalloutColors(li, inherited);
+      wrapLiContent(li);
     });
 
     if (config.highlightRe) decorateHighlights(el, config);

@@ -17,6 +17,7 @@ import { buildPostProcessor } from './postProcessor';
 import {
   Callout,
   CalloutConfig,
+  DEFAULT_COLOR_NESTED_ITEMS,
   DEFAULT_HIDE_BULLETS,
   HIDE_BULLETS_CLASS,
   HighlightSettings,
@@ -31,7 +32,14 @@ export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
   highlights: HighlightSettings;
   hideBullets: boolean;
+  colorNestedItems: boolean;
   postProcessorConfig: CalloutConfig;
+
+  /**
+   * The nested items preference as last pushed to the open views, so a save
+   * can tell whether it is the one that flipped it.
+   */
+  private appliedColorNestedItems: boolean;
 
   /**
    * Whether this vault still holds settings from the plugin this one was
@@ -58,6 +66,7 @@ export default class ListCalloutsPlugin extends Plugin {
     await this.loadSettings();
     this.buildPostProcessorConfig();
     this.applyHideBullets();
+    this.appliedColorNestedItems = this.colorNestedItems;
 
     this.legacyDataAvailable = await legacySettingsExist(this.app);
 
@@ -168,6 +177,25 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   /**
+   * Push a flipped nested items preference to every open view at once. The
+   * editor takes it as a config change and redecorates; a reading view has
+   * to render again, since the post-processor only sees a note as it is
+   * rendered. Straight away rather than through the debounced update, as a
+   * toggle is one deliberate change, not a color being typed.
+   */
+  private applyColorNestedItems(): void {
+    if (this.appliedColorNestedItems === this.colorNestedItems) return;
+    this.appliedColorNestedItems = this.colorNestedItems;
+
+    this.dispatchUpdate();
+
+    this.app.workspace.getLeavesOfType('markdown').forEach((leaf) => {
+      const view = leaf.view as MarkdownView;
+      if (view.getMode() === 'preview') view.previewMode.rerender(true);
+    });
+  }
+
+  /**
    * Register the vault's own SVG icons so they show up in the icon picker
    * alongside the ones Obsidian ships.
    */
@@ -272,6 +300,7 @@ export default class ListCalloutsPlugin extends Plugin {
       highlightRe: this.highlightPattern(chars, 'whole'),
       highlightOpenRe: this.highlightPattern(chars, 'opener'),
       hideBullets: this.hideBullets,
+      colorNestedItems: this.colorNestedItems,
     };
   }
 
@@ -282,6 +311,7 @@ export default class ListCalloutsPlugin extends Plugin {
       callouts: this.calloutsByChar(),
       re: chars ? new RegExp(`^(${chars}) `) : null,
       highlightRe: this.highlightPattern(chars, 'anchored'),
+      colorNestedItems: this.colorNestedItems,
     };
   }
 
@@ -325,18 +355,22 @@ export default class ListCalloutsPlugin extends Plugin {
       this.settings = stored;
       this.highlights = defaultHighlightSettings();
       this.hideBullets = DEFAULT_HIDE_BULLETS;
+      this.colorNestedItems = DEFAULT_COLOR_NESTED_ITEMS;
     } else if (stored && Array.isArray(stored.callouts)) {
       // A vault that has saved is taken at its word, empty included --
       // reconstructing the built-ins here is what used to make deleting them
-      // impossible. Missing highlight and bullet keys come from a version
-      // that did not know them, so they take the defaults.
+      // impossible. Missing highlight, bullet and nested item keys come from
+      // a version that did not know them, so they take the defaults.
       this.settings = stored.callouts;
       this.highlights = { ...defaultHighlightSettings(), ...stored.highlights };
       this.hideBullets = stored.hideBullets ?? DEFAULT_HIDE_BULLETS;
+      this.colorNestedItems =
+        stored.colorNestedItems ?? DEFAULT_COLOR_NESTED_ITEMS;
     } else {
       this.settings = defaultCallouts();
       this.highlights = defaultHighlightSettings();
       this.hideBullets = DEFAULT_HIDE_BULLETS;
+      this.colorNestedItems = DEFAULT_COLOR_NESTED_ITEMS;
     }
   }
 
@@ -345,11 +379,13 @@ export default class ListCalloutsPlugin extends Plugin {
       callouts: this.settings,
       highlights: this.highlights,
       hideBullets: this.hideBullets,
+      colorNestedItems: this.colorNestedItems,
     };
 
     await this.saveData(data);
     this.emitSettingsUpdate();
     this.buildPostProcessorConfig();
     this.applyHideBullets();
+    this.applyColorNestedItems();
   }
 }
