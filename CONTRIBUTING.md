@@ -116,7 +116,9 @@ regenerate them if you change how callouts look. The same run also writes
 `.reading.png` and `.source.png` companions for some notes (the README's first
 note and the multi-line items one), the same note in reading view and source
 mode; a name without a suffix is Live Preview. Those companions are not in the
-README but are there to compare the renderers against each other. That script needs the Inter font
+README but are there to compare the renderers against each other: reading view
+should match Live Preview, and source mode should show the raw markdown with
+nothing drawn over it. That script needs the Inter font
 and, for the two captures with a color picker open, `ffmpeg` and a Linux display
 (the picker is a window of Chromium's own, so it is grabbed off the screen rather
 than out of the page).
