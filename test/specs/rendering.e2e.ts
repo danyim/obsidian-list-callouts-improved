@@ -4,6 +4,7 @@ import { obsidianPage } from 'wdio-obsidian-service';
 
 import {
   captureRendering,
+  ensureReadingMode,
   getSettings,
   openNote,
   setSettings,
@@ -86,6 +87,48 @@ describe('Callout rendering', function () {
       const file = await captureRendering('reading-mode');
       expect(file).toContain('reading-mode');
     });
+  });
+});
+
+/**
+ * A loose list (one with a blank line between items, or inside one) renders
+ * each item's text in a <p>, and a task item's checkbox goes inside that
+ * <p> ahead of the text. The post-processor has to look past the checkbox
+ * to find the callout character.
+ */
+describe('Task callouts in a loose list', function () {
+  before(async function () {
+    await obsidianPage.resetVault();
+    await browser.executeObsidian(async ({ app }) => {
+      await app.vault.create(
+        'Loose.md',
+        ['- [ ] & Loose task', '', '- & Loose bullet', ''].join('\n')
+      );
+    });
+    await openNote('Loose.md');
+    await ensureReadingMode();
+    await browser.$('.markdown-reading-view .lc-list-callout').waitForExist();
+  });
+
+  it('decorates the task item in reading mode', async function () {
+    const items = await browser.executeObsidian(() =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>('.markdown-reading-view li')
+      ).map((li) => ({
+        text: (li.textContent ?? '').trim(),
+        callout: li.classList.contains('lc-list-callout'),
+        marker: li.querySelector('.lc-list-marker')?.textContent ?? null,
+        // The checkbox has to stay clickable, so it must survive the
+        // rewrite that puts the marker in.
+        checkbox: !!li.querySelector('input.task-list-item-checkbox'),
+      }))
+    );
+
+    const task = items.find((i) => i.text.includes('Loose task'));
+    expect(task).toMatchObject({ callout: true, marker: '&', checkbox: true });
+
+    const bullet = items.find((i) => i.text.includes('Loose bullet'));
+    expect(bullet).toMatchObject({ callout: true, marker: '&' });
   });
 });
 
