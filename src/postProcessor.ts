@@ -17,11 +17,21 @@ function getFirstTextNode(li: HTMLElement) {
       }
     }
 
+    // A loose list puts each item's text in a <p>, and a task item's
+    // checkbox goes inside it ahead of the text, so the first child is not
+    // always the text itself.
     if (
       node.nodeType === document.ELEMENT_NODE &&
       (node as HTMLElement).tagName === 'P'
     ) {
-      return node.firstChild;
+      const first = node.firstChild;
+      if (
+        first?.nodeType === document.ELEMENT_NODE &&
+        (first as HTMLElement).hasClass('task-list-item-checkbox')
+      ) {
+        return first.nextSibling;
+      }
+      return first;
     }
 
     if (node.nodeType !== document.TEXT_NODE) {
