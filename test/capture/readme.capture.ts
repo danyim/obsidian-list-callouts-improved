@@ -1630,6 +1630,39 @@ describe('README screenshots', function () {
     await captureEditor('callout-icons.png', true, true);
   });
 
+  it('captures the icon rendering over the same note in source mode', async function () {
+    // The icons note, rendered twice and stacked as for the highlights: in
+    // Live Preview with its icons, then in source mode, where the icons
+    // give way to the characters they stand for, tinted, under the same
+    // bands (#49). Each under a heading that says which it is; the source
+    // mode one shows its own `###`, which is the point.
+    await openNote('Icons.md');
+    await setSettings(callouts(true));
+    const note = await editorText();
+
+    await setEditorText(`### Live Preview\n\n${note}`);
+    await browser.$('.lc-list-marker svg').waitForExist({ timeout: 10000 });
+    const livePreview = await editorComposite(true, true, '.lc-list-callout');
+
+    await setEditorText(`### Source mode\n\n${note}`);
+    await setRendering('source');
+    const source = await editorComposite(
+      true,
+      true,
+      '.markdown-source-view:not(.is-live-preview) .lc-raw-marker'
+    );
+    await setRendering('live-preview');
+    await setEditorText(note);
+
+    await fs.writeFile(
+      path.join(OUT_DIR, 'callout-source-mode.png'),
+      // One capture's padding rather than both: source mode gives its
+      // heading less room above than Live Preview does, and trimming both
+      // took the top off it.
+      await stacked(livePreview, source, EDITOR_PADDING)
+    );
+  });
+
   it('captures the rendering with bullets hidden', async function () {
     // Each kind of list marker next to a plain item of the same kind, with
     // the "Hide bullets and numbers" setting on: the callout's icon stands

@@ -101,7 +101,9 @@ async function waitForDecorations(): Promise<Record<string, number>> {
   await browser.waitUntil(
     async () => {
       counts = await decorationCounts();
-      return counts['lc-list-callout'] > 0 && counts['lc-highlight-callout'] > 0;
+      return (
+        counts['lc-list-callout'] > 0 && counts['lc-highlight-callout'] > 0
+      );
     },
     { timeout: 10000, timeoutMsg: 'the editor never decorated the note' }
   );
@@ -215,6 +217,32 @@ describe('Source mode', function () {
       }
     });
 
+    it('shows the raw character where live preview would show an icon', async function () {
+      await setSettings(
+        DEFAULT_SETTINGS.map((c) => ({ ...c, icon: 'lucide-star' }))
+      );
+      try {
+        // The settings change rebuilds the decorations; the raw markers are
+        // back once the rebuild has landed.
+        await browser.waitUntil(async () => (await rawMarkers()).length > 0, {
+          timeout: 10000,
+          timeoutMsg: 'the callouts were not redrawn',
+        });
+        const icons = await browser.executeObsidian(({ app }, root: string) => {
+          return app.workspace.containerEl.querySelectorAll(
+            `${root} .lc-list-callout svg, ${root} .lc-highlight-callout svg`
+          ).length;
+        }, EDITOR);
+        expect(icons).toBe(0);
+        expect(await editorLineText('Important')).toBe('- & Important');
+
+        const file = await captureRendering('source-mode-icons');
+        expect(file).toContain('source-mode-icons');
+      } finally {
+        await setSettings(DEFAULT_SETTINGS);
+      }
+    });
+
     it('stays as it is while the caret moves through a callout', async function () {
       const before = await waitForRawRendering();
       await placeCursor(5, 4);
@@ -276,7 +304,9 @@ describe('Source mode', function () {
       );
       expect(counts['lc-list-marker']).toBe(counts['lc-list-callout']);
       expect(counts['lc-list-bg']).toBe(counts['lc-list-callout']);
-      expect(counts['lc-highlight-marker']).toBe(counts['lc-highlight-callout']);
+      expect(counts['lc-highlight-marker']).toBe(
+        counts['lc-highlight-callout']
+      );
       expect(counts['lc-raw-marker']).toBe(0);
     });
 
