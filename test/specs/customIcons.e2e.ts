@@ -1,13 +1,55 @@
 import { browser, expect } from '@wdio/globals';
 import { before, describe, it } from 'mocha';
 
-import { getSettings, openNote, setSettings } from '../helpers';
+import { getSettings, openNote, setRendering, setSettings } from '../helpers';
+
+/**
+ * Wait for the plugin to finish reading the vault's icon folder. It does that
+ * after Obsidian's layout is up rather than during its own load, so right
+ * after a reload or an enable the icons may not be registered yet.
+ */
+async function customIconsReady(): Promise<void> {
+  await browser.executeObsidian(async ({ app }) => {
+    await (app as any).plugins.plugins['list-callouts-improved']
+      .customIconsReady;
+  });
+}
 
 /** Ids registered by the plugin from the vault's icon folder. */
-function customIconIds(): Promise<string[]> {
+async function customIconIds(): Promise<string[]> {
+  await customIconsReady();
   return browser.executeObsidian(({ app }) => {
     return (app as any).plugins.plugins['list-callouts-improved'].customIconIds;
   }) as Promise<string[]>;
+}
+
+/**
+ * Make every read of a file in the icon folder take `delay` ms, so the test
+ * can tell whether something waited on the folder being read. Undone by the
+ * next reloadObsidian.
+ */
+function slowIconReads(delay: number): Promise<void> {
+  return browser.executeObsidian(({ app }, delay) => {
+    const adapter = app.vault.adapter as any;
+    const read = adapter.read.bind(adapter);
+    adapter.read = (path: string) =>
+      path.includes('/icons/')
+        ? new Promise((resolve) => window.setTimeout(resolve, delay)).then(() =>
+            read(path)
+          )
+        : read(path);
+  }, delay);
+}
+
+/** Turn the plugin off and on, resolving with how long the enable took. */
+async function reenablePlugin(): Promise<number> {
+  return await browser.executeObsidian(async ({ app }) => {
+    const plugins = (app as any).plugins;
+    await plugins.disablePlugin('list-callouts-improved');
+    const started = performance.now();
+    await plugins.enablePlugin('list-callouts-improved');
+    return performance.now() - started;
+  });
 }
 
 function iconRegistered(id: string): Promise<boolean> {
@@ -109,5 +151,76 @@ describe('Custom icons from the vault', function () {
     });
 
     expect(results).toEqual(['my-fancy-mark']);
+  });
+
+  describe('when the icon folder is slow to read', function () {
+    const READ_DELAY = 500;
+
+    before(async function () {
+      await browser.reloadObsidian({ vault: 'test/vaults/icons' });
+      await customIconsReady();
+
+      const settings = await getSettings();
+      settings[0].icon = 'my-fancy-mark';
+      await setSettings(settings);
+      await openNote('Note.md');
+    });
+
+    it('does not hold up enabling the plugin', async function () {
+      // Obsidian enables plugins one after another and shows a "taking too
+      // long" prompt for one whose load runs past a few seconds, so a read per
+      // icon file must not be part of the load (#50).
+      await slowIconReads(READ_DELAY);
+
+      const took = await reenablePlugin();
+
+      // Enabling takes a few ms on its own, so anything under one delayed
+      // read means the load waited on none of them.
+      expect(took).toBeLessThan(READ_DELAY);
+      expect(await customIconIds()).toContain('my-fancy-mark');
+    });
+
+    it('draws the icon on editor markers rendered before it was registered', async function () {
+      await setRendering('live-preview');
+      await slowIconReads(READ_DELAY);
+      await reenablePlugin();
+
+      // The marker is drawn as soon as the plugin is on, before the folder
+      // has been read, so at this point it has no icon to show.
+      await browser.$('.lc-list-marker').waitForExist();
+      await customIconsReady();
+
+      await browser.$('.lc-list-marker svg').waitForExist({ timeout: 10000 });
+      const className = await browser.executeObsidian(({ app }) => {
+        return (
+          app.workspace.containerEl
+            .querySelector('.lc-list-marker svg')
+            ?.getAttribute('class') ?? ''
+        );
+      });
+
+      expect(className).toContain('my-fancy-mark');
+    });
+
+    it('draws the icon in reading view rendered before it was registered', async function () {
+      await setRendering('reading');
+      await browser.$('.markdown-reading-view .lc-list-marker').waitForExist();
+      await slowIconReads(READ_DELAY);
+      await reenablePlugin();
+      await customIconsReady();
+
+      await browser
+        .$('.markdown-reading-view .lc-list-marker svg')
+        .waitForExist({ timeout: 10000 });
+      const className = await browser.executeObsidian(({ app }) => {
+        return (
+          app.workspace.containerEl
+            .querySelector('.markdown-reading-view .lc-list-marker svg')
+            ?.getAttribute('class') ?? ''
+        );
+      });
+
+      expect(className).toContain('my-fancy-mark');
+    });
   });
 });

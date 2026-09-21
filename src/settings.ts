@@ -125,6 +125,12 @@ export interface CalloutConfig {
    * item, the post-processor to color an <li> from the callout <li> above it.
    */
   colorNestedItems?: boolean;
+  /**
+   * Editor only: changes when icons are registered after markers may have
+   * been drawn, so the marker widgets stop comparing equal to the ones on
+   * screen and are rebuilt with the icon.
+   */
+  iconRevision?: number;
 }
 
 export type ListCalloutsSettings = Callout[];

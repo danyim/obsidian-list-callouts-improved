@@ -56,6 +56,21 @@ export default class ListCalloutsPlugin extends Plugin {
   customIconIds: string[] = [];
 
   /**
+   * Settled once the vault's icon folder has been read and its icons
+   * registered, which happens after Obsidian's layout is up rather than during
+   * load. A seam for the tests, which otherwise have no way to know whether a
+   * fresh Obsidian has got that far.
+   */
+  customIconsReady: Promise<void> = Promise.resolve();
+
+  /**
+   * Bumped when icons are registered after editors may have drawn their
+   * markers, so the next config dispatch rebuilds the markers rather than
+   * keeping the ones drawn without an icon.
+   */
+  private iconRevision = 0;
+
+  /**
    * The editor's view plugin, exposed so a test can hand it to
    * `EditorView.plugin()` and ask whether CodeMirror still has it running in a
    * given editor: it comes back null once a plugin has thrown.
@@ -67,10 +82,6 @@ export default class ListCalloutsPlugin extends Plugin {
     this.buildPostProcessorConfig();
     this.applyHideBullets();
     this.appliedColorNestedItems = this.colorNestedItems;
-
-    this.legacyDataAvailable = await legacySettingsExist(this.app);
-
-    await this.registerCustomIcons();
 
     this.settingTab = new ListCalloutSettingTab(this);
     this.addSettingTab(this.settingTab);
@@ -117,6 +128,31 @@ export default class ListCalloutsPlugin extends Plugin {
         win.doc.body.toggleClass(HIDE_BULLETS_CLASS, this.hideBullets);
       })
     );
+
+    // Obsidian enables plugins one after another and counts the wait for
+    // each `onload` against that plugin, prompting to disable one that runs
+    // past a few seconds. Reading the icon folder is a file read per icon,
+    // and on a slow disk or a cloud-synced vault that alone ran to twenty
+    // seconds (#50). So the folder is read once the layout is up, and the
+    // markers drawn without their icons in the meantime are redrawn. The
+    // legacy check is one more read that nothing needs before the settings
+    // tab opens, which checks again anyway.
+    this.customIconsReady = new Promise((resolve) => {
+      this.app.workspace.onLayoutReady(() => {
+        void legacySettingsExist(this.app).then((available) => {
+          this.legacyDataAvailable = available;
+        });
+
+        this.registerCustomIcons()
+          .catch((e: unknown) => {
+            console.error(
+              'List Callouts, Improved: could not read custom icons',
+              e
+            );
+          })
+          .finally(resolve);
+      });
+    });
 
     this.app.workspace.trigger('parse-style-settings');
   }
@@ -197,7 +233,8 @@ export default class ListCalloutsPlugin extends Plugin {
 
   /**
    * Register the vault's own SVG icons so they show up in the icon picker
-   * alongside the ones Obsidian ships.
+   * alongside the ones Obsidian ships, then redraw whatever was rendered
+   * while they were still being read.
    */
   async registerCustomIcons(): Promise<void> {
     const { registered, skipped } = await loadCustomIcons(this.app);
@@ -209,6 +246,36 @@ export default class ListCalloutsPlugin extends Plugin {
         `List Callouts, Improved: skipped custom icon ${file}: ${reason}`
       );
     }
+
+    if (registered.length) this.redrawIcons();
+  }
+
+  /**
+   * Redraw every marker so one drawn for an icon that was not registered at
+   * the time gets it. Editors rebuild their decorations on the config
+   * dispatch, with the revision telling the marker widgets not to keep the
+   * old DOM; reading views are re-rendered outright, since the post
+   * processor's output is not kept in step with anything.
+   */
+  private redrawIcons(): void {
+    this.iconRevision++;
+    this.dispatchUpdate();
+
+    for (const view of this.markdownViews()) {
+      if (view.getMode() === 'preview') view.previewMode.rerender(true);
+    }
+  }
+
+  /**
+   * The loaded markdown views. A leaf whose view is deferred is left out: it
+   * has no editor or preview yet, and gets a fresh render of its own when it
+   * is shown.
+   */
+  private markdownViews(): MarkdownView[] {
+    return this.app.workspace
+      .getLeavesOfType('markdown')
+      .map((leaf) => leaf.view)
+      .filter((view): view is MarkdownView => view instanceof MarkdownView);
   }
 
   /** One transaction, so a single undo puts every changed line back. */
@@ -233,15 +300,14 @@ export default class ListCalloutsPlugin extends Plugin {
   dispatchUpdate() {
     const newConfig = this.buildEditorConfig();
 
-    this.app.workspace.getLeavesOfType('markdown').forEach((leaf) => {
-      const view = leaf.view as MarkdownView;
+    for (const view of this.markdownViews()) {
       // `cm` is the underlying CodeMirror instance; not part of the public API.
       const cm = (view.editor as unknown as { cm?: EditorView }).cm;
 
       cm?.dispatch({
         effects: [setConfig.of(newConfig)],
       });
-    });
+    }
   }
 
   private calloutsByChar(): Record<string, Callout> {
@@ -301,6 +367,7 @@ export default class ListCalloutsPlugin extends Plugin {
       highlightOpenRe: this.highlightPattern(chars, 'opener'),
       hideBullets: this.hideBullets,
       colorNestedItems: this.colorNestedItems,
+      iconRevision: this.iconRevision,
     };
   }
 
