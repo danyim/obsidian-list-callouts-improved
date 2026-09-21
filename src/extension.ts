@@ -358,11 +358,20 @@ function highlightEndAfter(state: EditorState, pos: number): number | null {
 }
 
 /**
- * Decorate one highlight callout: a mark over the content plus a replacement
- * showing the marker -- the character, or the icon when one is set -- in
- * place of the raw character and space. The replacement is dropped while the
- * selection touches the highlight, so the raw `==& ` is there to edit, which
- * is what Obsidian does with `==`.
+ * The tint over a callout character left in place as document text: source
+ * mode's stand-in for the marker widget (#49). Only the color comes from
+ * the callout, the same one the widget uses, so the character still reads
+ * as the raw markdown it is.
+ */
+const rawMarkerDecoration = Decoration.mark({ class: 'lc-raw-marker' });
+
+/**
+ * Decorate one highlight callout: a mark over the content plus, in Live
+ * Preview, a replacement showing the marker -- the character, or the icon
+ * when one is set -- in place of the raw character and space. The
+ * replacement is dropped while the selection touches the highlight, so the
+ * raw `==& ` is there to edit, which is what Obsidian does with `==`. Source
+ * mode keeps the raw character throughout and tints it instead.
  */
 function addHighlightDeco(
   builder: RangeSetBuilder<Decoration>,
@@ -378,7 +387,13 @@ function addHighlightDeco(
 
   outer.add(contentFrom, contentTo, highlightDecoration(callout));
 
-  if (!selectionTouches(state, contentFrom - 2, contentTo + 2)) {
+  if (!isLivePreview(state)) {
+    builder.add(
+      contentFrom,
+      contentFrom + callout.char.length,
+      rawMarkerDecoration
+    );
+  } else if (!selectionTouches(state, contentFrom - 2, contentTo + 2)) {
     builder.add(
       contentFrom,
       markerTo,
@@ -471,10 +486,12 @@ function isLivePreview(state: EditorState): boolean {
 /**
  * Build the callout decorations for everything on screen.
  *
- * Nothing at all in source mode: that is the rendering Obsidian keeps as raw
- * markdown, and a callout there shows as the `- & text` the user typed, with
- * no marker, band or highlight color drawn over it, so the character is
- * there to see and edit (mgmeyers/obsidian-list-callouts#35).
+ * Source mode is the rendering Obsidian keeps as raw markdown, so a callout
+ * there shows as the `- & text` the user typed, the character there to see
+ * and edit (mgmeyers/obsidian-list-callouts#35): no marker widget stands in
+ * for it. The band and a highlight's color are drawn all the same, and the
+ * character is tinted, so the callout is still told apart at a glance and
+ * nothing is lost switching modes (#49).
  *
  * Walks the visible lines and tests each against the callout pattern, rather
  * than walking every syntax node in the viewport. The viewport holds a few
@@ -487,13 +504,10 @@ export function buildCalloutDecos(
   stats?: BuildStats
 ): CalloutDecorations {
   const config = state.field(calloutsConfigField);
-  if (
-    !isLivePreview(state) ||
-    (!config?.re && !config?.highlightRe) ||
-    !view.visibleRanges.length
-  )
+  if ((!config?.re && !config?.highlightRe) || !view.visibleRanges.length)
     return { decorations: Decoration.none, outerDecorations: Decoration.none };
 
+  const livePreview = isLivePreview(state);
   const builder = new RangeSetBuilder<Decoration>();
   const outer = new RangeSetBuilder<Decoration>();
   const { doc } = state;
@@ -561,13 +575,16 @@ export function buildCalloutDecos(
         if (!continuation) {
           const labelPos = line.from + match[1].length;
 
-          // Decorate the callout marker
+          // Decorate the callout marker: the widget in place of the
+          // character, or the character itself, tinted, in source mode.
           builder.add(
             labelPos,
             labelPos + run.char.length,
-            Decoration.replace({
-              widget: new CalloutMarker(run.char, run.icon),
-            })
+            livePreview
+              ? Decoration.replace({
+                  widget: new CalloutMarker(run.char, run.icon),
+                })
+              : rawMarkerDecoration
           );
         }
       } else {
@@ -786,12 +803,15 @@ export const calloutExtension = ViewPlugin.fromClass(
         update.viewportChanged ||
         syntaxTree(update.state) !== syntaxTree(update.startState);
 
+      // Switching between Live Preview and source mode reconfigures the
+      // editor in place, with the document, viewport and tree as they were;
+      // the marker is a widget in one and the tinted character in the other.
+      const modeChanged =
+        isLivePreview(update.state) !== isLivePreview(update.startState);
+
       if (
         layoutMayHaveChanged ||
-        // Switching between Live Preview and source mode reconfigures the
-        // editor in place, with the document, viewport and tree as they
-        // were; the decorations are drawn in one and not the other.
-        isLivePreview(update.state) !== isLivePreview(update.startState) ||
+        modeChanged ||
         // A highlight's marker is hidden or revealed by where the caret is,
         // so caret movement matters -- but only on a screen that has one.
         (update.selectionSet && this.hasHighlights) ||
@@ -809,12 +829,14 @@ export const calloutExtension = ViewPlugin.fromClass(
       // marker, so re-measuring for either would just confirm nothing
       // changed at DOM-read cost. The one config change that does move
       // one is the bullets preference: a bullet line's band is inset for
-      // its bullet, and that bullet has just been drawn or taken away.
+      // its bullet, and that bullet has just been drawn or taken away. A
+      // mode switch moves it the same way: source mode has no bullet glyph,
+      // only the raw `- `.
       const hideBulletsChanged =
         update.startState.field(calloutsConfigField).hideBullets !==
         update.state.field(calloutsConfigField).hideBullets;
 
-      if (layoutMayHaveChanged || hideBulletsChanged) {
+      if (layoutMayHaveChanged || hideBulletsChanged || modeChanged) {
         alignCalloutBackgrounds(update.view);
       }
     }

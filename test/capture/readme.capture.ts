@@ -1594,9 +1594,10 @@ describe('README screenshots', function () {
   it('captures the character rendering in reading view and source mode', async function () {
     // The same note through the other two renderings, so a change to one
     // renderer can be compared against the others without opening Obsidian.
-    // Source mode is left as raw markdown (upstream #35), so its companion
-    // shows what the plugin does not draw. Not in the README, which shows
-    // live preview alone.
+    // Source mode keeps the markdown raw (upstream #35) under the band and
+    // highlight color, with the character tinted in place of a marker
+    // (#49), so its companion shows that much and no more. Not in the
+    // README, which shows live preview alone.
     await setRendering('reading');
     await captureEditor(
       'callout-characters.reading.png',
@@ -1612,7 +1613,7 @@ describe('README screenshots', function () {
       'callout-characters.source.png',
       false,
       true,
-      '.markdown-source-view:not(.is-live-preview) .cm-line'
+      '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
     );
 
     // The leaf keeps its rendering across notes, and the rest of the set is
@@ -1627,6 +1628,39 @@ describe('README screenshots', function () {
     await openNote('Icons.md');
     await setSettings(callouts(true));
     await captureEditor('callout-icons.png', true, true);
+  });
+
+  it('captures the icon rendering over the same note in source mode', async function () {
+    // The icons note, rendered twice and stacked as for the highlights: in
+    // Live Preview with its icons, then in source mode, where the icons
+    // give way to the characters they stand for, tinted, under the same
+    // bands (#49). Each under a heading that says which it is; the source
+    // mode one shows its own `###`, which is the point.
+    await openNote('Icons.md');
+    await setSettings(callouts(true));
+    const note = await editorText();
+
+    await setEditorText(`### Live Preview\n\n${note}`);
+    await browser.$('.lc-list-marker svg').waitForExist({ timeout: 10000 });
+    const livePreview = await editorComposite(true, true, '.lc-list-callout');
+
+    await setEditorText(`### Source mode\n\n${note}`);
+    await setRendering('source');
+    const source = await editorComposite(
+      true,
+      true,
+      '.markdown-source-view:not(.is-live-preview) .lc-raw-marker'
+    );
+    await setRendering('live-preview');
+    await setEditorText(note);
+
+    await fs.writeFile(
+      path.join(OUT_DIR, 'callout-source-mode.png'),
+      // One capture's padding rather than both: source mode gives its
+      // heading less room above than Live Preview does, and trimming both
+      // took the top off it.
+      await stacked(livePreview, source, EDITOR_PADDING)
+    );
   });
 
   it('captures the rendering with bullets hidden', async function () {
@@ -1671,7 +1705,7 @@ describe('README screenshots', function () {
       'callout-multiline.source.png',
       true,
       true,
-      '.markdown-source-view:not(.is-live-preview) .cm-line'
+      '.markdown-source-view:not(.is-live-preview) .lc-list-callout'
     );
 
     await setRendering('live-preview');
