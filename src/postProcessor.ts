@@ -17,11 +17,21 @@ function getFirstTextNode(li: HTMLElement) {
       }
     }
 
+    // A loose list puts each item's text in a <p>, and a task item's
+    // checkbox goes inside it ahead of the text, so the first child is not
+    // always the text itself.
     if (
       node.nodeType === document.ELEMENT_NODE &&
       (node as HTMLElement).tagName === 'P'
     ) {
-      return node.firstChild;
+      const first = node.firstChild;
+      if (
+        first?.nodeType === document.ELEMENT_NODE &&
+        (first as HTMLElement).hasClass('task-list-item-checkbox')
+      ) {
+        return first.nextSibling;
+      }
+      return first;
     }
 
     if (node.nodeType !== document.TEXT_NODE) {
@@ -134,13 +144,11 @@ export function buildPostProcessor(
       await Promise.all(pending);
     }
 
+    // Document order, so by the time a nested item is reached the callout
+    // item it sits under has been marked and can be found by walking up.
     el.findAll('li').forEach((li) => {
       const node = getFirstTextNode(li);
-      if (!node) return;
-
-      const text = node.textContent;
-      if (!text) return;
-
+      const text = node?.textContent ?? '';
       const match = text.match(config.re);
       const callout = match ? config.callouts[match[1]] : null;
 
@@ -169,7 +177,25 @@ export function buildPostProcessor(
         );
 
         wrapLiContent(li);
+        return;
       }
+
+      if (!config.colorNestedItems) return;
+
+      // The nearest colored item above, callout or nested alike, so a
+      // callout deeper in the tree takes over for everything under it.
+      const above = li.parentElement?.closest<HTMLElement>(
+        'li.lc-list-callout, li.lc-list-callout-nested'
+      );
+      const inherited = above
+        ? config.callouts[above.getAttribute('data-callout')]
+        : null;
+      if (!inherited) return;
+
+      li.addClass('lc-list-callout-nested');
+      li.setAttribute('data-callout', inherited.char);
+      applyCalloutColors(li, inherited);
+      wrapLiContent(li);
     });
 
     if (config.highlightRe) decorateHighlights(el, config);

@@ -137,20 +137,30 @@ export class HighlightMarker extends WidgetType {
 }
 
 /**
- * The line class for a callout's own line, or for one of the lines its item
- * wraps onto (`continuation`). `continued` marks any line of the run that
- * has another after it, which is what lets the stylesheet join the bands
- * end to end instead of leaving the per-line spacing between them.
+ * What a decorated line is to its callout: the item's own line, one of the
+ * lines that item wraps onto, or the line of an item nested under it (only
+ * with the nested items preference on). A nested line carries the color
+ * but not the `lc-list-callout` class: that class is also what hides the
+ * bullet under the bullets preference, and a nested item has no marker of
+ * its own to stand in for the bullet.
+ */
+export type CalloutLineKind = 'callout' | 'continuation' | 'nested';
+
+/**
+ * The line class for a line of the given kind. `continued` marks any line
+ * of an item's run that has another after it, which is what lets the
+ * stylesheet join the bands end to end instead of leaving the per-line
+ * spacing between them.
  */
 export const calloutDecoration = (
   callout: Callout,
-  continuation = false,
+  kind: CalloutLineKind = 'callout',
   continued = false
 ) =>
   Decoration.line({
     attributes: {
       class: [
-        continuation ? 'lc-list-callout-continuation' : 'lc-list-callout',
+        kind === 'callout' ? 'lc-list-callout' : `lc-list-callout-${kind}`,
         ...(continued ? ['lc-list-callout-continued'] : []),
       ].join(' '),
       style: calloutColorStyle(callout),
@@ -276,28 +286,149 @@ function isContinuationLine(state: EditorState, line: Line): boolean {
   return isContinuation;
 }
 
+/** A line with a list marker of its own, whatever comes after it. */
+const LIST_ITEM_TEXT = /^\s*(?:[-*+]|\d+[.)]) /;
+
 /**
- * The callout whose item `line` continues, when `line` is a continuation
- * line and the item's own line sits above it: walked back to from the first
- * line of a visible range, which is the one place the builder meets a
- * continuation line without having just passed its item's own line.
+ * A line's indentation in columns, a tab counting to the next multiple of
+ * four as Obsidian lays it out. Nesting is judged by comparing these: an
+ * item is nested under another when it sits further in, however the two
+ * were indented. No parser depth is used because the parser may not have
+ * reached one of the two lines yet, and a depth taken from the tree for one
+ * and from the text for the other would not compare.
  */
-function calloutContinuedAt(
+function indentColumns(text: string): number {
+  let columns = 0;
+  for (const ch of text) {
+    if (ch === ' ') columns++;
+    else if (ch === '\t') columns += 4 - (columns % 4);
+    else break;
+  }
+  return columns;
+}
+
+/** A callout item whose subtree the builder is currently inside. */
+interface Ancestor {
+  indent: number;
+  callout: Callout;
+}
+
+/**
+ * The callout item `line` starts, if it is one. The match is also handed
+ * back, since the marker is replaced at a position taken from it.
+ */
+function calloutHeadAt(
   state: EditorState,
   config: CalloutConfig,
   line: Line
+): { callout: Callout; match: RegExpMatchArray } | null {
+  const match = config.re ? line.text.match(config.re) : null;
+  const callout = match ? config.callouts[match[2]] : null;
+  return callout && isListLine(state, line) ? { callout, match } : null;
+}
+
+/**
+ * End the subtrees `line` is not in: those of every callout item indented
+ * as far as it or further, whether `line` is an item on their level or a
+ * paragraph at column zero. A blank line ends nothing, so a list that goes
+ * on after one is still one list. A line an item wraps onto sits further in
+ * than its item and so ends nothing its item did not, which is why a caller
+ * need not tell one apart first.
+ */
+function popAncestors(ancestors: Ancestor[], line: Line) {
+  if (/^\s*$/.test(line.text)) return;
+  const indent = indentColumns(line.text);
+  while (ancestors.length && ancestors[ancestors.length - 1].indent >= indent) {
+    ancestors.pop();
+  }
+}
+
+/**
+ * The callout `line` inherits as an item nested under a callout item, when
+ * it is a list item of its own inside one's subtree.
+ */
+function inheritedCallout(
+  state: EditorState,
+  ancestors: Ancestor[],
+  line: Line
 ): Callout | null {
-  if (!config.re) return null;
+  if (!ancestors.length || !LIST_ITEM_TEXT.test(line.text)) return null;
+  return isListLine(state, line)
+    ? ancestors[ancestors.length - 1].callout
+    : null;
+}
 
-  while (line.number > 1 && isContinuationLine(state, line)) {
-    line = state.doc.line(line.number - 1);
+/** What the builder carries from one line to the next. */
+interface Carried {
+  /** The callout of the item the last line belonged to; null outside one. */
+  run: Callout | null;
+  /** Whether the next line is a continuation of that item. */
+  continues: boolean;
+  /** The callout items whose subtrees the next line sits in, outermost first. */
+  ancestors: Ancestor[];
+}
 
-    const match = line.text.match(config.re);
-    const callout = match ? config.callouts[match[2]] : null;
-    if (callout) return isListLine(state, line) ? callout : null;
+/**
+ * What the builder would be carrying into `line` had it walked every line
+ * above it: worked out from the first line of a visible range, which is the
+ * one place the builder meets a line without having just passed the one
+ * before it.
+ *
+ * A continuation line is walked back to its item's own line first, since
+ * that is the line whose callout it continues. From there the ancestors are
+ * read by walking up: a line further out than every line met so far is one
+ * the item has not been popped from under, so if it is a callout item it is
+ * an ancestor, and either way nothing further out than it can be. The walk
+ * ends at column zero, which nothing is nested under. Continuation lines
+ * along the way need no special case: each sits further in than its own
+ * item, so it excludes nothing that item would not.
+ */
+function carriedStateAt(
+  state: EditorState,
+  config: CalloutConfig,
+  line: Line
+): Carried {
+  const none: Carried = { run: null, continues: false, ancestors: [] };
+  if (!config.re) return none;
+
+  const { doc } = state;
+  let item = line;
+  while (item.number > 1 && isContinuationLine(state, item)) {
+    item = doc.line(item.number - 1);
   }
 
-  return null;
+  const ancestors: Ancestor[] = [];
+  if (config.colorNestedItems) {
+    let limit = indentColumns(item.text);
+    for (let n = item.number - 1; n >= 1 && limit > 0; n--) {
+      const above = doc.line(n);
+      if (/^\s*$/.test(above.text)) continue;
+      const indent = indentColumns(above.text);
+      if (indent >= limit) continue;
+
+      const head = calloutHeadAt(state, config, above);
+      if (head) ancestors.unshift({ indent, callout: head.callout });
+      limit = indent;
+    }
+  }
+
+  if (item === line) return { run: null, continues: false, ancestors };
+
+  const head = calloutHeadAt(state, config, item);
+  if (head) {
+    if (config.colorNestedItems) {
+      ancestors.push({
+        indent: indentColumns(item.text),
+        callout: head.callout,
+      });
+    }
+    return { run: head.callout, continues: true, ancestors };
+  }
+
+  const run = config.colorNestedItems
+    ? inheritedCallout(state, ancestors, item)
+    : null;
+  return { run, continues: run !== null, ancestors };
 }
 
 /**
@@ -519,12 +650,16 @@ export function buildCalloutDecos(
   // every callout off the screen rather than duplicating one.
   let lastLine = 0;
 
-  // The callout whose item the current line continues, carried from one
-  // line to the next; null outside a run. `nextContinues` is the answer for
+  // The callout whose item the current line belongs to, carried from one
+  // line to the next; null outside one. `nextContinues` is the answer for
   // the line after the current one, which deciding the current line's
-  // `continued` class already had to compute.
+  // `continued` class already had to compute. `ancestors` holds the callout
+  // items whose subtrees the current line is in, innermost last, and is only
+  // ever filled with the nested items preference on.
   let run: Callout | null = null;
   let nextContinues = false;
+  let ancestors: Ancestor[] = [];
+  const nesting = !!config.colorNestedItems;
 
   for (const { from, to } of view.visibleRanges) {
     let line = doc.lineAt(from);
@@ -540,18 +675,37 @@ export function buildCalloutDecos(
       // callout above it. The carried state is only right for the line after
       // the last one processed, so anywhere else look back for the item.
       if (line.number !== lastLine + 1) {
-        run = calloutContinuedAt(state, config, line);
-        nextContinues = run !== null;
+        const carried = carriedStateAt(state, config, line);
+        run = carried.run;
+        nextContinues = carried.continues;
+        ancestors = carried.ancestors;
       }
 
       lastLine = line.number;
 
-      const match = config.re ? line.text.match(config.re) : null;
-      const callout = match ? config.callouts[match[2]] : null;
-      const isHead = !!callout && isListLine(state, line);
-      const continuation = !isHead && nextContinues ? run : null;
+      const head = calloutHeadAt(state, config, line);
+      const continuation = !head && nextContinues ? run : null;
 
-      run = isHead ? callout : continuation;
+      let kind: CalloutLineKind = 'callout';
+      if (head) {
+        run = head.callout;
+      } else if (continuation) {
+        run = continuation;
+        kind = 'continuation';
+      } else if (nesting) {
+        popAncestors(ancestors, line);
+        run = inheritedCallout(state, ancestors, line);
+        kind = 'nested';
+      } else {
+        run = null;
+      }
+
+      // A callout item's subtree starts below it; the pop first, since the
+      // item ends the subtree of anything on its own level.
+      if (head && nesting) {
+        popAncestors(ancestors, line);
+        ancestors.push({ indent: indentColumns(line.text), callout: run });
+      }
 
       if (run) {
         nextContinues =
@@ -562,7 +716,7 @@ export function buildCalloutDecos(
         builder.add(
           line.from,
           line.from,
-          calloutDecoration(run, !!continuation, nextContinues)
+          calloutDecoration(run, kind, nextContinues)
         );
 
         // Add the callout background element
@@ -572,8 +726,8 @@ export function buildCalloutDecos(
           Decoration.widget({ widget: new CalloutBackground(), side: -1 })
         );
 
-        if (!continuation) {
-          const labelPos = line.from + match[1].length;
+        if (head) {
+          const labelPos = line.from + head.match[1].length;
 
           // Decorate the callout marker: the widget in place of the
           // character, or the character itself, tinted, in source mode.
@@ -681,7 +835,11 @@ function alignCalloutBackgrounds(view: EditorView) {
           head = head.previousElementSibling as HTMLElement | null;
         }
         // Visited before this line, in document order, so already measured.
-        if (head?.classList.contains('lc-list-callout')) {
+        // A nested item's line heads a run the same way a callout's does.
+        if (
+          head?.classList.contains('lc-list-callout') ||
+          head?.classList.contains('lc-list-callout-nested')
+        ) {
           const indent = measured.get(head);
           if (indent !== undefined) return indent;
         }
@@ -827,16 +985,20 @@ export const calloutExtension = ViewPlugin.fromClass(
       // or its viewport. A bare selection change or a setConfig effect
       // (recoloring, say) rebuilds decorations above but never moves a
       // marker, so re-measuring for either would just confirm nothing
-      // changed at DOM-read cost. The one config change that does move
-      // one is the bullets preference: a bullet line's band is inset for
-      // its bullet, and that bullet has just been drawn or taken away. A
-      // mode switch moves it the same way: source mode has no bullet glyph,
-      // only the raw `- `.
-      const hideBulletsChanged =
-        update.startState.field(calloutsConfigField).hideBullets !==
-        update.state.field(calloutsConfigField).hideBullets;
+      // changed at DOM-read cost. Two config changes are the exception.
+      // The bullets preference moves a band: a bullet line's is inset for
+      // its bullet, and that bullet has just been drawn or taken away. The
+      // nested items preference adds bands, on lines nested under a
+      // callout, and a new band starts at the line's own edge until it is
+      // measured. A mode switch moves them the way the bullets preference
+      // does: source mode has no bullet glyph, only the raw `- `.
+      const before = update.startState.field(calloutsConfigField);
+      const after = update.state.field(calloutsConfigField);
+      const bandsMoved =
+        before.hideBullets !== after.hideBullets ||
+        before.colorNestedItems !== after.colorNestedItems;
 
-      if (layoutMayHaveChanged || hideBulletsChanged || modeChanged) {
+      if (layoutMayHaveChanged || bandsMoved || modeChanged) {
         alignCalloutBackgrounds(update.view);
       }
     }
