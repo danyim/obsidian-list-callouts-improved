@@ -400,12 +400,13 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
    rule's padding is taken into account. Left alone, that pins the box to
    its pre-drag height and any padding added here just eats into the
    control row instead of growing the card, so extra bottom padding never
-   becomes visible. `!important` is the only way to win against an inline
-   style from a stylesheet rule; `auto` then lets the box size itself to
-   its own content and padding, the same as an ordinary (undragged) row. */
+   becomes visible. A stylesheet `height` can't beat an inline one, but
+   `min-height` is resolved after `height` and wins regardless of where
+   either came from, so it forces the box to grow to its own content and
+   padding, the same as an ordinary (undragged) row. */
 .lc-setting.mod-dragged-item {
   padding: 15px 15px 1.5rem;
-  height: auto !important;
+  min-height: max-content;
 }
 
 /* The character input holds a single character, in the settings row and
