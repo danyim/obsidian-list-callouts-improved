@@ -78,12 +78,14 @@ export class CalloutBackground extends WidgetType {
 export class CalloutMarker extends WidgetType {
   char: string;
   icon?: string;
+  revision?: number;
 
-  constructor(char: string, icon?: string) {
+  constructor(char: string, icon?: string, revision?: number) {
     super();
 
     this.char = char;
     this.icon = icon;
+    this.revision = revision;
   }
 
   toDOM() {
@@ -104,14 +106,19 @@ export class CalloutMarker extends WidgetType {
   }
 
   eq(widget: CalloutMarker): boolean {
-    return widget.char === this.char && widget.icon === this.icon;
+    return (
+      widget.char === this.char &&
+      widget.icon === this.icon &&
+      widget.revision === this.revision
+    );
   }
 }
 
 export class HighlightMarker extends WidgetType {
   constructor(
     readonly char: string,
-    readonly icon?: string
+    readonly icon?: string,
+    readonly revision?: number
   ) {
     super();
   }
@@ -132,7 +139,11 @@ export class HighlightMarker extends WidgetType {
   }
 
   eq(widget: HighlightMarker): boolean {
-    return widget.char === this.char && widget.icon === this.icon;
+    return (
+      widget.char === this.char &&
+      widget.icon === this.icon &&
+      widget.revision === this.revision
+    );
   }
 }
 
@@ -509,6 +520,7 @@ function addHighlightDeco(
   outer: RangeSetBuilder<Decoration>,
   state: EditorState,
   callout: Callout,
+  revision: number | undefined,
   contentFrom: number,
   markerTo: number,
   contentTo: number,
@@ -529,7 +541,7 @@ function addHighlightDeco(
       contentFrom,
       markerTo,
       Decoration.replace({
-        widget: new HighlightMarker(callout.char, callout.icon),
+        widget: new HighlightMarker(callout.char, callout.icon, revision),
       })
     );
   }
@@ -574,6 +586,7 @@ function addHighlightDecos(
       outer,
       state,
       callout,
+      config.iconRevision,
       contentFrom,
       contentTo - match[2].length,
       contentTo,
@@ -602,6 +615,7 @@ function addHighlightDecos(
     outer,
     state,
     callout,
+    config.iconRevision,
     contentFrom,
     line.from + opener.index + opener[0].length,
     contentTo,
@@ -736,7 +750,11 @@ export function buildCalloutDecos(
             labelPos + run.char.length,
             livePreview
               ? Decoration.replace({
-                  widget: new CalloutMarker(run.char, run.icon),
+                  widget: new CalloutMarker(
+                    run.char,
+                    run.icon,
+                    config.iconRevision
+                  ),
                 })
               : rawMarkerDecoration
           );

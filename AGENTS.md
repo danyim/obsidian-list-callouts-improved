@@ -173,6 +173,11 @@ Specific to this plugin:
   commands, the settings tab, the editor extension); delegate feature logic
   to the other modules in `src/`.
 - Bundle everything into `main.js` — no unbundled runtime dependencies.
+- Keep `onload()` to what has to happen before the first note renders:
+  Obsidian loads plugins one at a time, counts each `onload()`'s wait
+  against that plugin, and prompts to disable one that runs past a few
+  seconds. Vault reads that scale with what is in the vault (the icon folder
+  scan) go in `onLayoutReady` and redraw what they affect (#50).
 - `isDesktopOnly` is `false`: avoid Node/Electron-only APIs, and be mindful
   of mobile (`settingsTab.ts`'s inputs wrap and its icon menu anchors to
   whichever side of its button it fits on, because a mobile settings pane is
