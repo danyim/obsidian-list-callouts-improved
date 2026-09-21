@@ -1336,7 +1336,7 @@ export function markerPaint(
       .forEach((el) => {
         const char = el.getAttribute('data-callout');
         const marker = el.querySelector<HTMLElement>(
-          '.lc-list-marker, .lc-highlight-marker'
+          '.lc-list-marker, .lc-highlight-marker, .lc-raw-marker'
         );
         if (!char || !marker) return;
         out[char] = {

@@ -220,6 +220,14 @@ settings:
   top: 0.125em;
 }
 
+/* Source mode (#49): the callout character stays in the text, where it can
+   be seen and edited, and takes the marker's color and nothing else of its
+   styling, so it still reads as raw markdown. Both a list callout's and a
+   highlight's. */
+.lc-raw-marker {
+  color: rgb(var(--lc-callout-marker-color, var(--lc-callout-color)));
+}
+
 /* "Hide bullets and numbers" (mgmeyers/obsidian-list-callouts#59): the
    callout marker is drawn where the bullet or number would be, the way a
    checkbox stands in for a bullet. main.ts keeps the body class in step
@@ -242,13 +250,19 @@ settings:
    two out, while the raw "- " Obsidian reveals in the span when the
    caret enters it is a real text run and still renders. The band's own
    inset for a bullet (alignCalloutBackgrounds in extension.ts) goes with
-   the bullet, so the two lines get one band as well. */
+   the bullet, so the two lines get one band as well.
+
+   Source mode has no bullet or number span to hide, only the raw "- " text
+   in its formatting span, and with no marker widget standing in for the
+   bullet there (#49) that span is left as Obsidian lays it out: the flex
+   rule is Live Preview's alone. The settings tab's preview line carries
+   the live-preview class too. */
 .lc-hide-bullets .lc-list-callout .list-bullet,
 .lc-hide-bullets .lc-list-callout .list-number {
   display: none;
 }
 
-.lc-hide-bullets .cm-line.lc-list-callout .cm-formatting-list-ul {
+.lc-hide-bullets .is-live-preview .cm-line.lc-list-callout .cm-formatting-list-ul {
   display: inline-flex;
 }
 

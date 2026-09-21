@@ -2,12 +2,16 @@ import { browser, expect } from '@wdio/globals';
 import { after, before, describe, it } from 'mocha';
 import { obsidianPage } from 'wdio-obsidian-service';
 
+import { DEFAULT_SETTINGS } from '../../src/settings';
 import {
   captureRendering,
   editorLineText,
+  markerPaint,
   openNote,
   placeCursor,
+  setHideBullets,
   setRendering,
+  setSettings,
 } from '../helpers';
 
 const EDITOR = '.workspace .markdown-source-view';
@@ -18,6 +22,7 @@ const DECORATION_CLASSES = [
   'lc-list-callout-continuation',
   'lc-list-bg',
   'lc-list-marker',
+  'lc-raw-marker',
   'lc-highlight-callout',
   'lc-highlight-marker',
 ];
@@ -37,6 +42,44 @@ function decorationCounts(): Promise<Record<string, number>> {
     EDITOR,
     DECORATION_CLASSES
   );
+}
+
+/**
+ * Each tinted raw character next to the callout it belongs to, read off the
+ * decorated ancestor's `data-callout`.
+ */
+function rawMarkers(): Promise<{ text: string; callout: string | null }[]> {
+  return browser.executeObsidian(({ app }, root: string) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        `${root} .lc-raw-marker`
+      )
+    ).map((el) => ({
+      text: el.textContent ?? '',
+      callout:
+        el.closest<HTMLElement>('[data-callout]')?.dataset.callout ?? null,
+    }));
+  }, EDITOR);
+}
+
+/**
+ * The list marker text (`- `, `1. `) of each callout line and whether it
+ * takes up space, which is what the bullets preference removes.
+ */
+function listMarkers(): Promise<{ text: string; shown: boolean }[]> {
+  return browser.executeObsidian(({ app }, root: string) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        `${root} .cm-line.lc-list-callout`
+      )
+    ).map((line) => {
+      const marker = line.querySelector<HTMLElement>('.cm-formatting-list');
+      return {
+        text: marker?.textContent ?? '',
+        shown: !!marker && marker.getBoundingClientRect().width > 0,
+      };
+    });
+  }, EDITOR);
 }
 
 function isLivePreview(): Promise<boolean> {
@@ -65,19 +108,45 @@ async function waitForDecorations(): Promise<Record<string, number>> {
   return counts;
 }
 
-function expectNothingDecorated(counts: Record<string, number>) {
-  for (const cls of DECORATION_CLASSES) {
-    expect(counts[cls]).toBe(0);
-  }
+/** Wait for the source-mode rendering: bands drawn, marker widgets gone. */
+async function waitForRawRendering(): Promise<Record<string, number>> {
+  let counts: Record<string, number> = {};
+  await browser.waitUntil(
+    async () => {
+      counts = await decorationCounts();
+      return (
+        counts['lc-list-callout'] > 0 &&
+        counts['lc-raw-marker'] > 0 &&
+        counts['lc-list-marker'] === 0
+      );
+    },
+    {
+      timeout: 10000,
+      timeoutMsg: 'source mode did not redraw the callouts as raw text',
+    }
+  );
+  return counts;
 }
 
 /**
- * mgmeyers/obsidian-list-callouts#35: source mode is where the raw markdown
- * is meant to show, so a callout there is the plain `- & text` with nothing
- * drawn over it, no marker, band or highlight color, and the character can
- * be seen and edited as typed. Live preview keeps the rendering, and
+ * Source mode keeps the callout's band and a highlight's color, so the
+ * visual cues survive a switch between modes, and keeps the markdown raw:
+ * no marker widget stands in for the character, which is there to see and
+ * edit as typed (mgmeyers/obsidian-list-callouts#35), tinted in the
+ * callout's color (#49). Live preview keeps the full rendering, and
  * switching between the two redraws on its own, with no edit in between.
  */
+function expectRawRendering(counts: Record<string, number>) {
+  expect(counts['lc-list-callout']).toBeGreaterThan(0);
+  expect(counts['lc-list-bg']).toBe(counts['lc-list-callout']);
+  expect(counts['lc-highlight-callout']).toBeGreaterThan(0);
+  expect(counts['lc-list-marker']).toBe(0);
+  expect(counts['lc-highlight-marker']).toBe(0);
+  expect(counts['lc-raw-marker']).toBe(
+    counts['lc-list-callout'] + counts['lc-highlight-callout']
+  );
+}
+
 describe('Source mode', function () {
   before(async function () {
     await obsidianPage.resetVault();
@@ -90,6 +159,7 @@ describe('Source mode', function () {
   });
 
   after(async function () {
+    await setHideBullets(false);
     await setRendering('live-preview');
   });
 
@@ -99,15 +169,8 @@ describe('Source mode', function () {
       await waitForRendering(false);
     });
 
-    it('draws no callout, marker, band or highlight', async function () {
-      await browser.waitUntil(
-        async () => (await decorationCounts())['lc-list-callout'] === 0,
-        {
-          timeout: 10000,
-          timeoutMsg: 'source mode kept the callout decorations',
-        }
-      );
-      expectNothingDecorated(await decorationCounts());
+    it('keeps the band and highlight color, with no marker widget', async function () {
+      expectRawRendering(await waitForRawRendering());
     });
 
     it('shows the raw text, callout character included', async function () {
@@ -117,16 +180,79 @@ describe('Source mode', function () {
       );
     });
 
-    it('stays plain while the caret moves through a callout', async function () {
+    it('tints the raw character, and only the character, in the callout color', async function () {
+      const markers = await rawMarkers();
+      expect(markers.length).toBeGreaterThan(0);
+      for (const marker of markers) {
+        expect(marker.text).toBe(marker.callout);
+      }
+
+      const paint = await markerPaint(`${EDITOR} .cm-line.lc-list-callout`);
+      expect(paint['&'].painted).toBe('rgb(255, 214, 0)');
+
+      const highlight = await markerPaint(`${EDITOR} .lc-highlight-callout`);
+      expect(highlight['!'].painted).toBe('rgb(255, 23, 68)');
+    });
+
+    it('tints the raw character in a custom marker color', async function () {
+      await setSettings(
+        DEFAULT_SETTINGS.map((c) =>
+          c.char === '&' ? { ...c, markerColor: '10, 20, 30' } : c
+        )
+      );
+      try {
+        await browser.waitUntil(
+          async () =>
+            (await markerPaint(`${EDITOR} .cm-line.lc-list-callout`))['&']
+              ?.painted === 'rgb(10, 20, 30)',
+          {
+            timeout: 10000,
+            timeoutMsg: 'the raw marker did not take the custom marker color',
+          }
+        );
+      } finally {
+        await setSettings(DEFAULT_SETTINGS);
+      }
+    });
+
+    it('stays as it is while the caret moves through a callout', async function () {
+      const before = await waitForRawRendering();
       await placeCursor(5, 4);
       expect(await editorLineText('Important')).toBe('- & Important');
-      expectNothingDecorated(await decorationCounts());
+      expect(await decorationCounts()).toEqual(before);
       await placeCursor(0, 0);
     });
 
     it('captures the rendering for visual inspection', async function () {
       const file = await captureRendering('source-mode');
       expect(file).toContain('source-mode');
+    });
+  });
+
+  describe('with bullets and numbers hidden', function () {
+    before(async function () {
+      await setHideBullets(true);
+    });
+
+    after(async function () {
+      await setHideBullets(false);
+    });
+
+    it('keeps the raw list markers, with no callout marker to stand in for them', async function () {
+      const markers = await listMarkers();
+      expect(markers.length).toBeGreaterThan(0);
+      for (const marker of markers) {
+        expect(marker.text).toMatch(/^(- |\d+\. )$/);
+        expect(marker.shown).toBe(true);
+      }
+      expect(await editorLineText('Ordered callout')).toBe(
+        '1. & Ordered callout'
+      );
+    });
+
+    it('captures the rendering for visual inspection', async function () {
+      const file = await captureRendering('source-mode-hidden-bullets');
+      expect(file).toContain('source-mode-hidden-bullets');
     });
   });
 
@@ -137,10 +263,21 @@ describe('Source mode', function () {
     });
 
     it('decorates the callouts again without an edit', async function () {
-      const counts = await waitForDecorations();
+      let counts: Record<string, number> = {};
+      await browser.waitUntil(
+        async () => {
+          counts = await decorationCounts();
+          return counts['lc-list-marker'] > 0 && counts['lc-raw-marker'] === 0;
+        },
+        {
+          timeout: 10000,
+          timeoutMsg: 'live preview did not put the marker widgets back',
+        }
+      );
       expect(counts['lc-list-marker']).toBe(counts['lc-list-callout']);
       expect(counts['lc-list-bg']).toBe(counts['lc-list-callout']);
       expect(counts['lc-highlight-marker']).toBe(counts['lc-highlight-callout']);
+      expect(counts['lc-raw-marker']).toBe(0);
     });
 
     it('hides the callout character behind its marker', async function () {
@@ -171,7 +308,7 @@ describe('Source mode', function () {
       await waitForRendering(false);
     });
 
-    it('is plain from the first draw', async function () {
+    it('is raw and tinted from the first draw', async function () {
       await browser.waitUntil(
         async () => (await editorLineText('Opened in')) !== '',
         { timeout: 10000, timeoutMsg: 'the note did not open' }
@@ -179,7 +316,16 @@ describe('Source mode', function () {
       expect(await editorLineText('Opened in')).toBe(
         '1. & Opened in source mode'
       );
-      expectNothingDecorated(await decorationCounts());
+      await browser.waitUntil(
+        async () => (await decorationCounts())['lc-list-callout'] === 1,
+        { timeout: 10000, timeoutMsg: 'the note was not decorated' }
+      );
+      expect(await decorationCounts()).toMatchObject({
+        'lc-list-callout': 1,
+        'lc-list-bg': 1,
+        'lc-raw-marker': 1,
+        'lc-list-marker': 0,
+      });
     });
   });
 });
