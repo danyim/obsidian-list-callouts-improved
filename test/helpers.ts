@@ -1569,3 +1569,78 @@ export function listItemGeometry(root: string): Promise<ListItemGeometry[]> {
     });
   }, root);
 }
+
+const THEME_RULE_ID = 'lc-test-theme-rule';
+
+/**
+ * Add a stylesheet to the app, the way a theme or CSS snippet would, so a
+ * test can see what the plugin's own styling does under one that paints the
+ * same elements. One at a time; `removeThemeRule` takes it out again.
+ */
+export async function applyThemeRule(css: string): Promise<void> {
+  await browser.executeObsidian(
+    ({ app }, id, text) => {
+      const doc = app.workspace.containerEl.ownerDocument;
+      doc.getElementById(id)?.remove();
+      const style = doc.createElement('style');
+      style.id = id;
+      style.textContent = text;
+      doc.head.appendChild(style);
+    },
+    THEME_RULE_ID,
+    css
+  );
+}
+
+export async function removeThemeRule(): Promise<void> {
+  await browser.executeObsidian(({ app }, id) => {
+    app.workspace.containerEl.ownerDocument.getElementById(id)?.remove();
+  }, THEME_RULE_ID);
+}
+
+export interface HighlightTextColors {
+  /** Computed text color of a list callout's line or item. */
+  listCallout: string;
+  /** Computed text color of the plain `==highlight==`, undecorated. */
+  plain: string;
+  /** Computed text color of every callout highlight's text, by character. */
+  callouts: Record<string, string>;
+}
+
+/**
+ * The colors the text is actually painted in, from the element the text node
+ * sits in: the <mark> itself in reading view, and in the editor Obsidian's
+ * own span.cm-highlight, which is nested inside the plugin's and so is what
+ * the text inherits from.
+ */
+export function highlightTextColors(
+  view: 'editor' | 'reading'
+): Promise<HighlightTextColors> {
+  return browser.executeObsidian(({ app }, which) => {
+    const root = app.workspace.containerEl.querySelector<HTMLElement>(
+      which === 'editor' ? '.markdown-source-view' : '.markdown-reading-view'
+    );
+    const textEl = (el: Element): Element =>
+      which === 'editor' ? (el.querySelector('span.cm-highlight') ?? el) : el;
+    const color = (el: Element) => getComputedStyle(textEl(el)).color;
+
+    const listCallout = root.querySelector('.lc-list-callout');
+    const plain = Array.from(
+      root.querySelectorAll('mark, span.cm-highlight')
+    ).find(
+      (el) =>
+        el.textContent === 'highlight' && !el.closest('.lc-highlight-callout')
+    );
+    const callouts: Record<string, string> = {};
+    for (const el of Array.from(
+      root.querySelectorAll<HTMLElement>('.lc-highlight-callout')
+    )) {
+      callouts[el.getAttribute('data-callout')] = color(el);
+    }
+    return {
+      listCallout: listCallout ? getComputedStyle(listCallout).color : '',
+      plain: plain ? getComputedStyle(plain).color : '',
+      callouts,
+    };
+  }, view);
+}

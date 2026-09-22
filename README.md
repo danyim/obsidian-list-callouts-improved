@@ -55,6 +55,10 @@ A highlight that runs across a line break is colored as one in both the editor a
 
 ![A paragraph, a list, a callout block and a table, each holding highlights in different callout colors, two of them running across a line break, shown in light and dark mode](screenshots/highlight-multiline.png)
 
+A callout highlight's text keeps the normal text color, the same as a list callout's. Under a theme that gives highlighted text a color of its own, a plain highlight takes the theme's color and a callout highlight does not:
+
+![A paragraph with a plain highlight in a theme's own text color, and below it a list callout with a callout highlight inside, both in the normal text color, shown in light and dark mode](screenshots/highlight-foreground.png)
+
 ## Managing callouts
 
 Callouts are defined in one list. A new vault starts with the seven shown above, and any of them can be edited, reordered by dragging, or deleted, built-in ones included.
