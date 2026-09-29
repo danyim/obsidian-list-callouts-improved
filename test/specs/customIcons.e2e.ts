@@ -46,16 +46,17 @@ async function loadAllCustomIcons(): Promise<void> {
 }
 
 /**
- * Record the path of every file read from the icon folder from here on, until
+ * Record the name of every file read from the icon folder from here on, until
  * the next reloadObsidian, so a test can tell which icons were read.
  */
 function recordIconReads(): Promise<void> {
   return browser.executeObsidian(({ app }) => {
     const adapter = app.vault.adapter as any;
     const read = adapter.read.bind(adapter);
+    const folder = `${app.vault.configDir}/icons/`;
     const reads: string[] = ((window as any).__lcIconReads = []);
     adapter.read = (path: string) => {
-      if (path.includes('/icons/')) reads.push(path);
+      if (path.startsWith(folder)) reads.push(path.slice(folder.length));
       return read(path);
     };
   });
@@ -120,7 +121,7 @@ describe('Custom icons from the vault', function () {
     await reenablePlugin();
     await customIconsReady();
 
-    expect(await iconReads()).toEqual(['.obsidian/icons/My Fancy Mark.svg']);
+    expect(await iconReads()).toEqual(['My Fancy Mark.svg']);
     expect(await customIconIds()).toEqual(['my-fancy-mark']);
   });
 
