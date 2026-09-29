@@ -340,6 +340,24 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
   );
 }
 
+/* The text keeps the normal text color, the same as a list callout's text,
+   which the plugin never recolors. Obsidian paints highlighted text
+   --text-normal already, but a theme that wants dark text on its yellow
+   overrides that on the same elements (`.markdown-rendered mark` and the
+   editor's span.cm-highlight), and over the callout's faint band that
+   color read as a different thing from the list callout beside it. Set
+   where the text actually inherits it from: the <mark> itself in reading
+   view, and in the editor Obsidian's span, nested inside ours.
+
+   A theme's stylesheet comes after this one, so a tie in specificity goes
+   to the theme, and a theme that colors highlighted text per scheme does
+   it from `.theme-dark` or `.theme-light`, a class above Obsidian's own
+   rule. Matching the attribute the mark carries anyway puts these a class
+   above that in turn, without an !important. */
+.markdown-rendered mark.lc-highlight-callout[data-callout] {
+  color: var(--text-normal);
+}
+
 /* CodeMirror nests Obsidian's own highlight span inside our mark (the mark
    is an outer decoration, see highlightDecoration in extension.ts, which is
    what keeps this a descendant selector rather than a `:has()`). Paint the
@@ -348,6 +366,10 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
    at least that specific or its yellow stays underneath every highlight. */
 .cm-s-obsidian .lc-highlight-callout span.cm-highlight {
   background-color: transparent;
+}
+
+.cm-s-obsidian .lc-highlight-callout[data-callout] span.cm-highlight {
+  color: var(--text-normal);
 }
 
 /* Styled like the list marker, so a highlight's character reads as the

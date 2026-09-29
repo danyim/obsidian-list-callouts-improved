@@ -5,20 +5,35 @@ import { obsidianPage } from 'wdio-obsidian-service';
 import { DEFAULT_HIGHLIGHT_SETTINGS, DEFAULT_SETTINGS } from '../../src/settings';
 import {
   RenderedHighlight,
+  applyThemeRule,
   editorHighlights,
   editorLineNumber,
   editorLineText,
   ensureEditingMode,
   ensureReadingMode,
+  highlightTextColors,
   openNote,
   placeCursor,
   readingHighlights,
+  removeThemeRule,
   rerenderReadingView,
   setHighlights,
   setSettings,
 } from '../helpers';
 
 const BUILT_IN_CHARS = ['&', '?', '!', '~', '@', '$', '%'];
+
+/**
+ * What a theme does to highlighted text: Obsidian paints it --text-normal,
+ * and a theme that wants dark text on its yellow overrides that on the same
+ * elements, one color per scheme, from a stylesheet that comes after the
+ * plugin's. Odd enough a color that nothing else on the page has it.
+ */
+const THEME_HIGHLIGHT_TEXT = [
+  '.markdown-rendered mark, .cm-s-obsidian span.cm-highlight { color: rgb(1, 2, 3); }',
+  '.theme-light .markdown-rendered mark, .theme-dark .markdown-rendered mark,',
+  '.theme-light .cm-s-obsidian span.cm-highlight, .theme-dark .cm-s-obsidian span.cm-highlight { color: rgb(120, 60, 0); }',
+].join('\n');
 
 /** The built-ins with a star on `&`, so one highlight shows an icon. */
 function withStar() {
@@ -190,6 +205,27 @@ describe('Highlight rendering in live preview', function () {
     expect(spans.some((s) => s.text === 'highlight')).toBe(false);
   });
 
+  // A list callout's text is never recolored, so under a theme that gives
+  // highlighted text a color of its own, a callout highlight's text went that
+  // color while the list callout's stayed put. Both now read the same.
+  it('paints the text the same color as a list callout under a theme', async function () {
+    await applyThemeRule(THEME_HIGHLIGHT_TEXT);
+    try {
+      const colors = await highlightTextColors('editor');
+
+      expect(colors.plain).toBe('rgb(120, 60, 0)');
+      expect(colors.listCallout).not.toBe('rgb(120, 60, 0)');
+      expect(Object.keys(colors.callouts)).toEqual(
+        expect.arrayContaining(BUILT_IN_CHARS)
+      );
+      for (const color of Object.values(colors.callouts)) {
+        expect(color).toBe(colors.listCallout);
+      }
+    } finally {
+      await removeThemeRule();
+    }
+  });
+
   it('never decorates highlights inside code', async function () {
     const spans = await editorHighlights();
 
@@ -324,6 +360,24 @@ describe('Highlight rendering in reading mode', function () {
     expect(plain).toBeDefined();
     expect(plain.char).toBeNull();
     expect(plain.color).toBe('');
+  });
+
+  it('paints the text the same color as a list callout under a theme', async function () {
+    await applyThemeRule(THEME_HIGHLIGHT_TEXT);
+    try {
+      const colors = await highlightTextColors('reading');
+
+      expect(colors.plain).toBe('rgb(120, 60, 0)');
+      expect(colors.listCallout).not.toBe('rgb(120, 60, 0)');
+      expect(Object.keys(colors.callouts)).toEqual(
+        expect.arrayContaining(BUILT_IN_CHARS)
+      );
+      for (const color of Object.values(colors.callouts)) {
+        expect(color).toBe(colors.listCallout);
+      }
+    } finally {
+      await removeThemeRule();
+    }
   });
 
   it('never decorates highlights inside code', async function () {

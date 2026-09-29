@@ -22,11 +22,13 @@ import * as path from 'path';
 
 import type { Callout } from '../../src/settings';
 import {
+  applyThemeRule,
   editorText,
   isMobile,
   openNote,
   openPluginSettings,
   reloadPlugin,
+  removeThemeRule,
   setColorNestedItems,
   setEditorText,
   setHideBullets,
@@ -1774,6 +1776,33 @@ describe('README screenshots', function () {
       true,
       '.markdown-source-view table .lc-highlight-callout'
     );
+  });
+
+  it('captures the highlight rendering under a theme', async function () {
+    // The default theme paints highlighted text --text-normal, so what the
+    // plugin does to a callout highlight's text only shows under a theme
+    // that gives highlighted text a color of its own. Stand in for one with
+    // a rule on the same elements a theme would restyle, one color per
+    // scheme as a theme would choose: the plain highlight takes it, the
+    // callout highlight beside the list callout does not.
+    await openNote('Highlight foreground.md');
+    await setSettings(callouts(true));
+    await applyThemeRule(
+      [
+        '.theme-light .markdown-rendered mark, .theme-light .cm-s-obsidian span.cm-highlight { color: rgb(176, 96, 0); }',
+        '.theme-dark .markdown-rendered mark, .theme-dark .cm-s-obsidian span.cm-highlight { color: rgb(255, 213, 79); }',
+      ].join('\n')
+    );
+    try {
+      await captureEditor(
+        'highlight-foreground.png',
+        true,
+        true,
+        '.lc-highlight-callout'
+      );
+    } finally {
+      await removeThemeRule();
+    }
   });
 
   it('captures the whole settings tab', async function () {
