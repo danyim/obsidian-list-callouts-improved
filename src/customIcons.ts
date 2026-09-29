@@ -143,59 +143,151 @@ export function svgToIconBody(source: string): string {
   return `<g ${attributes} transform="${transform}">${body}</g>`;
 }
 
-export interface CustomIconLoad {
-  /** Ids registered with Obsidian, in the order the picker will show them. */
-  registered: string[];
-  /** Files that could not be used, with the reason. */
-  skipped: { file: string; reason: string }[];
-}
+/**
+ * How many icon files are read at once when the whole folder is wanted. One
+ * at a time, a vault with a few thousand icons took over forty seconds on
+ * Windows (#50); a handful in flight hides most of each read's latency
+ * without flooding the adapter.
+ */
+const READ_CONCURRENCY = 16;
 
 /**
- * Register every SVG in the custom icon folder.
+ * The vault's custom icons, registered only as they are needed.
  *
- * Ids that an Obsidian icon already uses are left alone: overwriting one would
- * change an icon the rest of the app draws.
+ * Listing the folder is one call, but registering an icon is a file read,
+ * and some vaults keep thousands of them there for Iconize. So at startup
+ * only the icons a callout actually uses are read; the rest wait until the
+ * icon picker asks for all of them.
  */
-export async function loadCustomIcons(app: App): Promise<CustomIconLoad> {
-  const folder = customIconFolder(app);
-  const result: CustomIconLoad = { registered: [], skipped: [] };
+export class CustomIcons {
+  /** Ids registered with Obsidian, in the order they were registered. */
+  readonly registered: string[] = [];
 
-  if (!(await app.vault.adapter.exists(folder))) {
-    return result;
+  /** Listed icons not yet read: id to file path, in file name order. */
+  private unread = new Map<string, string>();
+
+  /** Reads in flight, so an icon asked for twice is read once. */
+  private reading = new Map<string, Promise<boolean>>();
+
+  private listed: Promise<void> | null = null;
+  private everything: Promise<boolean> | null = null;
+  private unloaded = false;
+
+  constructor(
+    private app: App,
+    private warn: (file: string, reason: string) => void
+  ) {}
+
+  /**
+   * List the icon folder, once. Ids that an Obsidian icon already uses are
+   * left alone: overwriting one would change an icon the rest of the app
+   * draws.
+   */
+  list(): Promise<void> {
+    return (this.listed ??= this.readListing());
   }
 
-  const listing = await app.vault.adapter.list(folder);
-  const taken = new Set(getIconIds());
+  private async readListing(): Promise<void> {
+    const folder = customIconFolder(this.app);
 
-  for (const file of listing.files.sort()) {
-    if (!file.toLowerCase().endsWith('.svg')) continue;
+    if (!(await this.app.vault.adapter.exists(folder))) return;
 
-    const id = iconIdFromFile(file);
+    const listing = await this.app.vault.adapter.list(folder);
+    const taken = new Set(getIconIds());
 
-    if (!id) {
-      result.skipped.push({ file, reason: 'name has no usable characters' });
-      continue;
+    for (const file of listing.files.sort()) {
+      if (!file.toLowerCase().endsWith('.svg')) continue;
+
+      const id = iconIdFromFile(file);
+
+      if (!id) {
+        this.warn(file, 'name has no usable characters');
+      } else if (taken.has(id) || this.unread.has(id)) {
+        this.warn(file, `"${id}" is already an icon`);
+      } else {
+        this.unread.set(id, file);
+      }
     }
+  }
 
-    if (taken.has(id)) {
-      result.skipped.push({ file, reason: `"${id}" is already an icon` });
-      continue;
-    }
+  /**
+   * Register those of `ids` that name a listed icon not read yet. Resolves
+   * true when any of them was registered. Ids that are not custom icons are
+   * ignored, so a caller can pass every icon its settings mention.
+   */
+  async load(ids: Iterable<string>): Promise<boolean> {
+    await this.list();
+
+    const reads = [...new Set(ids)].map((id) => this.read(id));
+    return (await Promise.all(reads)).some(Boolean);
+  }
+
+  /**
+   * Register every listed icon, once, for the picker. Resolves true when any
+   * icon was registered by this call or an earlier one still running.
+   */
+  loadAll(): Promise<boolean> {
+    return (this.everything ??= this.readAll());
+  }
+
+  private async readAll(): Promise<boolean> {
+    await this.list();
+
+    const queue = [...this.unread.keys(), ...this.reading.keys()];
+    let any = false;
+
+    const worker = async () => {
+      for (let id = queue.shift(); id; id = queue.shift()) {
+        if (await this.read(id)) any = true;
+      }
+    };
+
+    await Promise.all(Array.from({ length: READ_CONCURRENCY }, worker));
+    return any;
+  }
+
+  private read(id: string): Promise<boolean> {
+    const inFlight = this.reading.get(id);
+    if (inFlight !== undefined) return inFlight;
+
+    const file = this.unread.get(id);
+    if (!file) return Promise.resolve(false);
+
+    this.unread.delete(id);
+
+    const reading = this.readOne(id, file).finally(() => {
+      this.reading.delete(id);
+    });
+    this.reading.set(id, reading);
+    return reading;
+  }
+
+  private async readOne(id: string, file: string): Promise<boolean> {
+    let body: string;
 
     try {
-      addIcon(id, svgToIconBody(await app.vault.adapter.read(file)));
-      taken.add(id);
-      result.registered.push(id);
+      body = svgToIconBody(await this.app.vault.adapter.read(file));
     } catch (e) {
-      result.skipped.push({ file, reason: (e as Error).message });
+      this.warn(file, (e as Error).message);
+      return false;
     }
+
+    // Unloaded while the file was being read: nothing would remove it.
+    if (this.unloaded) return false;
+
+    addIcon(id, body);
+    this.registered.push(id);
+    return true;
   }
 
-  return result;
-}
+  /** Hand back every registered icon; reads still in flight register none. */
+  unload(): void {
+    this.unloaded = true;
 
-export function unloadCustomIcons(ids: string[]): void {
-  for (const id of ids) {
-    removeIcon(id);
+    for (const id of this.registered) {
+      removeIcon(id);
+    }
+
+    this.registered.length = 0;
   }
 }

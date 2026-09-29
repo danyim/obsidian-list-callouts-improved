@@ -80,6 +80,7 @@ const ICON_PAGE_SIZE = 120;
 
 function attachIconMenu(
   btn: ButtonComponent,
+  loadAllIcons: () => Promise<boolean>,
   onSelect: (icon: null | string) => void
 ) {
   let menuRef: HTMLDivElement = null;
@@ -216,6 +217,8 @@ function attachIconMenu(
           }
         ));
 
+      let searchInput: HTMLInputElement;
+
       // The icons still to be added to the list, in display order.
       let pending: string[] = [];
 
@@ -255,6 +258,7 @@ function attachIconMenu(
             },
           },
           (input) => {
+            searchInput = input;
             window.setTimeout(() => {
               input.focus();
             });
@@ -279,6 +283,23 @@ function attachIconMenu(
       });
 
       showIcons(allIconIds());
+
+      // The vault's own icons are only read once a picker asks for them, and
+      // a folder of thousands takes a while, so the picker opens on what is
+      // registered and takes the rest in when they land, keeping its place.
+      void loadAllIcons().then((added) => {
+        if (!added || menuRef !== menu) return;
+
+        const top = iconList.scrollTop;
+        showIcons(searchIcons(searchInput.value));
+        while (
+          pending.length &&
+          iconList.scrollHeight < top + iconList.clientHeight
+        ) {
+          showMore();
+        }
+        iconList.scrollTop = top;
+      });
     });
 
     btnEl.win.setTimeout(() => {
@@ -391,6 +412,7 @@ function buildMarkerColorControls(
  */
 function buildIconControls(
   container: HTMLElement,
+  plugin: ListCalloutsPlugin,
   callout: Callout,
   onChange: () => void
 ) {
@@ -415,15 +437,19 @@ function buildIconControls(
     clearBtn.extraSettingsEl.toggle(!!callout.icon);
   };
 
-  attachIconMenu(iconBtn, (icon) => {
-    if (icon == null) {
-      delete callout.icon;
-    } else {
-      callout.icon = icon;
+  attachIconMenu(
+    iconBtn,
+    () => plugin.loadAllIcons(),
+    (icon) => {
+      if (icon == null) {
+        delete callout.icon;
+      } else {
+        callout.icon = icon;
+      }
+      render();
+      onChange();
     }
-    render();
-    onChange();
-  });
+  );
 
   render();
 }
@@ -477,7 +503,7 @@ export function buildCalloutRow(
     redrawPreview();
   });
 
-  buildIconControls(inputContainer, plugin.settings[index], onChange);
+  buildIconControls(inputContainer, plugin, plugin.settings[index], onChange);
   buildMarkerColorControls(inputContainer, plugin.settings[index], onChange);
 }
 
@@ -523,7 +549,9 @@ export class NewCalloutModal extends Modal {
         redraw();
       });
 
-    buildIconControls(inputContainer, this.callout, () => redraw());
+    buildIconControls(inputContainer, this.plugin, this.callout, () =>
+      redraw()
+    );
     buildMarkerColorControls(inputContainer, this.callout, () => redraw());
 
     const errorEl = this.contentEl.createDiv({ cls: 'lc-error' });

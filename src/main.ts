@@ -4,7 +4,7 @@ import escapeStringRegexp from 'escape-string-regexp';
 import { Editor, EditorChange, MarkdownView, Plugin, debounce } from 'obsidian';
 
 import { cycleCalloutChanges, removeCalloutChanges } from './commands';
-import { loadCustomIcons, unloadCustomIcons } from './customIcons';
+import { CustomIcons } from './customIcons';
 import {
   BuildStats,
   buildCalloutDecos,
@@ -52,14 +52,19 @@ export default class ListCalloutsPlugin extends Plugin {
   /** The settings tab, kept so structural changes can ask it to re-read. */
   settingTab: ListCalloutSettingTab;
 
-  /** Icon ids registered from the vault's icon folder, to unregister on unload. */
-  customIconIds: string[] = [];
+  /** The vault's own SVG icons, registered as the callouts need them. */
+  customIcons: CustomIcons;
+
+  /** Icon ids registered from the vault's icon folder so far. */
+  get customIconIds(): string[] {
+    return this.customIcons?.registered ?? [];
+  }
 
   /**
-   * Settled once the vault's icon folder has been read and its icons
-   * registered, which happens after Obsidian's layout is up rather than during
-   * load. A seam for the tests, which otherwise have no way to know whether a
-   * fresh Obsidian has got that far.
+   * Settled once the vault's icon folder has been listed and the icons the
+   * callouts use registered, which happens after Obsidian's layout is up
+   * rather than during load. A seam for the tests, which otherwise have no
+   * way to know whether a fresh Obsidian has got that far.
    */
   customIconsReady: Promise<void> = Promise.resolve();
 
@@ -131,26 +136,25 @@ export default class ListCalloutsPlugin extends Plugin {
 
     // Obsidian enables plugins one after another and counts the wait for
     // each `onload` against that plugin, prompting to disable one that runs
-    // past a few seconds. Reading the icon folder is a file read per icon,
-    // and on a slow disk or a cloud-synced vault that alone ran to twenty
-    // seconds (#50). So the folder is read once the layout is up, and the
-    // markers drawn without their icons in the meantime are redrawn. The
-    // legacy check is one more read that nothing needs before the settings
-    // tab opens, which checks again anyway.
+    // past a few seconds. Registering an icon from the vault's icon folder
+    // is a file read, and a vault with thousands of them ran to forty seconds
+    // (#50). So the folder is read once the layout is up, and then only for
+    // the icons the callouts use; the markers drawn without them in the
+    // meantime are redrawn. The rest are read when the icon picker opens.
+    // The legacy check is one more read that nothing needs before the
+    // settings tab opens, which checks again anyway.
+    this.customIcons = new CustomIcons(this.app, (file, reason) => {
+      console.warn(
+        `List Callouts, Improved: skipped custom icon ${file}: ${reason}`
+      );
+    });
     this.customIconsReady = new Promise((resolve) => {
       this.app.workspace.onLayoutReady(() => {
         void legacySettingsExist(this.app).then((available) => {
           this.legacyDataAvailable = available;
         });
 
-        this.registerCustomIcons()
-          .catch((e: unknown) => {
-            console.error(
-              'List Callouts, Improved: could not read custom icons',
-              e
-            );
-          })
-          .finally(resolve);
+        void this.loadUsedIcons().finally(resolve);
       });
     });
 
@@ -173,8 +177,7 @@ export default class ListCalloutsPlugin extends Plugin {
 
   onunload() {
     // These are registered globally, so hand them back when the plugin goes.
-    unloadCustomIcons(this.customIconIds);
-    this.customIconIds = [];
+    this.customIcons.unload();
     for (const doc of this.documents()) {
       doc.body.removeClass(HIDE_BULLETS_CLASS);
     }
@@ -232,22 +235,32 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   /**
-   * Register the vault's own SVG icons so they show up in the icon picker
-   * alongside the ones Obsidian ships, then redraw whatever was rendered
-   * while they were still being read.
+   * Register the vault's own SVG icons that a callout uses, then redraw
+   * whatever was rendered while they were still being read.
    */
-  async registerCustomIcons(): Promise<void> {
-    const { registered, skipped } = await loadCustomIcons(this.app);
+  async loadUsedIcons(): Promise<void> {
+    const used = this.settings.flatMap((callout) =>
+      callout.icon ? [callout.icon] : []
+    );
 
-    this.customIconIds = registered;
-
-    for (const { file, reason } of skipped) {
-      console.warn(
-        `List Callouts, Improved: skipped custom icon ${file}: ${reason}`
-      );
+    try {
+      if (await this.customIcons.load(used)) this.redrawIcons();
+    } catch (e) {
+      console.error('List Callouts, Improved: could not read custom icons', e);
     }
+  }
 
-    if (registered.length) this.redrawIcons();
+  /**
+   * Register every icon in the vault's icon folder, for the icon picker.
+   * Resolves true when that added any, so an open picker knows to refresh.
+   */
+  async loadAllIcons(): Promise<boolean> {
+    try {
+      return await this.customIcons.loadAll();
+    } catch (e) {
+      console.error('List Callouts, Improved: could not read custom icons', e);
+      return false;
+    }
   }
 
   /**
@@ -451,6 +464,8 @@ export default class ListCalloutsPlugin extends Plugin {
 
     await this.saveData(data);
     this.emitSettingsUpdate();
+    // An import can bring in callouts whose custom icons were never read.
+    void this.loadUsedIcons();
     this.buildPostProcessorConfig();
     this.applyHideBullets();
     this.applyColorNestedItems();

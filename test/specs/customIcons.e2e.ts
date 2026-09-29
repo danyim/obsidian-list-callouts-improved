@@ -1,7 +1,18 @@
 import { browser, expect } from '@wdio/globals';
 import { before, describe, it } from 'mocha';
 
-import { getSettings, openNote, setRendering, setSettings } from '../helpers';
+import {
+  clickAddCallout,
+  closeSettings,
+  dismissModal,
+  getSettings,
+  openIconMenuInModal,
+  openNote,
+  openPluginSettings,
+  searchIconMenuFor,
+  setRendering,
+  setSettings,
+} from '../helpers';
 
 /**
  * Wait for the plugin to finish reading the vault's icon folder. It does that
@@ -21,6 +32,38 @@ async function customIconIds(): Promise<string[]> {
   return browser.executeObsidian(({ app }) => {
     return (app as any).plugins.plugins['list-callouts-improved'].customIconIds;
   }) as Promise<string[]>;
+}
+
+/**
+ * Register every icon in the folder, as opening the icon picker does. At
+ * startup only the ones a callout uses are read.
+ */
+async function loadAllCustomIcons(): Promise<void> {
+  await customIconsReady();
+  await browser.executeObsidian(async ({ app }) => {
+    await (app as any).plugins.plugins['list-callouts-improved'].loadAllIcons();
+  });
+}
+
+/**
+ * Record the name of every file read from the icon folder from here on, until
+ * the next reloadObsidian, so a test can tell which icons were read.
+ */
+function recordIconReads(): Promise<void> {
+  return browser.executeObsidian(({ app }) => {
+    const adapter = app.vault.adapter as any;
+    const read = adapter.read.bind(adapter);
+    const folder = `${app.vault.configDir}/icons/`;
+    const reads: string[] = ((window as any).__lcIconReads = []);
+    adapter.read = (path: string) => {
+      if (path.startsWith(folder)) reads.push(path.slice(folder.length));
+      return read(path);
+    };
+  });
+}
+
+function iconReads(): Promise<string[]> {
+  return browser.executeObsidian(() => (window as any).__lcIconReads);
 }
 
 /**
@@ -63,7 +106,50 @@ describe('Custom icons from the vault', function () {
     await browser.reloadObsidian({ vault: 'test/vaults/icons' });
   });
 
+  it('reads no icon at startup when no callout uses one', async function () {
+    // Some vaults keep thousands of icons here for Iconize, and reading each
+    // one ran startup to forty seconds (#50).
+    expect(await customIconIds()).toEqual([]);
+  });
+
+  it('reads only the icons the callouts use at startup', async function () {
+    const settings = await getSettings();
+    settings[0].icon = 'my-fancy-mark';
+    await setSettings(settings);
+
+    await recordIconReads();
+    await reenablePlugin();
+    await customIconsReady();
+
+    expect(await iconReads()).toEqual(['My Fancy Mark.svg']);
+    expect(await customIconIds()).toEqual(['my-fancy-mark']);
+  });
+
+  it('registers the rest of the folder when the icon picker opens', async function () {
+    expect(await customIconIds()).not.toContain('scripted');
+
+    await openPluginSettings();
+    await clickAddCallout();
+    await openIconMenuInModal();
+
+    await browser.waitUntil(
+      async () => (await customIconIds()).includes('scripted'),
+      {
+        timeout: 10000,
+        interval: 200,
+        timeoutMsg: 'opening the picker never registered the unused icon',
+      }
+    );
+    // The list is built a page at a time and custom icons come last, so
+    // search for it rather than expecting it on the first page.
+    await searchIconMenuFor('scripted', 'scripted');
+
+    await dismissModal();
+    await closeSettings();
+  });
+
   it('registers an SVG dropped in the icon folder', async function () {
+    await loadAllCustomIcons();
     // "My Fancy Mark.svg" becomes "my-fancy-mark".
     expect(await customIconIds()).toContain('my-fancy-mark');
     expect(await iconRegistered('my-fancy-mark')).toBe(true);
