@@ -22,6 +22,7 @@ import {
 import { editorLivePreviewField, setIcon } from 'obsidian';
 
 import { Callout, CalloutConfig, calloutColorStyle } from './settings';
+import { calloutTag, tagMatches } from './tags';
 
 export const setConfig = StateEffect.define<CalloutConfig>();
 
@@ -79,23 +80,28 @@ export class CalloutMarker extends WidgetType {
   char: string;
   icon?: string;
   revision?: number;
+  /** Standing in for a tag (#58), whose name the icon is labelled with. */
+  tag: boolean;
 
-  constructor(char: string, icon?: string, revision?: number) {
+  constructor(char: string, icon?: string, revision?: number, tag = false) {
     super();
 
     this.char = char;
     this.icon = icon;
     this.revision = revision;
+    this.tag = tag;
   }
 
   toDOM() {
     return createSpan(
       {
         text: this.char,
-        cls: 'lc-list-marker',
-        attr: {
-          'aria-hidden': 'true',
-        },
+        cls: this.tag ? 'lc-list-marker lc-tag-marker' : 'lc-list-marker',
+        attr: this.tag
+          ? { 'aria-label': this.char }
+          : {
+              'aria-hidden': 'true',
+            },
       },
       (s) => {
         if (this.icon) {
@@ -109,7 +115,8 @@ export class CalloutMarker extends WidgetType {
     return (
       widget.char === this.char &&
       widget.icon === this.icon &&
-      widget.revision === this.revision
+      widget.revision === this.revision &&
+      widget.tag === this.tag
     );
   }
 }
@@ -324,18 +331,92 @@ interface Ancestor {
   callout: Callout;
 }
 
+/** A list item's marker and any task checkbox, which a tag search skips. */
+const LIST_PREFIX = /^\s*(?:[-*+]|\d+[.)])(?: \[.\])? /;
+
+/** A callout item's line, and where on it the callout was named. */
+interface CalloutHead {
+  callout: Callout;
+  /** The span of the callout character, or of the tag. */
+  markerFrom: number;
+  markerTo: number;
+  /**
+   * The tag as written, when the callout was found by one (#58). A tag can
+   * sit anywhere in the line and is text the user reads, so it is only
+   * swapped for a marker when that marker is an icon.
+   */
+  tag?: string;
+}
+
 /**
- * The callout item `line` starts, if it is one. The match is also handed
- * back, since the marker is replaced at a position taken from it.
+ * Whether the `#` at `pos` starts a tag rather than, say, text in inline
+ * code. Taken on trust when the parser has not reached it, for the same
+ * reason isListLine is.
  */
+function isTagAt(state: EditorState, pos: number): boolean {
+  if (!syntaxTreeAvailable(state, pos + 1)) return true;
+
+  const prop = syntaxTree(state)
+    .resolveInner(pos, 1)
+    .type.prop(tokenClassNodeProp);
+
+  return !!prop && /hashtag/.test(prop);
+}
+
+/**
+ * The first tag on `line` with a callout, past the list marker. Leading
+ * callout characters are matched first, so an item that starts with one
+ * keeps that callout whatever tags follow.
+ */
+function tagHeadAt(
+  state: EditorState,
+  tags: Record<string, Callout>,
+  line: Line
+): CalloutHead | null {
+  if (!line.text.includes('#')) return null;
+
+  const prefix = LIST_PREFIX.exec(line.text);
+  if (!prefix) return null;
+
+  for (const match of tagMatches(line.text, tags, prefix[0].length)) {
+    if (!isTagAt(state, line.from + match.from)) continue;
+    return {
+      callout: match.callout,
+      markerFrom: line.from + match.from,
+      markerTo: line.from + match.to,
+      tag: match.text,
+    };
+  }
+
+  return null;
+}
+
+/** The callout item `line` starts, if it is one. */
 function calloutHeadAt(
   state: EditorState,
   config: CalloutConfig,
   line: Line
-): { callout: Callout; match: RegExpMatchArray } | null {
+): CalloutHead | null {
   const match = config.re ? line.text.match(config.re) : null;
-  const callout = match ? config.callouts[match[2]] : null;
-  return callout && isListLine(state, line) ? { callout, match } : null;
+  let callout = match ? config.callouts[match[2]] : null;
+
+  // With tag callouts on, one at the start of the item is a tag like any
+  // other, found below with the rest.
+  if (callout && config.tags && calloutTag(callout) !== null) callout = null;
+
+  let head: CalloutHead | null = null;
+  if (callout) {
+    const markerFrom = line.from + match[1].length;
+    head = {
+      callout,
+      markerFrom,
+      markerTo: markerFrom + callout.char.length,
+    };
+  } else if (config.tags) {
+    head = tagHeadAt(state, config.tags, line);
+  }
+
+  return head && isListLine(state, line) ? head : null;
 }
 
 /**
@@ -468,6 +549,8 @@ function selectionTouches(
 export interface BuildStats {
   /** Confirmed highlights, hidden or revealed. */
   highlights: number;
+  /** Tags drawn as their callout's icon, or revealed for the caret. */
+  tagIcons?: number;
 }
 
 /** The two decoration sets one build produces, one per facet. */
@@ -623,6 +706,35 @@ function addHighlightDecos(
   );
 }
 
+/**
+ * Swap a tag that named a callout for the callout's icon, in Live Preview.
+ * The tag is left as Obsidian draws it when the callout has no icon, since
+ * the tag's own text is then all a marker could show, and in source mode,
+ * which shows the markdown as typed. While the selection touches it, the
+ * tag is shown as well, so it can be edited, as a highlight's `==& ` is.
+ */
+function addTagMarker(
+  builder: RangeSetBuilder<Decoration>,
+  state: EditorState,
+  head: CalloutHead,
+  revision: number | undefined,
+  stats?: BuildStats
+) {
+  const { callout, markerFrom, markerTo, tag } = head;
+  if (!callout.icon || !isLivePreview(state)) return;
+
+  if (stats) stats.tagIcons = (stats.tagIcons ?? 0) + 1;
+  if (selectionTouches(state, markerFrom, markerTo)) return;
+
+  builder.add(
+    markerFrom,
+    markerTo,
+    Decoration.replace({
+      widget: new CalloutMarker(tag, callout.icon, revision, true),
+    })
+  );
+}
+
 /** Whether the editor is in Live Preview, as opposed to source mode. */
 function isLivePreview(state: EditorState): boolean {
   return state.field(editorLivePreviewField, false) ?? false;
@@ -740,14 +852,14 @@ export function buildCalloutDecos(
           Decoration.widget({ widget: new CalloutBackground(), side: -1 })
         );
 
-        if (head) {
-          const labelPos = line.from + head.match[1].length;
-
+        if (head?.tag) {
+          addTagMarker(builder, state, head, config.iconRevision, stats);
+        } else if (head) {
           // Decorate the callout marker: the widget in place of the
           // character, or the character itself, tinted, in source mode.
           builder.add(
-            labelPos,
-            labelPos + run.char.length,
+            head.markerFrom,
+            head.markerTo,
             livePreview
               ? Decoration.replace({
                   widget: new CalloutMarker(
@@ -917,7 +1029,11 @@ export const calloutExtension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet = Decoration.none;
     outerDecorations: DecorationSet = Decoration.none;
-    hasHighlights = false;
+    /**
+     * Whether anything on screen is drawn one way or the other depending on
+     * the caret: a highlight's marker, or a tag swapped for its icon.
+     */
+    followsCaret = false;
 
     /** Whether a failed build has been logged for this editor already. */
     private reported = false;
@@ -946,7 +1062,7 @@ export const calloutExtension = ViewPlugin.fromClass(
       } catch (e) {
         this.decorations = Decoration.none;
         this.outerDecorations = Decoration.none;
-        this.hasHighlights = false;
+        this.followsCaret = false;
 
         if (!this.reported) {
           this.reported = true;
@@ -960,11 +1076,11 @@ export const calloutExtension = ViewPlugin.fromClass(
     }
 
     build(view: EditorView, state: EditorState) {
-      const stats: BuildStats = { highlights: 0 };
+      const stats: BuildStats = { highlights: 0, tagIcons: 0 };
       const built = buildCalloutDecos(view, state, stats);
       this.decorations = built.decorations;
       this.outerDecorations = built.outerDecorations;
-      this.hasHighlights = stats.highlights > 0;
+      this.followsCaret = stats.highlights > 0 || stats.tagIcons > 0;
     }
 
     update(update: ViewUpdate) {
@@ -988,9 +1104,10 @@ export const calloutExtension = ViewPlugin.fromClass(
       if (
         layoutMayHaveChanged ||
         modeChanged ||
-        // A highlight's marker is hidden or revealed by where the caret is,
-        // so caret movement matters -- but only on a screen that has one.
-        (update.selectionSet && this.hasHighlights) ||
+        // A highlight's marker and a tag's icon are hidden or revealed by
+        // where the caret is, so caret movement matters -- but only on a
+        // screen that has one.
+        (update.selectionSet && this.followsCaret) ||
         update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(setConfig))
         )

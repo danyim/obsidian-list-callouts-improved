@@ -1382,6 +1382,23 @@ export async function setColorNestedItems(on: boolean): Promise<void> {
   }, on);
 }
 
+export function getTagCallouts(): Promise<boolean> {
+  return browser.executeObsidian(({ app }) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    return p.tagCallouts as boolean;
+  });
+}
+
+/** Flip the tag callouts preference, as the toggle would. */
+export async function setTagCallouts(on: boolean): Promise<void> {
+  await browser.executeObsidian(async ({ app }, next) => {
+    const p = (app as any).plugins.plugins['list-callouts-improved'];
+    p.tagCallouts = next;
+    await p.saveSettings();
+    p.settingTab?.refresh?.();
+  }, on);
+}
+
 /**
  * Render the active note's reading view again from scratch. A preference
  * that changes what the post-processor does is only seen by a fresh render;

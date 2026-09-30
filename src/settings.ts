@@ -80,11 +80,20 @@ export interface PluginData {
    * what is nested under it (mgmeyers/obsidian-list-callouts#1, #85).
    */
   colorNestedItems: boolean;
+  /**
+   * Let a callout whose character is a tag, such as `#meeting`, color any
+   * list item with that tag anywhere in it rather than only at its start,
+   * with `#meeting/standup` taking `#meeting`'s callout unless it has one of
+   * its own (#58, after kltsv/obsidian-list-callouts-tags).
+   */
+  tagCallouts: boolean;
 }
 
 export const DEFAULT_HIDE_BULLETS = false;
 
 export const DEFAULT_COLOR_NESTED_ITEMS = false;
+
+export const DEFAULT_TAG_CALLOUTS = false;
 
 /**
  * The class `hideBullets` puts on the document body. Everything the
@@ -125,6 +134,13 @@ export interface CalloutConfig {
    * item, the post-processor to color an <li> from the callout <li> above it.
    */
   colorNestedItems?: boolean;
+  /**
+   * The tag callouts by lowercased tag name (see tags.ts), or null when the
+   * tag callouts preference is off or no callout is a tag. With it set, both
+   * renderers look for these tags anywhere in an item, one at the start
+   * included, rather than matching them as leading callout characters.
+   */
+  tags?: Record<string, Callout> | null;
   /**
    * Editor only: changes when icons are registered after markers may have
    * been drawn, so the marker widgets stop comparing equal to the ones on

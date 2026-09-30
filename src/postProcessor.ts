@@ -1,6 +1,7 @@
 import { MarkdownPostProcessor, setIcon } from 'obsidian';
 
-import { CalloutConfig, applyCalloutColors } from './settings';
+import { Callout, CalloutConfig, applyCalloutColors } from './settings';
+import { calloutForTag, calloutTag } from './tags';
 
 function getFirstTextNode(li: HTMLElement) {
   for (const node of Array.from(li.childNodes)) {
@@ -46,6 +47,49 @@ function getFirstTextNode(li: HTMLElement) {
   }
 
   return null;
+}
+
+/**
+ * The first tag in the item's own text, not its nested list's, that has a
+ * callout (#58). Obsidian has already turned each tag into an `a.tag`, so
+ * there is nothing left to parse, and `#tag` in inline code is not one.
+ */
+function findTagCallout(
+  li: HTMLElement,
+  tags: Record<string, Callout>
+): { callout: Callout; tagEl: HTMLElement } | null {
+  for (const tagEl of Array.from(li.querySelectorAll<HTMLElement>('a.tag'))) {
+    if (tagEl.closest('li') !== li) continue;
+
+    const text = tagEl.textContent ?? '';
+    const callout = text.startsWith('#')
+      ? calloutForTag(text.slice(1), tags)
+      : null;
+    if (callout) return { callout, tagEl };
+  }
+
+  return null;
+}
+
+/**
+ * Swap a tag that named a callout for the callout's icon. With no icon the
+ * tag stays as it was, a link to its search, since its own text is all a
+ * marker could show.
+ */
+function replaceTag(tagEl: HTMLElement, callout: Callout) {
+  if (!callout.icon) return;
+
+  const text = tagEl.textContent ?? '';
+  tagEl.replaceWith(
+    createSpan(
+      {
+        cls: 'lc-list-marker lc-tag-marker',
+        text,
+        attr: { 'aria-label': text },
+      },
+      (span) => setIcon(span, callout.icon)
+    )
+  );
 }
 
 function wrapLiContent(li: HTMLElement) {
@@ -150,7 +194,13 @@ export function buildPostProcessor(
       const node = getFirstTextNode(li);
       const text = node?.textContent ?? '';
       const match = text.match(config.re);
-      const callout = match ? config.callouts[match[1]] : null;
+      let callout = match ? config.callouts[match[1]] : null;
+
+      // With tag callouts on, a tag callout is found as a tag wherever it
+      // sits, below.
+      if (callout && config.tags && calloutTag(callout) !== null) {
+        callout = null;
+      }
 
       if (callout) {
         li.addClass('lc-list-callout');
@@ -176,6 +226,16 @@ export function buildPostProcessor(
           })
         );
 
+        wrapLiContent(li);
+        return;
+      }
+
+      const tagged = config.tags ? findTagCallout(li, config.tags) : null;
+      if (tagged) {
+        li.addClass('lc-list-callout');
+        li.setAttribute('data-callout', tagged.callout.char);
+        applyCalloutColors(li, tagged.callout);
+        replaceTag(tagged.tagEl, tagged.callout);
         wrapLiContent(li);
         return;
       }

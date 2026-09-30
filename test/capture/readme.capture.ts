@@ -35,6 +35,7 @@ import {
   setHighlights,
   setRendering,
   setSettings,
+  setTagCallouts,
   writeLegacyData,
 } from '../helpers';
 
@@ -1693,6 +1694,26 @@ describe('README screenshots', function () {
       await captureEditor('callout-nested-items.png', true, true);
     } finally {
       await setColorNestedItems(false);
+    }
+  });
+
+  it('captures the tag callout rendering', async function () {
+    // A day's log with the "Tag callouts" setting on (#58): each item takes
+    // the callout of a tag anywhere in it, a nested tag its parent's, and a
+    // callout with an icon shows the icon in place of the tag, where one
+    // without leaves the tag as Obsidian draws it.
+    await openNote('Tags.md');
+    await setSettings([
+      { char: '#exercise', color: '0, 200, 83', icon: 'lucide-dumbbell' },
+      { char: '#meal', color: '255, 145, 0', icon: 'lucide-utensils' },
+      { char: '#work', color: '0, 184, 212', icon: 'lucide-briefcase' },
+      { char: '#errand', color: '124, 77, 255' },
+    ]);
+    await setTagCallouts(true);
+    try {
+      await captureEditor('callout-tags.png', true, true);
+    } finally {
+      await setTagCallouts(false);
     }
   });
 

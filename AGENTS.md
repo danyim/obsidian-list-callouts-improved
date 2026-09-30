@@ -61,6 +61,7 @@ Everything importable lives in `src/`, one module per responsibility:
 | `settingsTab.ts` | The settings UI, implemented via `getSettingDefinitions()`. |
 | `extension.ts` | CodeMirror 6 extension — live preview / source mode rendering. |
 | `postProcessor.ts` | The markdown post processor — reading mode rendering. |
+| `tags.ts` | Which callouts are tags, and finding the first tag in some text with a callout, parent tags included (the "Tag callouts" setting). |
 | `commands.ts` | Editor commands: *Remove callout*, *Next callout*, *Previous callout*. |
 | `customIcons.ts` | Reads SVGs out of the vault's `.obsidian/icons` folder and registers them with Obsidian. |
 | `iconSearch.ts` | Fuzzy search behind the icon picker. |

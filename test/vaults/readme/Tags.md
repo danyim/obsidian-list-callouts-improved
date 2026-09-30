@@ -1,0 +1,7 @@
+- 07:30 #exercise Morning run
+- 08:15 #meal Breakfast
+- 09:00 Standup #work/meeting
+- 10:30 #work Review the release notes
+- 12:30 #meal Lunch with Sam
+- 15:00 Pick up the dry cleaning #errand
+- 17:00 Read a chapter

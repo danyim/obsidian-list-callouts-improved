@@ -24,6 +24,7 @@ import {
   Callout,
   DEFAULT_COLOR_NESTED_ITEMS,
   DEFAULT_HIDE_BULLETS,
+  DEFAULT_TAG_CALLOUTS,
   HighlightSettings,
   calloutColorStyle,
 } from './settings';
@@ -659,7 +660,24 @@ export class ListCalloutSettingTab extends PluginSettingTab {
         })
       );
       f.appendText(
-        ' using +, *, -, >, or # as the callout character can disrupt reading mode.'
+        ' using +, *, -, >, or # as the callout character can disrupt reading mode, unless the character is a whole tag and tag callouts are on.'
+      );
+    });
+  }
+
+  private tagCalloutsDesc(): DocumentFragment {
+    // Tags, not UI text, so held apart from the sentence-case check.
+    const tag = '#meeting';
+    const nested = `${tag}/standup`;
+    return createFragment((f) => {
+      f.appendText('A callout whose character is a tag, such as ');
+      f.append(createEl('code', { text: tag }));
+      f.appendText(', colors any list item with that tag anywhere in it. ');
+      f.append(createEl('code', { text: nested }));
+      f.appendText(' takes the ');
+      f.append(createEl('code', { text: tag }));
+      f.appendText(
+        ' callout unless it has one of its own. If the callout has an icon, the icon replaces the tag.'
       );
     });
   }
@@ -714,10 +732,11 @@ export class ListCalloutSettingTab extends PluginSettingTab {
 
   // The default implementations read and write `plugin.settings[key]`, which
   // here is the callout array; the toggles live on `plugin.highlights` and,
-  // for the bullets and nested items, straight on the plugin.
+  // for the bullets, nested items and tags, straight on the plugin.
   getControlValue(key: string): unknown {
     if (key === 'hideBullets') return this.plugin.hideBullets;
     if (key === 'colorNestedItems') return this.plugin.colorNestedItems;
+    if (key === 'tagCallouts') return this.plugin.tagCallouts;
     return this.plugin.highlights[key as keyof HighlightSettings];
   }
 
@@ -726,6 +745,8 @@ export class ListCalloutSettingTab extends PluginSettingTab {
       this.plugin.hideBullets = value as boolean;
     } else if (key === 'colorNestedItems') {
       this.plugin.colorNestedItems = value as boolean;
+    } else if (key === 'tagCallouts') {
+      this.plugin.tagCallouts = value as boolean;
     } else {
       this.plugin.highlights[key as keyof HighlightSettings] = value as boolean;
     }
@@ -829,6 +850,17 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     });
 
     definitions.push(
+      {
+        // Top level rather than under Callouts: it changes what counts as a
+        // callout at all, where the Callouts group tunes how one looks.
+        name: 'Tag callouts',
+        desc: this.tagCalloutsDesc(),
+        control: {
+          type: 'toggle',
+          key: 'tagCallouts',
+          defaultValue: DEFAULT_TAG_CALLOUTS,
+        },
+      },
       {
         type: 'group',
         heading: 'Highlights',
