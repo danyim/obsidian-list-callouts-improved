@@ -6,6 +6,7 @@ import {
 import {
   EditorState,
   Line,
+  Range,
   RangeSetBuilder,
   StateEffect,
   StateField,
@@ -22,7 +23,7 @@ import {
 import { editorLivePreviewField, setIcon } from 'obsidian';
 
 import { Callout, CalloutConfig, calloutColorStyle } from './settings';
-import { calloutTag, tagMatches } from './tags';
+import { tagMatches } from './tags';
 
 export const setConfig = StateEffect.define<CalloutConfig>();
 
@@ -168,18 +169,22 @@ export type CalloutLineKind = 'callout' | 'continuation' | 'nested';
  * The line class for a line of the given kind. `continued` marks any line
  * of an item's run that has another after it, which is what lets the
  * stylesheet join the bands end to end instead of leaving the per-line
- * spacing between them.
+ * spacing between them. `tag` marks a callout found by a tag (#58), whose
+ * marker is not at the start of the line and so cannot stand in for the
+ * bullet the bullets preference hides.
  */
 export const calloutDecoration = (
   callout: Callout,
   kind: CalloutLineKind = 'callout',
-  continued = false
+  continued = false,
+  tag = false
 ) =>
   Decoration.line({
     attributes: {
       class: [
         kind === 'callout' ? 'lc-list-callout' : `lc-list-callout-${kind}`,
         ...(continued ? ['lc-list-callout-continued'] : []),
+        ...(tag ? ['lc-tag-callout'] : []),
       ].join(' '),
       style: calloutColorStyle(callout),
       'data-callout': callout.char,
@@ -348,19 +353,9 @@ interface CalloutHead {
   tag?: string;
 }
 
-/**
- * Whether the `#` at `pos` starts a tag rather than, say, text in inline
- * code. Taken on trust when the parser has not reached it, for the same
- * reason isListLine is.
- */
+/** Whether the `#` at `pos` starts a tag rather than, say, inline code. */
 function isTagAt(state: EditorState, pos: number): boolean {
-  if (!syntaxTreeAvailable(state, pos + 1)) return true;
-
-  const prop = syntaxTree(state)
-    .resolveInner(pos, 1)
-    .type.prop(tokenClassNodeProp);
-
-  return !!prop && /hashtag/.test(prop);
+  return tokenClassAt(state, pos, /hashtag/);
 }
 
 /**
@@ -398,11 +393,7 @@ function calloutHeadAt(
   line: Line
 ): CalloutHead | null {
   const match = config.re ? line.text.match(config.re) : null;
-  let callout = match ? config.callouts[match[2]] : null;
-
-  // With tag callouts on, one at the start of the item is a tag like any
-  // other, found below with the rest.
-  if (callout && config.tags && calloutTag(callout) !== null) callout = null;
+  const callout = match ? config.callouts[match[2]] : null;
 
   let head: CalloutHead | null = null;
   if (callout) {
@@ -481,7 +472,7 @@ function carriedStateAt(
   line: Line
 ): Carried {
   const none: Carried = { run: null, continues: false, ancestors: [] };
-  if (!config.re) return none;
+  if (!config.re && !config.tags) return none;
 
   const { doc } = state;
   let item = line;
@@ -524,18 +515,26 @@ function carriedStateAt(
 }
 
 /**
- * Whether `pos` sits inside an Obsidian highlight rather than, say, a code
- * block that happens to contain `==& text==`. Taken on trust when the parser
- * has not reached it, for the same reason isListLine is.
+ * Whether the syntax token starting at `pos` has a token class matching
+ * `re`. Taken on trust when the parser has not reached it, for the same
+ * reason isListLine is.
  */
-function isHighlightAt(state: EditorState, pos: number): boolean {
+function tokenClassAt(state: EditorState, pos: number, re: RegExp): boolean {
   if (!syntaxTreeAvailable(state, pos)) return true;
 
   const prop = syntaxTree(state)
     .resolveInner(pos, 1)
     .type.prop(tokenClassNodeProp);
 
-  return !!prop && /highlight/.test(prop);
+  return !!prop && re.test(prop);
+}
+
+/**
+ * Whether `pos` sits inside an Obsidian highlight rather than, say, a code
+ * block that happens to contain `==& text==`.
+ */
+function isHighlightAt(state: EditorState, pos: number): boolean {
+  return tokenClassAt(state, pos, /highlight/);
 }
 
 function selectionTouches(
@@ -550,7 +549,7 @@ export interface BuildStats {
   /** Confirmed highlights, hidden or revealed. */
   highlights: number;
   /** Tags drawn as their callout's icon, or revealed for the caret. */
-  tagIcons?: number;
+  tagIcons: number;
 }
 
 /** The two decoration sets one build produces, one per facet. */
@@ -582,6 +581,34 @@ function highlightEndAfter(state: EditorState, pos: number): number | null {
   return null;
 }
 
+/** Where the per-line decorations go: a builder, or a LineDecos. */
+interface DecoSink {
+  add(from: number, to: number, value: Decoration): void;
+}
+
+/**
+ * The decorations inside one line, held until the line is done and then
+ * handed to the builder in position order. RangeSetBuilder throws on a
+ * range that starts before the last one, and a line's decorations are not
+ * found in order: a tag's icon can sit after a highlight on its line or
+ * inside one, and is found first.
+ */
+class LineDecos implements DecoSink {
+  private ranges: Range<Decoration>[] = [];
+
+  add(from: number, to: number, value: Decoration) {
+    this.ranges.push(value.range(from, to));
+  }
+
+  flush(builder: RangeSetBuilder<Decoration>) {
+    this.ranges.sort(
+      (a, b) => a.from - b.from || a.value.startSide - b.value.startSide
+    );
+    for (const r of this.ranges) builder.add(r.from, r.to, r.value);
+    this.ranges = [];
+  }
+}
+
 /**
  * The tint over a callout character left in place as document text: source
  * mode's stand-in for the marker widget (#49). Only the color comes from
@@ -599,7 +626,7 @@ const rawMarkerDecoration = Decoration.mark({ class: 'lc-raw-marker' });
  * mode keeps the raw character throughout and tints it instead.
  */
 function addHighlightDeco(
-  builder: RangeSetBuilder<Decoration>,
+  builder: DecoSink,
   outer: RangeSetBuilder<Decoration>,
   state: EditorState,
   callout: Callout,
@@ -639,7 +666,7 @@ function addHighlightDeco(
  * wherever that falls, and the mark simply spans the lines in between.
  */
 function addHighlightDecos(
-  builder: RangeSetBuilder<Decoration>,
+  builder: DecoSink,
   outer: RangeSetBuilder<Decoration>,
   line: Line,
   config: CalloutConfig,
@@ -714,7 +741,7 @@ function addHighlightDecos(
  * tag is shown as well, so it can be edited, as a highlight's `==& ` is.
  */
 function addTagMarker(
-  builder: RangeSetBuilder<Decoration>,
+  builder: DecoSink,
   state: EditorState,
   head: CalloutHead,
   revision: number | undefined,
@@ -723,7 +750,7 @@ function addTagMarker(
   const { callout, markerFrom, markerTo, tag } = head;
   if (!callout.icon || !isLivePreview(state)) return;
 
-  if (stats) stats.tagIcons = (stats.tagIcons ?? 0) + 1;
+  if (stats) stats.tagIcons++;
   if (selectionTouches(state, markerFrom, markerTo)) return;
 
   builder.add(
@@ -761,12 +788,16 @@ export function buildCalloutDecos(
   stats?: BuildStats
 ): CalloutDecorations {
   const config = state.field(calloutsConfigField);
-  if ((!config?.re && !config?.highlightRe) || !view.visibleRanges.length)
+  if (
+    (!config?.re && !config?.tags && !config?.highlightRe) ||
+    !view.visibleRanges.length
+  )
     return { decorations: Decoration.none, outerDecorations: Decoration.none };
 
   const livePreview = isLivePreview(state);
   const builder = new RangeSetBuilder<Decoration>();
   const outer = new RangeSetBuilder<Decoration>();
+  const inline = new LineDecos();
   const { doc } = state;
 
   // Visible ranges can start partway through a line, so consecutive ranges can
@@ -842,7 +873,7 @@ export function buildCalloutDecos(
         builder.add(
           line.from,
           line.from,
-          calloutDecoration(run, kind, nextContinues)
+          calloutDecoration(run, kind, nextContinues, !!head?.tag)
         );
 
         // Add the callout background element
@@ -853,11 +884,11 @@ export function buildCalloutDecos(
         );
 
         if (head?.tag) {
-          addTagMarker(builder, state, head, config.iconRevision, stats);
+          addTagMarker(inline, state, head, config.iconRevision, stats);
         } else if (head) {
           // Decorate the callout marker: the widget in place of the
           // character, or the character itself, tinted, in source mode.
-          builder.add(
+          inline.add(
             head.markerFrom,
             head.markerTo,
             livePreview
@@ -877,8 +908,10 @@ export function buildCalloutDecos(
 
       // `includes` is the whole cost for a line without highlights.
       if (config.highlightRe && line.text.includes('==')) {
-        addHighlightDecos(builder, outer, line, config, state, stats);
+        addHighlightDecos(inline, outer, line, config, state, stats);
       }
+
+      inline.flush(builder);
 
       if (line.to >= to || line.number >= doc.lines) break;
       line = doc.line(line.number + 1);
@@ -1025,6 +1058,12 @@ function alignCalloutBackgrounds(view: EditorView) {
   });
 }
 
+/** What decides which lines are callouts, as one comparable string. */
+function calloutSetKey(config: CalloutConfig): string {
+  const tags = config.tags ? Object.keys(config.tags).join(' ') : '';
+  return `${config.re?.source ?? ''}\n${tags}`;
+}
+
 export const calloutExtension = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet = Decoration.none;
@@ -1125,13 +1164,16 @@ export const calloutExtension = ViewPlugin.fromClass(
       // its bullet, and that bullet has just been drawn or taken away. The
       // nested items preference adds bands, on lines nested under a
       // callout, and a new band starts at the line's own edge until it is
-      // measured. A mode switch moves them the way the bullets preference
-      // does: source mode has no bullet glyph, only the raw `- `.
+      // measured. So does a change to which callouts there are, the tag
+      // callouts preference included, which can put a band on a nested
+      // line that had none. A mode switch moves them the way the bullets
+      // preference does: source mode has no bullet glyph, only the raw `- `.
       const before = update.startState.field(calloutsConfigField);
       const after = update.state.field(calloutsConfigField);
       const bandsMoved =
         before.hideBullets !== after.hideBullets ||
-        before.colorNestedItems !== after.colorNestedItems;
+        before.colorNestedItems !== after.colorNestedItems ||
+        calloutSetKey(before) !== calloutSetKey(after);
 
       if (layoutMayHaveChanged || bandsMoved || modeChanged) {
         alignCalloutBackgrounds(update.view);

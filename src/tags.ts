@@ -4,7 +4,7 @@ import { Callout } from './settings';
  * The characters Obsidian allows in a tag's name: anything but whitespace,
  * the ASCII punctuation other than `-`, `_` and `/`, and the Unicode
  * punctuation blocks. A tag ends at the first character outside it, which is
- * how `#meeting.` or `(#meeting)` still carry the `#meeting` tag.
+ * how `#meeting.` or `#meeting)` still carry the `#meeting` tag.
  */
 const TAG_NAME =
   '[^\\s!"#$%&\'()*+,.:;<=>?@^`{|}~\\[\\]\\\\\\u2000-\\u206F\\u2E00-\\u2E7F]+';
@@ -13,11 +13,21 @@ const TAG_NAME =
 const TAG_CALLOUT_RE = new RegExp(`^#(${TAG_NAME})$`);
 
 /**
- * A tag in running text. Obsidian only starts one at the beginning of the
- * text or after whitespace, so `a#b` is no tag; group 1 is that lead-in,
- * group 2 the name.
+ * A tag in running text. Obsidian's editor only starts one at the beginning
+ * of the text or after whitespace, so `a#b` and `(#b)` are no tags; group 1
+ * is that lead-in, group 2 the name. A source string rather than a RegExp,
+ * since each search needs a global one of its own to keep its place in.
  */
-const TAG_IN_TEXT_RE = new RegExp(`(^|\\s)#(${TAG_NAME})`, 'g');
+const TAG_IN_TEXT = `(^|\\s)#(${TAG_NAME})`;
+
+/**
+ * Whether a tag preceded by `before` starts where the editor would start
+ * one. Reading view renders a few more as tags than the editor does
+ * (`[#meeting]`), and this keeps the two renderers to the same tags.
+ */
+export function tagCanStartAfter(before: string): boolean {
+  return before === '' || /\s$/.test(before);
+}
 
 /** Obsidian's rule that a tag needs something besides digits: `#2024` is not one. */
 function isTagName(name: string): boolean {
@@ -36,8 +46,8 @@ export function calloutTag(callout: Callout): string | null {
 
 /**
  * The tag callouts by tag, or null when there are none. Two callouts for the
- * same tag differ at most in case, and the one higher in the list wins, as it
- * would for the next/previous commands.
+ * same tag differ at most in case, and the one lower in the list wins, as it
+ * does for two callouts with the same character.
  */
 export function calloutsByTag(
   callouts: Callout[]
@@ -47,7 +57,7 @@ export function calloutsByTag(
 
   for (const callout of callouts) {
     const tag = calloutTag(callout);
-    if (tag === null || byTag[tag]) continue;
+    if (tag === null) continue;
     byTag[tag] = callout;
     any = true;
   }
@@ -98,7 +108,7 @@ export function* tagMatches(
 ): Generator<TagMatch> {
   // One back, so a tag right at `start` still has the whitespace before it
   // to match as its lead-in.
-  const re = new RegExp(TAG_IN_TEXT_RE.source, 'g');
+  const re = new RegExp(TAG_IN_TEXT, 'g');
   re.lastIndex = Math.max(0, start - 1);
 
   let match: RegExpExecArray | null;

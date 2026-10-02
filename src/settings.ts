@@ -105,9 +105,10 @@ export const HIDE_BULLETS_CLASS = 'lc-hide-bullets';
 export interface CalloutConfig {
   callouts: Record<string, Callout>;
   /**
-   * Null when no callouts are configured. Every callout can be deleted, so
-   * that is a reachable state, and an empty character class would compile to a
-   * pattern that matches every list item.
+   * Null when no callouts are configured, or, with tag callouts on, when
+   * every callout is a tag, which `tags` matches instead. Every callout can
+   * be deleted, so that is a reachable state, and an empty character class
+   * would compile to a pattern that matches every list item.
    */
   re: RegExp | null;
   /**
@@ -137,8 +138,8 @@ export interface CalloutConfig {
   /**
    * The tag callouts by lowercased tag name (see tags.ts), or null when the
    * tag callouts preference is off or no callout is a tag. With it set, both
-   * renderers look for these tags anywhere in an item, one at the start
-   * included, rather than matching them as leading callout characters.
+   * renderers look for these tags anywhere on an item's first line, one at
+   * the start included, and `re` leaves their characters out.
    */
   tags?: Record<string, Callout> | null;
   /**

@@ -17,12 +17,13 @@ import {
   setRendering,
   setSettings,
   setTagCallouts,
+  undo,
   writePluginData,
 } from '../helpers';
 
 /**
  * #58: with the "Tag callouts" preference on, a callout whose character is a
- * tag colors any list item with that tag anywhere in it, the way
+ * tag colors any list item with that tag anywhere on its first line, the way
  * kltsv/obsidian-list-callouts-tags does. A nested tag takes its parent's
  * callout, and when the callout has an icon, the icon stands in for the tag.
  * Off (the default), a tag callout only counts at the start of an item, like
@@ -46,6 +47,12 @@ const NOTE = [
   '- 12:00 #work then #breakfast',
   '- [ ] Task #breakfast',
   '1. Numbered #work',
+  '- ==& Note== before #breakfast Highlighted',
+  '- 13:00 [#breakfast] Bracketed',
+  '- Wrapped first line',
+  '  #breakfast on the second line',
+  '- Plain parent',
+  '\t- Nested #work child',
   '',
   'Paragraph #breakfast',
   '',
@@ -57,19 +64,35 @@ interface Row {
   data: string | null;
   color: string;
   tagIcon: boolean;
+  /** Whether the line's bullet or number takes up space, null if it has none. */
+  bulletShown: boolean | null;
+}
+
+interface EditorRow extends Row {
+  bandLeft: number | null;
+  highlight: boolean;
 }
 
 /** The editor's lines, as drawn. */
-function editorRows(): Promise<Row[]> {
+function editorRows(): Promise<EditorRow[]> {
   return browser.executeObsidian(() =>
     Array.from(
       document.querySelectorAll<HTMLElement>('.markdown-source-view .cm-line')
-    ).map((line) => ({
-      text: line.textContent ?? '',
-      data: line.getAttribute('data-callout'),
-      color: line.style.getPropertyValue('--lc-callout-color'),
-      tagIcon: !!line.querySelector('.lc-tag-marker svg'),
-    }))
+    ).map((line) => {
+      const bg = line.querySelector<HTMLElement>('.lc-list-bg');
+      const bullet = line.querySelector<HTMLElement>(
+        '.list-bullet, .list-number'
+      );
+      return {
+        text: line.textContent ?? '',
+        data: line.getAttribute('data-callout'),
+        color: line.style.getPropertyValue('--lc-callout-color'),
+        tagIcon: !!line.querySelector('.lc-tag-marker svg'),
+        bulletShown: bullet ? bullet.getClientRects().length > 0 : null,
+        bandLeft: bg ? bg.getBoundingClientRect().left : null,
+        highlight: !!line.querySelector('.lc-highlight-callout'),
+      };
+    })
   );
 }
 
@@ -78,13 +101,17 @@ function readingRows(): Promise<(Row & { tagLink: boolean })[]> {
   return browser.executeObsidian(() =>
     Array.from(
       document.querySelectorAll<HTMLElement>('.markdown-preview-view li')
-    ).map((li) => ({
-      text: li.textContent ?? '',
-      data: li.getAttribute('data-callout'),
-      color: li.style.getPropertyValue('--lc-callout-color'),
-      tagIcon: !!li.querySelector('.lc-tag-marker svg'),
-      tagLink: !!li.querySelector('a.tag'),
-    }))
+    ).map((li) => {
+      const bullet = li.querySelector<HTMLElement>(':scope > .list-bullet');
+      return {
+        text: li.textContent ?? '',
+        data: li.getAttribute('data-callout'),
+        color: li.style.getPropertyValue('--lc-callout-color'),
+        tagIcon: !!li.querySelector('.lc-tag-marker svg'),
+        tagLink: !!li.querySelector('a.tag'),
+        bulletShown: bullet ? bullet.getClientRects().length > 0 : null,
+      };
+    })
   );
 }
 
@@ -226,6 +253,78 @@ describe('Tag callouts', function () {
     it('builds the icon for a tag right after a checkbox', async function () {
       expect(pick(await editorRows(), 'Task').tagIcon).toBe(true);
     });
+
+    it('draws a tag after a callout highlight on the same line', async function () {
+      // The tag's icon is found before the highlight that precedes it, and
+      // adding them out of order used to throw and clear every callout.
+      const rows = await editorRows();
+      const line = pick(rows, 'Highlighted');
+      expect(line.data).toBe('#breakfast');
+      expect(line.tagIcon).toBe(true);
+      expect(line.highlight).toBe(true);
+      expect(pick(rows, 'Eggs').data).toBe('#breakfast');
+    });
+
+    it('only takes a tag the editor parses as one', async function () {
+      expect(pick(await editorRows(), 'Bracketed').data).toBeNull();
+    });
+
+    it('leaves a tag on a line the item wraps onto alone', async function () {
+      const rows = await editorRows();
+      expect(pick(rows, 'Wrapped first line').data).toBeNull();
+      expect(pick(rows, 'on the second line').data).toBeNull();
+    });
+
+    it("starts a nested item's band at its own indentation", async function () {
+      // Measured as the setting is turned on, with no edit or scroll after.
+      const rows = await editorRows();
+      const nested = pick(rows, 'Nested #work child');
+      expect(nested.data).toBe('#work');
+      expect(nested.bandLeft).toBeGreaterThan(pick(rows, 'Email').bandLeft);
+    });
+
+    it('keeps the bullet on an item colored by a tag when bullets are hidden', async function () {
+      await setHideBullets(true);
+      try {
+        await browser.waitUntil(
+          async () =>
+            pick(await editorRows(), 'Character first').bulletShown === false,
+          {
+            timeout: 5000,
+            interval: 100,
+            timeoutMsg: 'the character callout bullet was not hidden',
+          }
+        );
+        const rows = await editorRows();
+        expect(pick(rows, 'Eggs').bulletShown).toBe(true);
+        expect(pick(rows, 'Numbered').bulletShown).toBe(true);
+      } finally {
+        await setHideBullets(false);
+      }
+    });
+
+    it('removes the tag with the Remove callout command', async function () {
+      const [line] = positionOf('Eggs');
+      await placeCursor(line, 0);
+      await browser.executeObsidianCommand(
+        'list-callouts-improved:remove-callout'
+      );
+      const text = await browser.executeObsidian(
+        ({ app, obsidian }, n) =>
+          app.workspace
+            .getActiveViewOfType(obsidian.MarkdownView)
+            .editor.getLine(n),
+        line
+      );
+      expect(text).toBe('- 09:00 Eggs');
+
+      await undo();
+      await placeCursor(LAST_LINE, 0);
+      await browser.waitUntil(
+        async () => pick(await editorRows(), 'Eggs').tagIcon,
+        { timeout: 5000, interval: 100 }
+      );
+    });
   });
 
   describe('in source mode', function () {
@@ -280,6 +379,17 @@ describe('Tag callouts', function () {
       expect(pick(rows, 'Numbered').data).toBe('#work');
       expect(pick(rows, 'Plain').data).toBeNull();
       expect(pick(rows, 'Code').data).toBeNull();
+      expect(pick(rows, 'Highlighted').data).toBe('#breakfast');
+      expect(rows.find((r) => r.text.startsWith('Nested'))?.data).toBe('#work');
+    });
+
+    it('passes over a tag the editor would not take for one', async function () {
+      // Reading view makes `[#tag]` a tag; the editor does not.
+      expect(pick(await readingRows(), 'Bracketed').data).toBeNull();
+    });
+
+    it('leaves a tag on a line the item wraps onto alone', async function () {
+      expect(pick(await readingRows(), 'Wrapped first line').data).toBeNull();
     });
 
     it("swaps the tag for the callout's icon, and only when it has one", async function () {
@@ -299,6 +409,10 @@ describe('Tag callouts', function () {
     it('keeps the icon where the tag was when bullets are hidden', async function () {
       await setHideBullets(true);
       try {
+        const rows = await readingRows();
+        expect(pick(rows, 'Eggs').bulletShown).toBe(true);
+        expect(pick(rows, 'Character first').bulletShown).toBe(false);
+
         const float = await browser.executeObsidian(() => {
           const marker = Array.from(
             document.querySelectorAll<HTMLElement>(

@@ -1,7 +1,7 @@
 import { MarkdownPostProcessor, setIcon } from 'obsidian';
 
 import { Callout, CalloutConfig, applyCalloutColors } from './settings';
-import { calloutForTag, calloutTag } from './tags';
+import { calloutForTag, tagCanStartAfter } from './tags';
 
 function getFirstTextNode(li: HTMLElement) {
   for (const node of Array.from(li.childNodes)) {
@@ -50,16 +50,64 @@ function getFirstTextNode(li: HTMLElement) {
 }
 
 /**
- * The first tag in the item's own text, not its nested list's, that has a
- * callout (#58). Obsidian has already turned each tag into an `a.tag`, so
- * there is nothing left to parse, and `#tag` in inline code is not one.
+ * Elements that start a new line of an item: a line break, the second of a
+ * loose item's paragraphs, or a block such as a code block or a quote.
+ */
+const LINE_ENDS = new Set([
+  'BR',
+  'P',
+  'PRE',
+  'BLOCKQUOTE',
+  'TABLE',
+  'HR',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+]);
+
+/**
+ * The tags on the item's first line, in order: the line the editor looks
+ * at, and nothing on the lines the item wraps onto or in what is nested
+ * under it, so the two renderers agree on which items are callouts.
+ */
+function firstLineTags(li: HTMLElement): HTMLElement[] {
+  const tags: HTMLElement[] = [];
+  let paragraphs = 0;
+
+  const walker = li.doc.createTreeWalker(li, NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (node) =>
+      ['UL', 'OL'].includes((node as Element).tagName)
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
+
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node as HTMLElement;
+    if (el.tagName === 'P' && paragraphs++ === 0) continue;
+    if (LINE_ENDS.has(el.tagName)) break;
+    if (el.matches('a.tag')) tags.push(el);
+  }
+
+  return tags;
+}
+
+/**
+ * The first tag on the item's first line that has a callout (#58).
+ * Obsidian has already turned each tag into an `a.tag`, so there is nothing
+ * left to parse, and `#tag` in inline code is not one. A tag reading view
+ * starts after punctuation, as in `[#tag]`, is passed over, since the
+ * editor does not take it for a tag.
  */
 function findTagCallout(
   li: HTMLElement,
   tags: Record<string, Callout>
 ): { callout: Callout; tagEl: HTMLElement } | null {
-  for (const tagEl of Array.from(li.querySelectorAll<HTMLElement>('a.tag'))) {
-    if (tagEl.closest('li') !== li) continue;
+  for (const tagEl of firstLineTags(li)) {
+    const before = tagEl.previousSibling?.textContent ?? '';
+    if (!tagCanStartAfter(before)) continue;
 
     const text = tagEl.textContent ?? '';
     const callout = text.startsWith('#')
@@ -178,7 +226,7 @@ export function buildPostProcessor(
 
     // No callouts configured, so nothing can match. Bailing here also avoids
     // awaiting the pending post-processors below for no reason.
-    if (!config.re) return;
+    if (!config.re && !config.tags) return;
 
     // `promises` is internal: it lets a post-processor wait for the ones
     // registered before it (embeds, for instance) to finish rendering.
@@ -193,14 +241,8 @@ export function buildPostProcessor(
     el.findAll('li').forEach((li) => {
       const node = getFirstTextNode(li);
       const text = node?.textContent ?? '';
-      const match = text.match(config.re);
-      let callout = match ? config.callouts[match[1]] : null;
-
-      // With tag callouts on, a tag callout is found as a tag wherever it
-      // sits, below.
-      if (callout && config.tags && calloutTag(callout) !== null) {
-        callout = null;
-      }
+      const match = config.re ? text.match(config.re) : null;
+      const callout = match ? config.callouts[match[1]] : null;
 
       if (callout) {
         li.addClass('lc-list-callout');
@@ -232,7 +274,7 @@ export function buildPostProcessor(
 
       const tagged = config.tags ? findTagCallout(li, config.tags) : null;
       if (tagged) {
-        li.addClass('lc-list-callout');
+        li.addClass('lc-list-callout', 'lc-tag-callout');
         li.setAttribute('data-callout', tagged.callout.char);
         applyCalloutColors(li, tagged.callout);
         replaceTag(tagged.tagEl, tagged.callout);

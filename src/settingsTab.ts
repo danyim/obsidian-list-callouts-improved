@@ -672,7 +672,9 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     return createFragment((f) => {
       f.appendText('A callout whose character is a tag, such as ');
       f.append(createEl('code', { text: tag }));
-      f.appendText(', colors any list item with that tag anywhere in it. ');
+      f.appendText(
+        ', colors any list item with that tag anywhere on its first line. '
+      );
       f.append(createEl('code', { text: nested }));
       f.appendText(' takes the ');
       f.append(createEl('code', { text: tag }));
@@ -714,7 +716,7 @@ export class ListCalloutSettingTab extends PluginSettingTab {
         'Show only the callout marker on a callout line, without the bullet or number in front of it. '
       );
       f.appendText(
-        'A checkbox stays, since it can be clicked. Plain list items keep their bullets.'
+        'A checkbox stays, since it can be clicked. Plain list items keep their bullets, as do items colored by a tag callout.'
       );
     });
   }

@@ -28,7 +28,7 @@ import {
   defaultHighlightSettings,
 } from './settings';
 import { ListCalloutSettingTab } from './settingsTab';
-import { calloutsByTag } from './tags';
+import { calloutTag, calloutsByTag } from './tags';
 
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
@@ -107,7 +107,7 @@ export default class ListCalloutsPlugin extends Plugin {
       editorCallback: (editor) => {
         this.applyChanges(
           editor,
-          removeCalloutChanges(editor, this.buildEditorConfig())
+          removeCalloutChanges(editor, this.commandConfig())
         );
       },
     });
@@ -311,7 +311,7 @@ export default class ListCalloutsPlugin extends Plugin {
       editor,
       cycleCalloutChanges(
         editor,
-        this.buildEditorConfig(),
+        this.commandConfig(),
         this.settings,
         direction
       )
@@ -352,6 +352,46 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   /**
+   * The characters a list item can start with to be a callout, as for
+   * charPattern. With tag callouts on, a tag callout is found as a tag
+   * wherever it sits, the start included, so it is left out here and the
+   * renderers need not tell the two apart.
+   */
+  private leadingPattern(): string {
+    if (!this.tagCallouts) return this.charPattern();
+    return this.settings
+      .filter((callout) => calloutTag(callout) === null)
+      .map((callout) => escapeStringRegexp(callout.char))
+      .join('|');
+  }
+
+  /** The tag callouts by tag when the preference is on, else null. */
+  private tagPattern(): CalloutConfig['tags'] {
+    return this.tagCallouts ? calloutsByTag(this.settings) : null;
+  }
+
+  /** The editor pattern for an item's leading callout, or null for none. */
+  private listPattern(chars: string): RegExp | null {
+    return chars
+      ? new RegExp(
+          `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
+        )
+      : null;
+  }
+
+  /**
+   * The editor config with every callout character in its pattern, tags
+   * included: the commands write and strip callouts at the start of an
+   * item, and a tag callout written there is one they step through.
+   */
+  private commandConfig(): CalloutConfig {
+    return {
+      ...this.buildEditorConfig(),
+      re: this.listPattern(this.charPattern()),
+    };
+  }
+
+  /**
    * The highlight pattern, or null when there is nothing to match. `anchored`
    * is the post-processor's form, which tests the text of a <mark> the
    * renderer has already found; `whole` finds a complete span in a line of
@@ -381,29 +421,26 @@ export default class ListCalloutsPlugin extends Plugin {
 
     return {
       callouts: this.calloutsByChar(),
-      re: chars
-        ? new RegExp(
-            `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
-          )
-        : null,
+      re: this.listPattern(this.leadingPattern()),
       highlightRe: this.highlightPattern(chars, 'whole'),
       highlightOpenRe: this.highlightPattern(chars, 'opener'),
       hideBullets: this.hideBullets,
       colorNestedItems: this.colorNestedItems,
-      tags: this.tagCallouts ? calloutsByTag(this.settings) : null,
+      tags: this.tagPattern(),
       iconRevision: this.iconRevision,
     };
   }
 
   buildPostProcessorConfig() {
     const chars = this.charPattern();
+    const leading = this.leadingPattern();
 
     this.postProcessorConfig = {
       callouts: this.calloutsByChar(),
-      re: chars ? new RegExp(`^(${chars}) `) : null,
+      re: leading ? new RegExp(`^(${leading}) `) : null,
       highlightRe: this.highlightPattern(chars, 'anchored'),
       colorNestedItems: this.colorNestedItems,
-      tags: this.tagCallouts ? calloutsByTag(this.settings) : null,
+      tags: this.tagPattern(),
     };
   }
 
