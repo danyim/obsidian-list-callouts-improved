@@ -21,6 +21,8 @@ import {
   openPluginSettings,
   placeCursor,
   reloadPlugin,
+  rerenderReading,
+  setColorNestedItems,
   setHideBullets,
   writePluginData,
 } from '../helpers';
@@ -52,17 +54,20 @@ function row(rows: ListMarkerVisibility[], suffix: string) {
   return found;
 }
 
-async function markersUntil(root: string): Promise<ListMarkerVisibility[]> {
+async function markersUntil(
+  root: string,
+  count = 6
+): Promise<ListMarkerVisibility[]> {
   let rows: ListMarkerVisibility[] = [];
   await browser.waitUntil(
     async () => {
       rows = await listMarkerVisibility(root);
-      return rows.length === 6;
+      return rows.length === count;
     },
     {
       timeout: 10000,
       interval: 200,
-      timeoutMsg: `expected six list items under ${root}`,
+      timeoutMsg: `expected ${count} list items under ${root}`,
     }
   );
   return rows;
@@ -408,6 +413,94 @@ describe('Hide bullets and numbers', function () {
         expect(task.markerLeft).toBeGreaterThan(task.glyphLeft);
         expect(task.textLeft).toBeGreaterThan(plainTask.textLeft);
       });
+    });
+  });
+
+  /**
+   * #57: reading view nests a list inside its parent's <li>, so hiding
+   * "the bullet inside a callout item" also took the bullets of every plain
+   * item under it. Only the callout items' own markers go, in both
+   * renderers, whether or not the nested items take the callout's color.
+   */
+  describe('items nested under a callout', function () {
+    const NESTED_NOTE = [
+      '- & Outer callout',
+      '\t- Plain child one',
+      '\t- Plain child two',
+      '\t- $ Inner callout',
+      '\t\t- Plain grandchild',
+      '\t1. Plain numbered child',
+      '- Plain after',
+      '\t- Plain after child',
+    ].join('\n');
+    const CALLOUTS = ['Outer callout', 'Inner callout'];
+
+    const expectOnlyCalloutsHidden = (rows: ListMarkerVisibility[]) => {
+      for (const suffix of CALLOUTS) {
+        expect(row(rows, suffix)).toMatchObject({
+          callout: true,
+          shown: false,
+        });
+      }
+      expect(row(rows, 'Plain numbered child')).toMatchObject({
+        marker: 'number',
+        shown: true,
+      });
+      for (const plain of rows.filter((r) => !r.callout)) {
+        expect(plain).toMatchObject({ shown: true });
+      }
+    };
+
+    before(async function () {
+      await browser.executeObsidian(async ({ app }, text) => {
+        await app.vault.create('Nested.md', `${text}\n`);
+      }, NESTED_NOTE);
+      await openNote('Nested.md');
+      await browser.$('.lc-list-callout').waitForExist({ timeout: 10000 });
+      await placeCursor(NESTED_NOTE.split('\n').length, 0);
+      await setColorNestedItems(false);
+      await setHideBullets(true);
+    });
+
+    after(async function () {
+      await ensureEditingMode();
+      await setColorNestedItems(false);
+      await setHideBullets(false);
+    });
+
+    for (const colorNested of [false, true]) {
+      describe(`with nested items ${colorNested ? '' : 'not '}colored`, function () {
+        before(async function () {
+          await setColorNestedItems(colorNested);
+        });
+
+        it("hides only the callouts' own markers in the editor", async function () {
+          await ensureEditingMode();
+          expectOnlyCalloutsHidden(await markersUntil(EDITOR, 8));
+        });
+
+        it("hides only the callouts' own markers in reading view", async function () {
+          await ensureReadingMode();
+          // The post processor reads the nested items preference, so the
+          // note has to render again for it.
+          await rerenderReading();
+          await browser
+            .$(`${READING} .lc-list-callout`)
+            .waitForExist({ timeout: 10000 });
+          // Colored nested items carry a class of their own, which must not
+          // hide their bullets either.
+          await browser
+            .$(`${READING} .lc-list-callout-nested`)
+            .waitForExist({ timeout: 10000, reverse: !colorNested });
+          expectOnlyCalloutsHidden(await markersUntil(READING, 8));
+        });
+      });
+    }
+
+    it('captures the rendering for visual inspection', async function () {
+      await ensureReadingMode();
+      const file = await captureRendering('hidden-bullets-nested-reading-mode');
+      expect(file).toContain('hidden-bullets-nested-reading-mode');
     });
   });
 

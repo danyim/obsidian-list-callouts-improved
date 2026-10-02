@@ -257,8 +257,8 @@ settings:
    bullet there (#49) that span is left as Obsidian lays it out: the flex
    rule is Live Preview's alone. The settings tab's preview line carries
    the live-preview class too. */
-.lc-hide-bullets .lc-list-callout .list-bullet,
-.lc-hide-bullets .lc-list-callout .list-number {
+.lc-hide-bullets .cm-line.lc-list-callout .list-bullet,
+.lc-hide-bullets .cm-line.lc-list-callout .list-number {
   display: none;
 }
 
@@ -275,7 +275,15 @@ settings:
    dot's, and within a pixel of a number's, and leaves the item's text
    where every plain item's is. The text starts with the space that
    followed the callout character; at the start of a line it collapses.
-   Not on a task item, where the marker stays inline after the checkbox. */
+   Not on a task item, where the marker stays inline after the checkbox.
+
+   The bullet is a child of the item itself, and only that child goes: a
+   list nested in the item is inside it too, and its plain items keep their
+   bullets (#57), as their lines do in the editor. */
+.lc-hide-bullets li.lc-list-callout > .list-bullet {
+  display: none;
+}
+
 .lc-hide-bullets li.lc-list-callout {
   list-style-type: none;
 }

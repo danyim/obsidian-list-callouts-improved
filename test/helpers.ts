@@ -1425,15 +1425,36 @@ export function listMarkerVisibility(
       scope.querySelectorAll<HTMLElement>('.cm-line, li')
     );
 
+    // Only what belongs to `el` itself: a reading view <li> also holds the
+    // items of any list nested in it, markers and text alike.
+    const own = (el: HTMLElement, node: Node) =>
+      (node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : node.parentElement
+      )?.closest('.cm-line, li') === el;
+    const ownGlyph = (el: HTMLElement, selector: string) =>
+      Array.from(el.querySelectorAll<HTMLElement>(selector)).find((g) =>
+        own(el, g)
+      ) ?? null;
+    const ownText = (el: HTMLElement) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let text = '';
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        if (own(el, node)) text += node.nodeValue;
+      }
+      return text.trim();
+    };
+
     return items.flatMap((el): ListMarkerVisibility[] => {
       // The checkbox first: reading view gives a task item a (hidden) bullet
       // span as well, ahead of the checkbox in document order.
       const glyph =
-        el.querySelector<HTMLElement>('.task-list-item-checkbox') ??
-        el.querySelector<HTMLElement>('.list-bullet, .list-number');
+        ownGlyph(el, '.task-list-item-checkbox') ??
+        ownGlyph(el, '.list-bullet, .list-number');
       const isLi = el.tagName === 'LI';
       const listStyle = isLi ? getComputedStyle(el).listStyleType : '';
-      const text = (el.textContent ?? '').trim();
+      const text = ownText(el);
       const callout = el.classList.contains('lc-list-callout');
 
       if (glyph) {
