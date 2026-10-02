@@ -236,7 +236,10 @@ settings:
    Scoped to callout lines: a plain list item keeps its bullet. A checkbox
    is left alone in both renderers (.task-list-label in the editor, a
    task-list-item <li> that already sets list-style: none in reading
-   view): it is the one marker that can be clicked.
+   view): it is the one marker that can be clicked. So is an item that is
+   a callout by a tag (#58, .lc-tag-callout): its marker sits where the tag
+   is, which may be anywhere on the line, so nothing would take the
+   bullet's place.
 
    Editor. Obsidian draws a bullet as .list-bullet and a number as
    .list-number, both inside the line's formatting span, after its own
@@ -257,12 +260,12 @@ settings:
    bullet there (#49) that span is left as Obsidian lays it out: the flex
    rule is Live Preview's alone. The settings tab's preview line carries
    the live-preview class too. */
-.lc-hide-bullets .cm-line.lc-list-callout .list-bullet,
-.lc-hide-bullets .cm-line.lc-list-callout .list-number {
+.lc-hide-bullets .cm-line.lc-list-callout:not(.lc-tag-callout) .list-bullet,
+.lc-hide-bullets .cm-line.lc-list-callout:not(.lc-tag-callout) .list-number {
   display: none;
 }
 
-.lc-hide-bullets .is-live-preview .cm-line.lc-list-callout .cm-formatting-list-ul {
+.lc-hide-bullets .is-live-preview .cm-line.lc-list-callout:not(.lc-tag-callout) .cm-formatting-list-ul {
   display: inline-flex;
 }
 
@@ -280,15 +283,15 @@ settings:
    The bullet is a child of the item itself, and only that child goes: a
    list nested in the item is inside it too, and its plain items keep their
    bullets (#57), as their lines do in the editor. */
-.lc-hide-bullets li.lc-list-callout > .list-bullet {
+.lc-hide-bullets li.lc-list-callout:not(.lc-tag-callout) > .list-bullet {
   display: none;
 }
 
-.lc-hide-bullets li.lc-list-callout {
+.lc-hide-bullets li.lc-list-callout:not(.lc-tag-callout) {
   list-style-type: none;
 }
 
-.lc-hide-bullets li.lc-list-callout:not(.task-list-item) > .lc-li-wrapper > .lc-list-marker {
+.lc-hide-bullets li.lc-list-callout:not(.task-list-item, .lc-tag-callout) > .lc-li-wrapper > .lc-list-marker {
   float: inline-start;
   display: inline-flex;
   justify-content: center;

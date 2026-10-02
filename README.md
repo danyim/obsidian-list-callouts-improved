@@ -59,11 +59,28 @@ A callout highlight's text keeps the normal text color, the same as a list callo
 
 ![A paragraph with a plain highlight in a theme's own text color, and below it a list callout with a callout highlight inside, both in the normal text color, shown in light and dark mode](screenshots/highlight-foreground.png)
 
+## Tag callouts
+
+A callout can be triggered by a tag instead of a character: set a callout's character to a whole tag, such as `#meal`, and turn on **Tag callouts** at the top of the settings tab. Any list item with that tag anywhere on its first line then takes the callout, so a day's log can read `- 12:30 #meal Lunch`. If the callout has an icon, the icon replaces the tag; without one, the tag stays as Obsidian draws it and still links to its search. In Live Preview the tag comes back while the cursor is on it, so it can be edited.
+
+![A day's log in which each timed entry is colored by a tag somewhere in it: exercise in green with a dumbbell, meals in orange with a fork and knife, work in blue with a briefcase whether tagged #work or #work/meeting, and an errand in purple still showing its #errand tag, shown in light and dark mode](screenshots/callout-tags.png)
+
+- A nested tag takes its parent's callout unless it has one of its own: `#work/meeting` uses the `#work` callout.
+- Tags match whatever their case, as in Obsidian.
+- If an item has more than one tag with a callout, the first one wins. A callout character at the start of the item wins over any tag.
+- A `#tag` in inline code or outside a list is left alone, and so is one on a line the item wraps onto.
+- **Remove callout** removes the tag that made the item a callout. **Next callout** and **Previous callout** work on the start of the item, as they do for characters.
+- **Hide bullets and numbers** leaves an item colored by a tag its bullet, since the icon sits where the tag is rather than where the bullet was.
+
+With the setting off, a tag callout only counts at the start of an item, like any other callout character.
+
+This follows [List Callouts Tags](https://github.com/kltsv/obsidian-list-callouts-tags), without replacing character callouts: both kinds can be used side by side.
+
 ## Managing callouts
 
 Callouts are defined in one list. A new vault starts with the seven shown above, and any of them can be edited, reordered by dragging, or deleted, built-in ones included.
 
-![The plugin's settings tab in full: the highlight toggles, then the seven built-in callouts each with a preview, character, icon, color and marker color, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
+![The plugin's settings tab in full: the tag callouts toggle, the highlight toggles, then the seven built-in callouts each with a preview, character, icon, color and marker color, and the reset at the bottom, shown in light and dark mode](screenshots/settings.png)
 
 **Reset to defaults**, at the bottom of the settings tab, restores the original seven. It replaces everything currently configured, so added callouts and edits to the built-in ones are lost. It asks for confirmation first and can't be undone.
 

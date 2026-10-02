@@ -1,6 +1,7 @@
 import { Editor, EditorChange } from 'obsidian';
 
 import { Callout, CalloutConfig } from './settings';
+import { tagMatches } from './tags';
 
 /**
  * A list item's marker and any task checkbox -- the same shapes the prefix
@@ -47,26 +48,43 @@ function changesForTouchedLines(
  *
  * `config.re` is the editor pattern from `buildEditorConfig`: group 1 is the
  * list prefix, so its length is where the marker starts, and group 2 is the
- * marker itself, which is always followed by a space. Lines with no callout
- * contribute nothing, so a run over a mixed selection leaves them untouched.
+ * marker itself, which is always followed by a space. With tag callouts on,
+ * an item with no such marker can still be a callout by a tag later in it,
+ * and then that tag goes, with a space beside it so no gap is left. Lines
+ * with no callout contribute nothing, so a run over a mixed selection leaves
+ * them untouched.
  */
 export function removeCalloutChanges(
   editor: Editor,
   config: CalloutConfig
 ): EditorChange[] {
-  if (!config.re) return [];
+  if (!config.re && !config.tags) return [];
 
   return changesForTouchedLines(editor, (line, text) => {
-    const match = config.re.exec(text);
-    if (!match) return null;
+    const match = config.re?.exec(text);
+    if (match) {
+      const ch = match[1].length;
 
-    const ch = match[1].length;
+      return {
+        from: { line, ch },
+        to: { line, ch: ch + match[2].length + 1 },
+        text: '',
+      };
+    }
 
-    return {
-      from: { line, ch },
-      to: { line, ch: ch + match[2].length + 1 },
-      text: '',
-    };
+    const prefix = config.tags ? LIST_PREFIX_RE.exec(text) : null;
+    if (!prefix) return null;
+
+    for (const tag of tagMatches(text, config.tags, prefix[1].length)) {
+      // The space after the tag, or before it when the tag ends the line.
+      let { from, to } = tag;
+      if (text[to] === ' ') to++;
+      else if (from > prefix[1].length && text[from - 1] === ' ') from--;
+
+      return { from: { line, ch: from }, to: { line, ch: to }, text: '' };
+    }
+
+    return null;
   });
 }
 

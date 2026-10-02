@@ -19,6 +19,7 @@ import {
   CalloutConfig,
   DEFAULT_COLOR_NESTED_ITEMS,
   DEFAULT_HIDE_BULLETS,
+  DEFAULT_TAG_CALLOUTS,
   HIDE_BULLETS_CLASS,
   HighlightSettings,
   ListCalloutsSettings,
@@ -27,19 +28,22 @@ import {
   defaultHighlightSettings,
 } from './settings';
 import { ListCalloutSettingTab } from './settingsTab';
+import { calloutTag, calloutsByTag } from './tags';
 
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
   highlights: HighlightSettings;
   hideBullets: boolean;
   colorNestedItems: boolean;
+  tagCallouts: boolean;
   postProcessorConfig: CalloutConfig;
 
   /**
-   * The nested items preference as last pushed to the open views, so a save
-   * can tell whether it is the one that flipped it.
+   * The nested items and tag callouts preferences as last pushed to the
+   * open views, so a save can tell whether it is the one that flipped one.
    */
   private appliedColorNestedItems: boolean;
+  private appliedTagCallouts: boolean;
 
   /**
    * Whether this vault still holds settings from the plugin this one was
@@ -87,6 +91,7 @@ export default class ListCalloutsPlugin extends Plugin {
     this.buildPostProcessorConfig();
     this.applyHideBullets();
     this.appliedColorNestedItems = this.colorNestedItems;
+    this.appliedTagCallouts = this.tagCallouts;
 
     this.settingTab = new ListCalloutSettingTab(this);
     this.addSettingTab(this.settingTab);
@@ -102,7 +107,7 @@ export default class ListCalloutsPlugin extends Plugin {
       editorCallback: (editor) => {
         this.applyChanges(
           editor,
-          removeCalloutChanges(editor, this.buildEditorConfig())
+          removeCalloutChanges(editor, this.commandConfig())
         );
       },
     });
@@ -216,22 +221,27 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   /**
-   * Push a flipped nested items preference to every open view at once. The
-   * editor takes it as a config change and redecorates; a reading view has
-   * to render again, since the post-processor only sees a note as it is
-   * rendered. Straight away rather than through the debounced update, as a
-   * toggle is one deliberate change, not a color being typed.
+   * Push a flipped nested items or tag callouts preference to every open
+   * view at once. The editor takes it as a config change and redecorates; a
+   * reading view has to render again, since the post-processor only sees a
+   * note as it is rendered. Straight away rather than through the debounced
+   * update, as a toggle is one deliberate change, not a color being typed.
    */
-  private applyColorNestedItems(): void {
-    if (this.appliedColorNestedItems === this.colorNestedItems) return;
+  private applyRenderPreferences(): void {
+    if (
+      this.appliedColorNestedItems === this.colorNestedItems &&
+      this.appliedTagCallouts === this.tagCallouts
+    ) {
+      return;
+    }
     this.appliedColorNestedItems = this.colorNestedItems;
+    this.appliedTagCallouts = this.tagCallouts;
 
     this.dispatchUpdate();
 
-    this.app.workspace.getLeavesOfType('markdown').forEach((leaf) => {
-      const view = leaf.view as MarkdownView;
+    for (const view of this.markdownViews()) {
       if (view.getMode() === 'preview') view.previewMode.rerender(true);
-    });
+    }
   }
 
   /**
@@ -301,7 +311,7 @@ export default class ListCalloutsPlugin extends Plugin {
       editor,
       cycleCalloutChanges(
         editor,
-        this.buildEditorConfig(),
+        this.commandConfig(),
         this.settings,
         direction
       )
@@ -342,6 +352,46 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   /**
+   * The characters a list item can start with to be a callout, as for
+   * charPattern. With tag callouts on, a tag callout is found as a tag
+   * wherever it sits, the start included, so it is left out here and the
+   * renderers need not tell the two apart.
+   */
+  private leadingPattern(): string {
+    if (!this.tagCallouts) return this.charPattern();
+    return this.settings
+      .filter((callout) => calloutTag(callout) === null)
+      .map((callout) => escapeStringRegexp(callout.char))
+      .join('|');
+  }
+
+  /** The tag callouts by tag when the preference is on, else null. */
+  private tagPattern(): CalloutConfig['tags'] {
+    return this.tagCallouts ? calloutsByTag(this.settings) : null;
+  }
+
+  /** The editor pattern for an item's leading callout, or null for none. */
+  private listPattern(chars: string): RegExp | null {
+    return chars
+      ? new RegExp(
+          `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
+        )
+      : null;
+  }
+
+  /**
+   * The editor config with every callout character in its pattern, tags
+   * included: the commands write and strip callouts at the start of an
+   * item, and a tag callout written there is one they step through.
+   */
+  private commandConfig(): CalloutConfig {
+    return {
+      ...this.buildEditorConfig(),
+      re: this.listPattern(this.charPattern()),
+    };
+  }
+
+  /**
    * The highlight pattern, or null when there is nothing to match. `anchored`
    * is the post-processor's form, which tests the text of a <mark> the
    * renderer has already found; `whole` finds a complete span in a line of
@@ -371,27 +421,26 @@ export default class ListCalloutsPlugin extends Plugin {
 
     return {
       callouts: this.calloutsByChar(),
-      re: chars
-        ? new RegExp(
-            `(^\\s*[-*+](?: \\[.\\])? |^\\s*\\d+[\\.\\)](?: \\[.\\])? )(${chars}) `
-          )
-        : null,
+      re: this.listPattern(this.leadingPattern()),
       highlightRe: this.highlightPattern(chars, 'whole'),
       highlightOpenRe: this.highlightPattern(chars, 'opener'),
       hideBullets: this.hideBullets,
       colorNestedItems: this.colorNestedItems,
+      tags: this.tagPattern(),
       iconRevision: this.iconRevision,
     };
   }
 
   buildPostProcessorConfig() {
     const chars = this.charPattern();
+    const leading = this.leadingPattern();
 
     this.postProcessorConfig = {
       callouts: this.calloutsByChar(),
-      re: chars ? new RegExp(`^(${chars}) `) : null,
+      re: leading ? new RegExp(`^(${leading}) `) : null,
       highlightRe: this.highlightPattern(chars, 'anchored'),
       colorNestedItems: this.colorNestedItems,
+      tags: this.tagPattern(),
     };
   }
 
@@ -436,21 +485,24 @@ export default class ListCalloutsPlugin extends Plugin {
       this.highlights = defaultHighlightSettings();
       this.hideBullets = DEFAULT_HIDE_BULLETS;
       this.colorNestedItems = DEFAULT_COLOR_NESTED_ITEMS;
+      this.tagCallouts = DEFAULT_TAG_CALLOUTS;
     } else if (stored && Array.isArray(stored.callouts)) {
       // A vault that has saved is taken at its word, empty included --
       // reconstructing the built-ins here is what used to make deleting them
-      // impossible. Missing highlight, bullet and nested item keys come from
-      // a version that did not know them, so they take the defaults.
+      // impossible. Missing highlight, bullet, nested item and tag keys come
+      // from a version that did not know them, so they take the defaults.
       this.settings = stored.callouts;
       this.highlights = { ...defaultHighlightSettings(), ...stored.highlights };
       this.hideBullets = stored.hideBullets ?? DEFAULT_HIDE_BULLETS;
       this.colorNestedItems =
         stored.colorNestedItems ?? DEFAULT_COLOR_NESTED_ITEMS;
+      this.tagCallouts = stored.tagCallouts ?? DEFAULT_TAG_CALLOUTS;
     } else {
       this.settings = defaultCallouts();
       this.highlights = defaultHighlightSettings();
       this.hideBullets = DEFAULT_HIDE_BULLETS;
       this.colorNestedItems = DEFAULT_COLOR_NESTED_ITEMS;
+      this.tagCallouts = DEFAULT_TAG_CALLOUTS;
     }
   }
 
@@ -460,6 +512,7 @@ export default class ListCalloutsPlugin extends Plugin {
       highlights: this.highlights,
       hideBullets: this.hideBullets,
       colorNestedItems: this.colorNestedItems,
+      tagCallouts: this.tagCallouts,
     };
 
     await this.saveData(data);
@@ -468,6 +521,6 @@ export default class ListCalloutsPlugin extends Plugin {
     void this.loadUsedIcons();
     this.buildPostProcessorConfig();
     this.applyHideBullets();
-    this.applyColorNestedItems();
+    this.applyRenderPreferences();
   }
 }
