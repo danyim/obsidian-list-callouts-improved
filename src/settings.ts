@@ -113,8 +113,9 @@ export interface CalloutConfig {
   re: RegExp | null;
   /**
    * Null when highlights are disabled or no callouts are configured. The
-   * editor's copy is global and matches a whole `==& text==` span; the
-   * post-processor's is anchored to the start of a <mark>'s text.
+   * editor's copy is global and matches a whole `==& text==` span, with any
+   * color emoji after the `==` (`==🔴& text==`); the post-processor's is
+   * anchored to the start of a <mark>'s text, which the emoji is not part of.
    */
   highlightRe: RegExp | null;
   /**

@@ -30,6 +30,14 @@ import {
 import { ListCalloutSettingTab } from './settingsTab';
 import { calloutTag, calloutsByTag } from './tags';
 
+/**
+ * The color emoji Obsidian 1.14 reads straight after a highlight's opening
+ * `==` (`==🔴text==`, a red highlight). Reading view drops it from the
+ * <mark>'s text, but the editor sees it in the line, between the `==` and
+ * any callout character.
+ */
+const HIGHLIGHT_COLOR = '(🔴|🟥|🟠|🟧|🟡|🟨|🟢|🟩|🔵|🟦|🟣|🟪)?';
+
 export default class ListCalloutsPlugin extends Plugin {
   settings: ListCalloutsSettings;
   highlights: HighlightSettings;
@@ -396,7 +404,8 @@ export default class ListCalloutsPlugin extends Plugin {
    * is the post-processor's form, which tests the text of a <mark> the
    * renderer has already found; `whole` finds a complete span in a line of
    * raw markdown, and `opener` just the start of one, for a highlight that
-   * closes on a later line.
+   * closes on a later line. Both of those capture the color emoji, if any,
+   * before the character.
    */
   private highlightPattern(
     chars: string,
@@ -410,9 +419,9 @@ export default class ListCalloutsPlugin extends Plugin {
       case 'anchored':
         return new RegExp(`^(${chars})${space}`);
       case 'whole':
-        return new RegExp(`==(${chars})${space}(.*?)==`, 'g');
+        return new RegExp(`==${HIGHLIGHT_COLOR}(${chars})${space}(.*?)==`, 'g');
       case 'opener':
-        return new RegExp(`==(${chars})${space}`, 'g');
+        return new RegExp(`==${HIGHLIGHT_COLOR}(${chars})${space}`, 'g');
     }
   }
 

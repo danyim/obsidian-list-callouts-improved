@@ -59,6 +59,8 @@ A callout highlight's text keeps the normal text color, the same as a list callo
 
 ![A paragraph with a plain highlight in a theme's own text color, and below it a list callout with a callout highlight inside, both in the normal text color, shown in light and dark mode](screenshots/highlight-foreground.png)
 
+A highlight in one of Obsidian's colors (1.14 and later, `==🔴* Highlighted text==`) that starts with a callout trigger is a callout too, in Live Preview and reading view, and takes the callout's color rather than its own. Source mode leaves it as Obsidian draws it, in the highlight's color.
+
 ## Tag callouts
 
 A callout can be triggered by a tag instead of a character: set a callout's character to a whole tag, such as `#meal`, and turn on **Tag callouts** at the top of the settings tab. Any list item with that tag anywhere on its first line then takes the callout, so a day's log can read `- 12:30 #meal Lunch`. If the callout has an icon, the icon replaces the tag; without one, the tag stays as Obsidian draws it and still links to its search. In Live Preview the tag comes back while the cursor is on it, so it can be edited.

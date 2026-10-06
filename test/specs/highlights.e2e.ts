@@ -2,7 +2,10 @@ import { browser, expect } from '@wdio/globals';
 import { after, before, describe, it } from 'mocha';
 import { obsidianPage } from 'wdio-obsidian-service';
 
-import { DEFAULT_HIGHLIGHT_SETTINGS, DEFAULT_SETTINGS } from '../../src/settings';
+import {
+  DEFAULT_HIGHLIGHT_SETTINGS,
+  DEFAULT_SETTINGS,
+} from '../../src/settings';
 import {
   RenderedHighlight,
   applyThemeRule,
@@ -18,6 +21,7 @@ import {
   removeThemeRule,
   rerenderReadingView,
   setHighlights,
+  setRendering,
   setSettings,
 } from '../helpers';
 
@@ -143,7 +147,11 @@ describe('Highlight rendering in live preview', function () {
 
     await browser.waitUntil(
       async () => !(await editorLineText('Important')).includes('& '),
-      { timeout: 5000, interval: 150, timeoutMsg: 'markup was not hidden again' }
+      {
+        timeout: 5000,
+        interval: 150,
+        timeoutMsg: 'markup was not hidden again',
+      }
     );
   });
 
@@ -318,9 +326,7 @@ describe('Highlight rendering in reading mode', function () {
   });
 
   it('decorates every built-in character', async function () {
-    const marks = await rerenderUntil((m) =>
-      m.some((x) => x.char === '%')
-    );
+    const marks = await rerenderUntil((m) => m.some((x) => x.char === '%'));
 
     for (const char of BUILT_IN_CHARS) {
       const mark = marks.find((m) => m.char === char);
@@ -571,5 +577,234 @@ describe('Highlight edge cases in reading mode', function () {
     expect(across.char).toBe('&');
     expect(across.text).toContain('then another');
     expect(across.text.startsWith('spans')).toBe(true);
+  });
+});
+
+/** Whether this Obsidian reads `==🔴text==` as a colored highlight (1.14 on). */
+function hasColoredHighlights(): Promise<boolean> {
+  return browser.executeObsidian(({ obsidian }) =>
+    obsidian.requireApiVersion('1.14.0')
+  );
+}
+
+/**
+ * Each decorated highlight in the editor with its painted background and that
+ * of every element inside it, which have to be transparent for the callout's
+ * color to be the one seen.
+ */
+function editorHighlightPaint(): Promise<
+  { char: string; own: string; inner: string[] }[]
+> {
+  return browser.executeObsidian(({ app }) => {
+    return Array.from(
+      app.workspace.containerEl.querySelectorAll<HTMLElement>(
+        '.markdown-source-view .lc-highlight-callout'
+      )
+    ).map((el) => ({
+      char: el.getAttribute('data-callout'),
+      own: getComputedStyle(el).backgroundColor,
+      inner: Array.from(el.querySelectorAll('*')).map(
+        (n) => getComputedStyle(n).backgroundColor
+      ),
+    }));
+  });
+}
+
+const CALLOUT_RGB: Record<string, string> = {
+  '@': 'rgba(0, 184, 212, ',
+  $: 'rgba(0, 200, 83, ',
+  '~': 'rgba(124, 77, 255, ',
+};
+
+describe('Colored highlights', function () {
+  let colored: boolean;
+
+  before(async function () {
+    await obsidianPage.resetVault();
+    await setSettings(DEFAULT_SETTINGS.map((c) => ({ ...c })));
+    await setHighlights({ ...DEFAULT_HIGHLIGHT_SETTINGS });
+    await openNote('Colored highlights.md');
+    colored = await hasColoredHighlights();
+  });
+
+  describe('in live preview', function () {
+    before(async function () {
+      await setRendering('live-preview');
+      await placeCursor(0, 0);
+      await browser
+        .$('.markdown-source-view .cm-highlight')
+        .waitForExist({ timeout: 10000 });
+    });
+
+    it('decorates a colored highlight that starts with a character', async function () {
+      if (!colored) this.skip();
+
+      const spans = await editorUntil(
+        (s) => s.some((x) => x.char === '~'),
+        'colored highlights were not decorated'
+      );
+
+      expect(spans.find((s) => s.char === '@')?.text).toBe('Red note');
+      expect(spans.find((s) => s.char === '$')?.text).toBe('Blue success');
+      // CodeMirror draws a mark that crosses a line break as one span per line.
+      expect(
+        spans.some((s) => s.char === '~' && s.text.includes('Green idea'))
+      ).toBe(true);
+      expect(
+        spans.some((s) => s.char === '~' && s.text.includes('next line'))
+      ).toBe(true);
+    });
+
+    it('hides the color and the character, leaving the marker', async function () {
+      if (!colored) this.skip();
+
+      const text = await editorLineText('Red note');
+
+      expect(text).toContain('@Red note');
+      expect(text).not.toContain('🔴');
+      expect(text).not.toContain('@ ');
+    });
+
+    it('paints the callout color, not the highlight color', async function () {
+      if (!colored) this.skip();
+
+      const paint = await editorHighlightPaint();
+
+      expect(paint.length).toBeGreaterThanOrEqual(3);
+      for (const { char, own, inner } of paint) {
+        expect(own.startsWith(CALLOUT_RGB[char])).toBe(true);
+        expect(inner.every((c) => c === 'rgba(0, 0, 0, 0)')).toBe(true);
+      }
+    });
+
+    it('leaves a colored highlight with no character alone', async function () {
+      const spans = await editorHighlights();
+
+      expect(spans.some((s) => s.text.includes('red highlight'))).toBe(false);
+    });
+
+    it('reveals the markup while the caret is inside', async function () {
+      if (!colored) this.skip();
+
+      const line = await editorLineNumber('Red note');
+      await placeCursor(line, 6);
+
+      await browser.waitUntil(
+        async () => (await editorLineText('Red note')).includes('@ Red note'),
+        { timeout: 5000, interval: 150, timeoutMsg: 'markup was not revealed' }
+      );
+
+      await placeCursor(0, 0);
+
+      await browser.waitUntil(
+        async () => !(await editorLineText('Red note')).includes('@ '),
+        {
+          timeout: 5000,
+          interval: 150,
+          timeoutMsg: 'markup was not hidden again',
+        }
+      );
+    });
+
+    // Before 1.14 the emoji is text, so a highlight starting with one does
+    // not start with a callout character, here or in reading view.
+    it('leaves them alone where the emoji is not a color', async function () {
+      if (colored) this.skip();
+
+      // Wait for a rebuild to have run before reading what it left out.
+      await browser.pause(500);
+      expect(await editorHighlights()).toEqual([]);
+    });
+  });
+
+  describe('in source mode', function () {
+    before(async function () {
+      await setRendering('source');
+    });
+
+    after(async function () {
+      await setRendering('live-preview');
+    });
+
+    it('leaves colored highlights as Obsidian draws them', async function () {
+      await browser.waitUntil(
+        async () =>
+          (await editorLineText('Red note')).includes('==🔴@ Red note=='),
+        {
+          timeout: 5000,
+          interval: 150,
+          timeoutMsg: 'source mode did not show the raw markup',
+        }
+      );
+
+      expect(await editorHighlights()).toEqual([]);
+      const rawMarkers = await browser.executeObsidian(({ app }) => {
+        return app.workspace.containerEl.querySelectorAll(
+          '.markdown-source-view .lc-raw-marker'
+        ).length;
+      });
+      expect(rawMarkers).toBe(0);
+    });
+  });
+
+  describe('in reading mode', function () {
+    before(async function () {
+      await ensureReadingMode();
+      await browser
+        .$('.markdown-reading-view mark')
+        .waitForExist({ timeout: 10000 });
+    });
+
+    after(async function () {
+      await ensureEditingMode();
+    });
+
+    it('decorates a colored highlight that starts with a character', async function () {
+      if (!colored) this.skip();
+
+      const marks = await rerenderUntil((m) => m.some((x) => x.char === '~'));
+
+      expect(marks.find((m) => m.char === '@')?.text).toBe('Red note');
+      expect(marks.find((m) => m.char === '$')?.text).toBe('Blue success');
+      expect(marks.find((m) => m.char === '~')?.text).toContain('next line');
+      expect(marks.find((m) => m.text === 'red highlight')?.char).toBeNull();
+    });
+
+    it('paints the callout color, not the highlight color', async function () {
+      if (!colored) this.skip();
+
+      const paint = await browser.executeObsidian(({ app }) => {
+        return Array.from(
+          app.workspace.containerEl.querySelectorAll<HTMLElement>(
+            '.markdown-reading-view mark'
+          )
+        ).map((el) => ({
+          char: el.getAttribute('data-callout'),
+          highlight: el.getAttribute('data-highlight'),
+          bg: getComputedStyle(el).backgroundColor,
+        }));
+      });
+
+      const callouts = paint.filter((p) => p.char);
+      expect(callouts.length).toBe(3);
+      for (const { char, highlight, bg } of callouts) {
+        // Still Obsidian's colored highlight underneath, just not its color.
+        expect(highlight).not.toBe('');
+        expect(bg.startsWith(CALLOUT_RGB[char])).toBe(true);
+      }
+      const plain = paint.find((p) => !p.char);
+      expect(
+        Object.values(CALLOUT_RGB).some((c) => plain.bg.startsWith(c))
+      ).toBe(false);
+    });
+
+    it('leaves them alone where the emoji is not a color', async function () {
+      if (colored) this.skip();
+
+      const marks = await readingHighlights();
+
+      expect(marks.length).toBeGreaterThan(0);
+      expect(marks.every((m) => m.char === null)).toBe(true);
+    });
   });
 });
