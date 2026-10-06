@@ -362,6 +362,32 @@ describe('Highlight rendering in reading mode', function () {
     expect(plain.color).toBe('');
   });
 
+  // Obsidian 1.14 paints <mark> from --highlight-background, resolved once on
+  // the body from --text-highlight-bg, so recoloring the latter on the mark
+  // alone left every callout highlight the default yellow (#61). The callout
+  // color was still set on the mark, so only the painted color shows it.
+  it('paints the callout color, not the default highlight color', async function () {
+    const paint = await browser.executeObsidian(({ app }) => {
+      const bg = (selector: string) =>
+        Array.from(
+          app.workspace.containerEl.querySelectorAll<HTMLElement>(selector)
+        ).map((el) => getComputedStyle(el).backgroundColor);
+      return {
+        callout: bg('.markdown-reading-view mark[data-callout="@"]'),
+        plain: bg('.markdown-reading-view mark:not(.lc-highlight-callout)'),
+      };
+    });
+
+    expect(paint.callout.length).toBeGreaterThanOrEqual(1);
+    expect(paint.plain.length).toBeGreaterThanOrEqual(1);
+    for (const color of paint.callout) {
+      expect(color.startsWith('rgba(0, 184, 212, ')).toBe(true);
+    }
+    expect(paint.plain.some((c) => c.startsWith('rgba(0, 184, 212, '))).toBe(
+      false
+    );
+  });
+
   it('paints the text the same color as a list callout under a theme', async function () {
     await applyThemeRule(THEME_HIGHLIGHT_TEXT);
     try {

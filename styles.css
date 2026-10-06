@@ -335,12 +335,16 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
 
 /* Obsidian paints both <mark> and the editor's .cm-highlight span from
    --text-highlight-bg, so overriding the variable on our element recolors
-   whichever of the two it is. */
+   whichever of the two it is. From 1.14 it paints them from
+   --highlight-background instead, which the body sets from
+   --text-highlight-bg once, so our element inherits it already resolved to
+   the default yellow (#61). Setting it here too resolves it against ours. */
 .lc-highlight-callout {
   --text-highlight-bg: rgba(
     var(--lc-callout-color),
     var(--lc-highlight-opacity-light)
   );
+  --highlight-background: var(--text-highlight-bg);
   background-color: var(--text-highlight-bg);
 }
 
