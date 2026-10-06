@@ -77,7 +77,7 @@ and `postProcessor.ts`.
 Formatting and linting are enforced, not advisory:
 
 ```bash
-npm run lint          # eslint, including eslint-plugin-obsidianmd
+npm run lint          # eslint, including eslint-plugin-obsidianmd; warnings fail
 npm run lint:fix
 npm run prettier      # format src/
 npm run clean         # prettier + lint:fix together

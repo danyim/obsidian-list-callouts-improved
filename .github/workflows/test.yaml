@@ -28,6 +28,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run check-types
+      - run: npm run test:scripts
 
   test:
     runs-on: ubuntu-latest
