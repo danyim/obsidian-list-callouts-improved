@@ -41,14 +41,22 @@ npm run check-types      # tsc --noEmit only
   `package.json`.
 
 ```bash
-npm run lint          # eslint .
+npm run lint          # eslint . (warnings fail too) + registry-only lockfile
 npm run lint:fix
 npm run prettier      # format src/
 npm run clean         # prettier + lint:fix together
 ```
 
-CI (`.github/workflows/test.yaml`) runs lint, type-check, and the e2e suite on
-every push and PR.
+CI (`.github/workflows/test.yaml`) runs lint, type-check, the script tests,
+and the e2e suite on every push and PR.
+
+Obsidian's plugin scanner reports warnings as well as errors, so `npm run lint`
+fails on either. It also lints with type information, and it left a dependency
+installed from GitHub unresolved, which typed every import from it as `any`.
+`scripts/check-registry-deps.mjs` (part of `npm run lint`) therefore rejects
+any package in `package-lock.json` that isn't from the npm registry. When
+Obsidian's runtime has an export the npm release lacks, declare it in a
+`src/*.d.ts` file, as `src/codemirror-language.d.ts` does.
 
 ## File & folder conventions
 
