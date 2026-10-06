@@ -351,6 +351,18 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
   );
 }
 
+/* From 1.14, reading view paints the <mark> from --highlight-background
+   instead. The body sets that from --text-highlight-bg once, so the mark
+   inherits it already resolved to the default yellow (#61), and a colored
+   highlight (`==🔴text==`) sets it to its own color from
+   `mark[data-highlight]`. Resolving it from ours on the mark itself, a
+   class above that selector, keeps the callout's color either way. The
+   editor needs none of this: ours is the span that paints there, and
+   Obsidian's, colored or not, is made transparent inside it below. */
+.markdown-rendered mark.lc-highlight-callout[data-callout] {
+  --highlight-background: var(--text-highlight-bg);
+}
+
 /* The text keeps the normal text color, the same as a list callout's text,
    which the plugin never recolors. Obsidian paints highlighted text
    --text-normal already, but a theme that wants dark text on its yellow

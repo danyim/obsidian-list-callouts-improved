@@ -624,6 +624,9 @@ const rawMarkerDecoration = Decoration.mark({ class: 'lc-raw-marker' });
  * replacement is dropped while the selection touches the highlight, so the
  * raw `==& ` is there to edit, which is what Obsidian does with `==`. Source
  * mode keeps the raw character throughout and tints it instead.
+ *
+ * `openFrom` is where the opening `==` starts, which is two characters before
+ * the content unless a color emoji sits between them.
  */
 function addHighlightDeco(
   builder: DecoSink,
@@ -631,6 +634,7 @@ function addHighlightDeco(
   state: EditorState,
   callout: Callout,
   revision: number | undefined,
+  openFrom: number,
   contentFrom: number,
   markerTo: number,
   contentTo: number,
@@ -646,7 +650,7 @@ function addHighlightDeco(
       contentFrom + callout.char.length,
       rawMarkerDecoration
     );
-  } else if (!selectionTouches(state, contentFrom - 2, contentTo + 2)) {
+  } else if (!selectionTouches(state, openFrom, contentTo + 2)) {
     builder.add(
       contentFrom,
       markerTo,
@@ -655,6 +659,26 @@ function addHighlightDeco(
       })
     );
   }
+}
+
+/**
+ * Where the content of a highlight whose `==` starts at `openFrom` begins,
+ * or null when it is not to be decorated. `color` is the color emoji the
+ * pattern found after the `==`, if any. That only counts when Obsidian read
+ * it as a color (1.14 on), folding it into the opening `==` token; before
+ * that it is text, and reading view, seeing it at the start of the <mark>,
+ * leaves the highlight alone. A colored highlight is a callout in Live
+ * Preview only: source mode shows it as Obsidian does, in its own color.
+ */
+function highlightContentFrom(
+  state: EditorState,
+  openFrom: number,
+  color: string | undefined
+): number | null {
+  if (!color) return openFrom + 2;
+  if (!isLivePreview(state)) return null;
+  if (!tokenClassAt(state, openFrom + 2, /formatting-highlight/)) return null;
+  return openFrom + 2 + color.length;
 }
 
 /**
@@ -682,11 +706,12 @@ function addHighlightDecos(
   while ((match = re.exec(line.text))) {
     searchFrom = re.lastIndex;
 
-    const callout = config.callouts[match[1]];
+    const callout = config.callouts[match[2]];
     if (!callout) continue;
 
     const from = line.from + match.index;
-    const contentFrom = from + 2;
+    const contentFrom = highlightContentFrom(state, from, match[1]);
+    if (contentFrom === null) continue;
     const contentTo = from + match[0].length - 2;
 
     if (!isHighlightAt(state, contentFrom)) continue;
@@ -697,8 +722,9 @@ function addHighlightDecos(
       state,
       callout,
       config.iconRevision,
+      from,
       contentFrom,
-      contentTo - match[2].length,
+      contentTo - match[3].length,
       contentTo,
       stats
     );
@@ -711,10 +737,12 @@ function addHighlightDecos(
   const opener = open.exec(line.text);
   if (!opener) return;
 
-  const callout = config.callouts[opener[1]];
+  const callout = config.callouts[opener[2]];
   if (!callout) return;
 
-  const contentFrom = line.from + opener.index + 2;
+  const from = line.from + opener.index;
+  const contentFrom = highlightContentFrom(state, from, opener[1]);
+  if (contentFrom === null) return;
   if (!isHighlightAt(state, contentFrom)) return;
 
   const contentTo = highlightEndAfter(state, contentFrom);
@@ -726,8 +754,9 @@ function addHighlightDecos(
     state,
     callout,
     config.iconRevision,
+    from,
     contentFrom,
-    line.from + opener.index + opener[0].length,
+    from + opener[0].length,
     contentTo,
     stats
   );
