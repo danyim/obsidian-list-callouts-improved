@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Scorecard
+
+# Obsidian scans each published release and lists what it finds on the
+# plugin's page at community.obsidian.md. npm run lint approximates that scan
+# but has missed findings before (1.8.1 shipped with 38), so this reads the
+# scorecard itself and fails while it lists anything beyond passed checks and
+# disclosures, with an annotation per finding.
+#
+# The scorecard only changes when a release does and Obsidian rescans it, so
+# this runs daily rather than per commit. Like check_for_new_obsidian.yaml,
+# GitHub disables it after 60 days without repository activity.
+
+on:
+  schedule: # Daily
+    - cron: '17 14 * * *'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      # No npm ci: the script uses only Node built-ins.
+      - run: npm run scorecard

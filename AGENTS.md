@@ -50,6 +50,10 @@ npm run clean         # prettier + lint:fix together
 CI (`.github/workflows/test.yaml`) runs lint, type-check, the script tests,
 and the e2e suite on every push and PR.
 
+```bash
+npm run scorecard     # what Obsidian's scanner reported for the latest release
+```
+
 Obsidian's plugin scanner reports warnings as well as errors, so `npm run lint`
 fails on either. It also lints with type information, and it left a dependency
 installed from GitHub unresolved, which typed every import from it as `any`.
@@ -57,6 +61,15 @@ installed from GitHub unresolved, which typed every import from it as `any`.
 any package in `package-lock.json` that isn't from the npm registry. When
 Obsidian's runtime has an export the npm release lacks, declare it in a
 `src/*.d.ts` file, as `src/codemirror-language.d.ts` does.
+
+Lint is still only an approximation. What the scanner actually found in the
+latest release is on the plugin's scorecard at
+https://community.obsidian.md/plugins/list-callouts-improved, and
+`npm run scorecard` (`scripts/check-scorecard.mjs`) reads it and fails while it
+lists any warning. `.github/workflows/scorecard.yaml` runs it daily and when a
+release is published. A scorecard finding that `npm run lint` doesn't
+reproduce means the lint setup has drifted from the scanner's: fix that too,
+not just the finding.
 
 ## File & folder conventions
 
