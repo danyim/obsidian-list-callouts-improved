@@ -75,6 +75,138 @@ function stripUnsafe(el: Element): void {
   }
 }
 
+/** Elements that draw something, and so take SVG's default black fill. */
+const SHAPES = new Set([
+  'path',
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'polyline',
+  'polygon',
+  'text',
+]);
+
+/** A fill, stroke or color declaration in a style attribute or sheet. */
+const PAINT_DECLARATION = /(?<![\w-])(fill|stroke|color)(\s*:\s*)([^;}]+)/gi;
+
+/**
+ * The solid color a paint value names, spelled one way so that `black` and
+ * `#000` compare equal, or null for a value that is not a solid color.
+ */
+function solidColor(value: string): string | null {
+  const v = value.trim().toLowerCase().replace(/\s+/g, '');
+
+  if (
+    ['', 'none', 'currentcolor', 'transparent', 'inherit'].includes(v) ||
+    v.startsWith('url(')
+  ) {
+    return null;
+  }
+  if (v === 'black') return '#000000';
+  if (v === 'white') return '#ffffff';
+
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+  return short
+    ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`
+    : v;
+}
+
+/** Whether an element sets a fill of its own, in an attribute or its style. */
+function setsFill(el: Element): boolean {
+  return (
+    el.hasAttribute('fill') ||
+    /(?<![\w-])fill\s*:/i.test(el.getAttribute('style') ?? '')
+  );
+}
+
+/**
+ * Hand a one-color icon's color over to the callout (#64). Obsidian draws a
+ * registered icon in the marker's color only where the icon paints in
+ * currentColor, so a file exported with its color written in (black,
+ * usually), or with no fill at all, which SVG paints black, stayed black
+ * whatever the callout's color. Such an icon is a glyph, drawn in one color
+ * the way Obsidian's own icons are, so that color becomes currentColor. An
+ * icon in two or more colors, or with a gradient, keeps them: they are part
+ * of the picture.
+ *
+ * Rewrites the paints in place and returns whether the icon is one color.
+ */
+function recolorOneColorIcon(root: Element): boolean {
+  const elements = [root, ...Array.from(root.querySelectorAll('*'))];
+  const sheets = elements.filter((el) => el.tagName.toLowerCase() === 'style');
+  const colors = new Set<string>();
+  let patterned = false;
+
+  const see = (property: string, value: string) => {
+    if (property.toLowerCase() === 'color') return;
+    if (value.trim().toLowerCase().startsWith('url(')) patterned = true;
+    const color = solidColor(value);
+    if (color) colors.add(color);
+  };
+
+  for (const el of elements) {
+    for (const property of ['fill', 'stroke']) {
+      const value = el.getAttribute(property);
+      if (value !== null) see(property, value);
+    }
+    for (const [, property, , value] of (
+      el.getAttribute('style') ?? ''
+    ).matchAll(PAINT_DECLARATION)) {
+      see(property, value);
+    }
+  }
+  for (const sheet of sheets) {
+    for (const [, property, , value] of (sheet.textContent ?? '').matchAll(
+      PAINT_DECLARATION
+    )) {
+      see(property, value);
+    }
+  }
+
+  // A shape with no fill anywhere above it is painted black. With a style
+  // sheet, a class may be what fills it, which is not worth resolving here.
+  const unfilled = elements.some((el) => {
+    if (!SHAPES.has(el.tagName.toLowerCase())) return false;
+    for (let at: Element | null = el; at; at = at.parentElement) {
+      if (setsFill(at)) return false;
+      if (at === root) break;
+    }
+    return true;
+  });
+  if (unfilled && sheets.length === 0) colors.add('#000000');
+
+  if (patterned || colors.size > 1) return false;
+
+  // Solid paints become currentColor, and a color property, which only sets
+  // what currentColor means, goes, so the marker's color comes through.
+  const recolor = (text: string) =>
+    text.replace(
+      PAINT_DECLARATION,
+      (whole: string, property: string, colon: string, value: string) => {
+        if (property.toLowerCase() === 'color') return '';
+        return solidColor(value) ? `${property}${colon}currentColor` : whole;
+      }
+    );
+
+  for (const el of elements) {
+    for (const property of ['fill', 'stroke']) {
+      const value = el.getAttribute(property);
+      if (value !== null && solidColor(value)) {
+        el.setAttribute(property, 'currentColor');
+      }
+    }
+    el.removeAttribute('color');
+    const style = el.getAttribute('style');
+    if (style !== null) el.setAttribute('style', recolor(style));
+  }
+  for (const sheet of sheets) {
+    sheet.textContent = recolor(sheet.textContent ?? '');
+  }
+
+  return true;
+}
+
 function parseViewBox(root: Element): [number, number, number, number] {
   const raw = (root.getAttribute('viewBox') ?? '').trim();
   const parts = raw.split(/[\s,]+/).map(Number);
@@ -123,6 +255,7 @@ export function svgToIconBody(source: string): string {
   }
 
   stripUnsafe(root);
+  const oneColor = recolorOneColorIcon(root);
 
   const [minX, minY, width, height] = parseViewBox(root);
   const transform = `scale(${round(100 / width)}, ${round(100 / height)}) translate(${round(-minX)}, ${round(-minY)})`;
@@ -134,13 +267,18 @@ export function svgToIconBody(source: string): string {
     )
     .join(' ');
 
+  // What SVG would paint black, the marker's color paints instead. The root's
+  // own style attribute is not carried over, so this goes by its attribute.
+  const fill =
+    oneColor && !root.hasAttribute('fill') ? 'fill="currentColor" ' : '';
+
   const body = root.innerHTML.trim();
 
   if (!body) {
     throw new Error('SVG has no content');
   }
 
-  return `<g ${attributes} transform="${transform}">${body}</g>`;
+  return `<g ${fill}${attributes} transform="${transform}">${body}</g>`;
 }
 
 /**
