@@ -246,10 +246,7 @@ export default class ListCalloutsPlugin extends Plugin {
     this.appliedTagCallouts = this.tagCallouts;
 
     this.dispatchUpdate();
-
-    for (const view of this.markdownViews()) {
-      if (view.getMode() === 'preview') view.previewMode.rerender(true);
-    }
+    this.rerenderReadingViews();
   }
 
   /**
@@ -291,7 +288,11 @@ export default class ListCalloutsPlugin extends Plugin {
   private redrawIcons(): void {
     this.iconRevision++;
     this.dispatchUpdate();
+    this.rerenderReadingViews();
+  }
 
+  /** Render every open reading view again, through the post processor. */
+  private rerenderReadingViews(): void {
     for (const view of this.markdownViews()) {
       if (view.getMode() === 'preview') view.previewMode.rerender(true);
     }
@@ -485,9 +486,44 @@ export default class ListCalloutsPlugin extends Plugin {
   }
 
   async loadSettings() {
-    const stored = (await this.loadData()) as
-      Callout[] | Partial<PluginData> | null;
+    this.readSettings(
+      (await this.loadData()) as Callout[] | Partial<PluginData> | null
+    );
+  }
 
+  /**
+   * Called by Obsidian when data.json changes on disk from outside the
+   * plugin: Sync, a hand edit, or a script. Obsidian re-reads the settings
+   * tab afterwards; redrawing the open notes is left to the plugin.
+   */
+  async onExternalSettingsChange() {
+    const stored = (await this.loadData()) as
+      Callout[] | Partial<PluginData> | null | undefined;
+
+    // loadData resolves undefined for a file that does not parse, such as
+    // one caught halfway through being written, and null for one that is
+    // gone. Reading either as a fresh vault would put the built-ins back,
+    // and the next save would write them over the callouts, so the settings
+    // in memory stand until the file holds settings again.
+    if (!Array.isArray(stored) && !Array.isArray(stored?.callouts)) {
+      console.warn(
+        'List Callouts, Improved: ignored a data.json change that holds no callouts'
+      );
+      return;
+    }
+
+    this.readSettings(stored);
+    this.applySettings();
+
+    // Straight away rather than through the debounced update, as nothing is
+    // being typed. Reading views render again because the post processor
+    // only sees a note as it is rendered, and anything about a callout may
+    // have changed.
+    this.dispatchUpdate();
+    this.rerenderReadingViews();
+  }
+
+  private readSettings(stored: Callout[] | Partial<PluginData> | null) {
     if (Array.isArray(stored)) {
       // Written before highlight settings existed.
       this.settings = stored;
@@ -526,6 +562,11 @@ export default class ListCalloutsPlugin extends Plugin {
 
     await this.saveData(data);
     this.emitSettingsUpdate();
+    this.applySettings();
+  }
+
+  /** Bring everything drawn from the settings in step with them. */
+  private applySettings() {
     // An import can bring in callouts whose custom icons were never read.
     void this.loadUsedIcons();
     this.buildPostProcessorConfig();

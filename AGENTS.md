@@ -137,7 +137,10 @@ and the beta-build matrix work, is in [`docs/TESTING.md`](docs/TESTING.md).
   `settingsTab.ts` — there is no imperative `display()` fallback; the
   declarative settings API is required (`minAppVersion` is 1.13.0+).
 - Settings persist via `this.loadData()` / `this.saveData()`, called from
-  `loadSettings()`/`saveSettings()` in `main.ts`.
+  `loadSettings()`/`saveSettings()` in `main.ts`. A change to `data.json`
+  from outside the plugin (Sync, a hand edit, a script) arrives through
+  `onExternalSettingsChange()`, which reads the file again and redraws the
+  open notes; Obsidian refreshes the settings tab itself.
 
 ## Versioning & releases
 
