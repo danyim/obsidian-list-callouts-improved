@@ -103,6 +103,8 @@ Any SVG in your vault's `.obsidian/icons` folder is registered as an icon and ap
 
 This is the same folder [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) uses, so a vault already keeping icons there needs no changes.
 
+An icon drawn in a single color, such as the black of most icon downloads, takes the callout's color (or its marker color) the way Obsidian's own icons do. An icon in two or more colors, or with a gradient, keeps its own.
+
 Icons are read once Obsidian has finished starting up, so restart Obsidian or toggle the plugin after adding files. A name that an Obsidian icon already uses is skipped rather than replaced, and a file that is not usable SVG is skipped with a note in the console.
 
 ## Migrating from [List Callouts](https://github.com/mgmeyers/obsidian-list-callouts)
