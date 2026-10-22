@@ -82,7 +82,13 @@ npm run lint:fix
 npm run prettier      # format src/
 npm run clean         # prettier + lint:fix together
 npm run check-types   # tsc --noEmit
+npm run scorecard     # findings Obsidian's scanner listed for the latest release
 ```
+
+Obsidian scans every published release and lists any warnings on the
+plugin's [scorecard](https://community.obsidian.md/plugins/list-callouts-improved).
+`npm run lint` approximates that scan; the Scorecard workflow checks the real
+one daily and fails while it lists anything.
 
 Comments in this codebase explain *why* something is the way it is — a
 constraint, a workaround, an Obsidian quirk — rather than restating what the

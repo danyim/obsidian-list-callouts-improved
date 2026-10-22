@@ -10,6 +10,7 @@
     "icons": "node scripts/make-icon-list.mjs",
     "lint": "eslint . --max-warnings=0 && node scripts/check-registry-deps.mjs",
     "lint:fix": "eslint . --fix",
+    "scorecard": "node scripts/check-scorecard.mjs",
     "prettier": "prettier --ignore-path config/.prettierignore --write \"./src/**/*.{ts,tsx}\"",
     "clean": "npm run prettier && npm run lint:fix",
     "swap": "node scripts/swap-installed-plugin.mjs",
