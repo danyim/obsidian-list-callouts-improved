@@ -8,7 +8,7 @@
     "build": "tsc -noEmit -skipLibCheck && node config/esbuild.config.mjs production",
     "check-types": "tsc --noEmit",
     "icons": "node scripts/make-icon-list.mjs",
-    "lint": "eslint . --max-warnings=0 && node scripts/check-registry-deps.mjs",
+    "lint": "eslint . --max-warnings=0 && node scripts/check-registry-deps.mjs && node scripts/check-install-scripts.mjs",
     "lint:fix": "eslint . --fix",
     "scorecard": "node scripts/check-scorecard.mjs",
     "prettier": "prettier --ignore-path config/.prettierignore --write \"./src/**/*.{ts,tsx}\"",
@@ -57,6 +57,13 @@
   "dependencies": {
     "escape-string-regexp": "^5.0.0",
     "fuse.js": "^7.5.0"
+  },
+  "allowScripts": {
+    "classic-level": false,
+    "edgedriver": false,
+    "esbuild": false,
+    "fsevents": false,
+    "geckodriver": false
   },
   "prettier": {
     "arrowParens": "always",

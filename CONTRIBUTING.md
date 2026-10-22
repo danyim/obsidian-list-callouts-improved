@@ -90,6 +90,13 @@ plugin's [scorecard](https://community.obsidian.md/plugins/list-callouts-improve
 `npm run lint` approximates that scan; the Scorecard workflow checks the real
 one daily and fails while it lists anything.
 
+The scanner installs the dependencies before it reviews the source, and npm
+12 can refuse a dependency's install script that `allowScripts` in
+`package.json` doesn't mention. If `npm run lint` reports an install script
+after a dependency change, add the package to `allowScripts`: `false` if it
+works without the script, `true` if it needs it. CI's `scanner` job installs
+that way and runs Obsidian's own checks on every pull request.
+
 Comments in this codebase explain *why* something is the way it is — a
 constraint, a workaround, an Obsidian quirk — rather than restating what the
 line does. Please match that. If a piece of code needs no explanation, it needs

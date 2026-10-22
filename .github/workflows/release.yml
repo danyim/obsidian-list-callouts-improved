@@ -26,9 +26,14 @@ jobs:
           node-version: '24.x'
           cache: 'npm'
 
+      # Installed as strictly as Obsidian's plugin scanner could (see the
+      # scanner job in test.yaml), so a tag whose dependencies the scanner
+      # would fail to install never becomes a release. Skipping the install
+      # scripts leaves main.js byte for byte the same.
       - name: Build plugin
         run: |
-          npm ci
+          npm install -g npm@12
+          npm ci --strict-allow-scripts
           npm run build
 
       # Obsidian's community catalog installs from the three loose files, but

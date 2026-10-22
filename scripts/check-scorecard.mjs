@@ -151,6 +151,22 @@ export function parseScorecard(html) {
   return scorecard.length > 0 ? scorecard : null;
 }
 
+/**
+ * The version a plugin page lists as current, which is the release its
+ * scorecard rates, or null when the page shows none. Obsidian scans a release
+ * some hours after it is published, so until then this is the one before.
+ */
+export function currentVersion(html) {
+  for (const row of flightRows(html).values()) {
+    let afterLabel = false;
+    for (const [, , , props] of elements(row)) {
+      if (afterLabel) return textOf(props?.children) || null;
+      afterLabel = textOf(props?.children) === 'Current version';
+    }
+  }
+  return null;
+}
+
 /** The items in `scorecard` that are neither passed checks nor disclosures. */
 export function findings(scorecard) {
   return scorecard
@@ -189,7 +205,7 @@ export function annotation(item) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { id } = JSON.parse(readFileSync('manifest.json', 'utf8'));
+  const { id, version } = JSON.parse(readFileSync('manifest.json', 'utf8'));
   const url = SITE + id;
 
   const response = await fetch(url);
@@ -198,13 +214,24 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     process.exit(1);
   }
 
-  const scorecard = parseScorecard(await response.text());
+  const html = await response.text();
+  const scorecard = parseScorecard(html);
   if (!scorecard) {
     console.error(
       `Found no scorecard in ${url}. The page has likely changed shape; ` +
         'update parseScorecard() in scripts/check-scorecard.mjs.'
     );
     process.exit(1);
+  }
+
+  // The run on a release's publication reads the page before Obsidian has
+  // scanned that release, so say which one the findings belong to.
+  const rated = currentVersion(html);
+  console.log(`Scorecard for ${rated ?? 'an unknown version'}`);
+  if (rated && rated !== version) {
+    console.log(
+      `Obsidian has not scanned ${version} yet; this is ${rated}'s scorecard.`
+    );
   }
 
   for (const { heading, count, items } of scorecard) {
