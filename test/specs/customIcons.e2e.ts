@@ -310,3 +310,99 @@ describe('Custom icons from the vault', function () {
     });
   });
 });
+
+/**
+ * How the icon `id` is painted on the first callout's marker in the open
+ * note: the marker's color, and each shape's computed fill and stroke.
+ */
+async function markerIconPaint(id: string): Promise<{
+  color: string;
+  shapes: { fill: string; stroke: string }[];
+}> {
+  await browser.$(`.lc-list-marker svg.${id}`).waitForExist({ timeout: 10000 });
+  return browser.executeObsidian(({ app }, wanted) => {
+    const svg = app.workspace.containerEl.querySelector(
+      `.lc-list-marker svg.${wanted}`
+    );
+    return {
+      color: getComputedStyle(svg).color,
+      shapes: Array.from(svg.querySelectorAll('path, rect, circle')).map(
+        (shape) => {
+          const style = getComputedStyle(shape);
+          return { fill: style.fill, stroke: style.stroke };
+        }
+      ),
+    };
+  }, id);
+}
+
+/**
+ * #64: Obsidian paints a registered icon in the marker's color only where
+ * the icon uses currentColor, so an icon with its one color written in, or
+ * with none, which SVG paints black, stayed black whatever the callout's
+ * color.
+ */
+describe('Custom icon colors', function () {
+  before(async function () {
+    await browser.reloadObsidian({ vault: 'test/vaults/icons' });
+    await customIconsReady();
+  });
+
+  async function drawIcon(id: string, markerColor?: string): Promise<void> {
+    const settings = await getSettings();
+    settings[0].icon = id;
+    settings[0].markerColor = markerColor;
+    await setSettings(settings);
+    await openNote('Note.md');
+  }
+
+  it('paints an icon written in black in the callout color', async function () {
+    // Google's Material Symbols export: fill="#000000" on the root.
+    await drawIcon('material-home');
+
+    const paint = await markerIconPaint('material-home');
+    expect(paint.color).not.toBe('rgb(0, 0, 0)');
+    expect(paint.shapes).toEqual([{ fill: paint.color, stroke: 'none' }]);
+  });
+
+  it('paints an icon with no color of its own in the callout color', async function () {
+    await drawIcon('unpainted');
+
+    const paint = await markerIconPaint('unpainted');
+    expect(paint.shapes).toEqual([{ fill: paint.color, stroke: 'none' }]);
+  });
+
+  it('paints an icon colored by a style sheet in the callout color', async function () {
+    await drawIcon('stylesheet');
+
+    const paint = await markerIconPaint('stylesheet');
+    expect(paint.shapes).toEqual([{ fill: paint.color, stroke: 'none' }]);
+  });
+
+  it("paints a one-color icon in the callout's marker color", async function () {
+    await drawIcon('material-home', '10, 200, 30');
+
+    const paint = await markerIconPaint('material-home');
+    expect(paint.color).toBe('rgb(10, 200, 30)');
+    expect(paint.shapes).toEqual([
+      { fill: 'rgb(10, 200, 30)', stroke: 'none' },
+    ]);
+  });
+
+  it('keeps the colors of an icon drawn in more than one', async function () {
+    await drawIcon('two-tone');
+
+    const paint = await markerIconPaint('two-tone');
+    expect(paint.shapes).toEqual([
+      { fill: 'rgb(255, 0, 0)', stroke: 'none' },
+      { fill: 'rgb(0, 0, 255)', stroke: 'none' },
+    ]);
+  });
+
+  it('still strokes an outline icon in the callout color', async function () {
+    await drawIcon('my-fancy-mark');
+
+    const paint = await markerIconPaint('my-fancy-mark');
+    expect(paint.shapes).toEqual([{ fill: 'none', stroke: paint.color }]);
+  });
+});
