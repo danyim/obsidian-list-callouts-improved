@@ -41,14 +41,14 @@ npm run check-types      # tsc --noEmit only
   `package.json`.
 
 ```bash
-npm run lint          # eslint . (warnings fail too) + registry-only lockfile
+npm run lint          # eslint . (warnings fail too) + lockfile checks
 npm run lint:fix
 npm run prettier      # format src/
 npm run clean         # prettier + lint:fix together
 ```
 
 CI (`.github/workflows/test.yaml`) runs lint, type-check, the script tests,
-and the e2e suite on every push and PR.
+the scanner job, and the e2e suite on every push and PR.
 
 ```bash
 npm run scorecard     # what Obsidian's scanner reported for the latest release
@@ -61,6 +61,19 @@ installed from GitHub unresolved, which typed every import from it as `any`.
 any package in `package-lock.json` that isn't from the npm registry. When
 Obsidian's runtime has an export the npm release lacks, declare it in a
 `src/*.d.ts` file, as `src/codemirror-language.d.ts` does.
+
+The scanner also has to install the dependencies, and 1.8.3's review failed
+to ("Source review dependency installation failed"). npm 12 blocks dependency
+install scripts that `allowScripts` in `package.json` doesn't list, and with
+`strict-allow-scripts` fails the install on them. None of ours needs its
+script (esbuild runs from its platform package, classic-level loads a bundled
+prebuild, the WebDriver drivers download only on request), so `allowScripts`
+denies them all. `scripts/check-install-scripts.mjs` (part of `npm run lint`)
+fails when the lockfile gains one it doesn't cover: decide on it there
+(`npx npm@12 install-scripts ls` lists them). The `scanner` job in
+`test.yaml` installs that way and then runs `obsidianmd/obsidian-workflows`,
+Obsidian's action for the directory's checks, with the scanner's lint
+rulesets and `strict` on; `release.yml` installs that way too.
 
 Lint is still only an approximation. What the scanner actually found in the
 latest release is on the plugin's scorecard at

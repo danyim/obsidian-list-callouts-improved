@@ -30,6 +30,29 @@ jobs:
       - run: npm run check-types
       - run: npm run test:scripts
 
+  # What Obsidian's plugin scanner does with a release, on every change, so a
+  # release is not the first to find out. 1.8.3's review failed to install the
+  # dependencies, which npm ci here never did: npm 12 with
+  # strict-allow-scripts is the strictest install the scanner could run, and
+  # fails on any dependency install script allowScripts in package.json leaves
+  # undecided. obsidianmd/obsidian-workflows is Obsidian's action matching the
+  # community directory's checks; it builds from that install and lints with
+  # the scanner's own rulesets, failing on policy findings as well.
+  scanner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+      - run: npm install -g npm@12
+      - run: npm ci --strict-allow-scripts
+      - uses: obsidianmd/obsidian-workflows@v1
+        with:
+          scanner-lint: true
+          strict: true
+
   test:
     runs-on: ubuntu-latest
     name: e2e

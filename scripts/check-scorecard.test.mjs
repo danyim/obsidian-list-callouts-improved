@@ -4,7 +4,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { annotation, findings, parseScorecard } from './check-scorecard.mjs';
+import {
+  annotation,
+  currentVersion,
+  findings,
+  parseScorecard,
+} from './check-scorecard.mjs';
 
 const el = (tag, key, props) => ['$', tag, key, props];
 
@@ -85,6 +90,19 @@ function page({ withScorecard = true } = {}) {
       })
     )}`,
     ...(withScorecard ? [`3a:${JSON.stringify(scorecard)}`] : []),
+    `4b:${JSON.stringify(
+      el('div', null, {
+        className: 'grid',
+        children: [
+          [
+            el('div', null, { children: 'Current version' }),
+            el('div', null, { children: '1.8.3' }),
+          ],
+          el('div', null, { children: 'Last updated' }),
+          el('div', null, { children: '19 hours ago' }),
+        ],
+      })
+    )}`,
   ].join('\n');
 
   const half = Math.floor(rows.length / 2);
@@ -132,6 +150,16 @@ describe('parseScorecard', () => {
   it('returns null for a page with no scorecard', () => {
     assert.equal(parseScorecard(page({ withScorecard: false })), null);
     assert.equal(parseScorecard('<html></html>'), null);
+  });
+});
+
+describe('currentVersion', () => {
+  it('reads the version the page lists as current', () => {
+    assert.equal(currentVersion(page()), '1.8.3');
+  });
+
+  it('is null for a page without one', () => {
+    assert.equal(currentVersion('<html></html>'), null);
   });
 });
 
