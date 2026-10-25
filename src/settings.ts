@@ -96,6 +96,13 @@ export const DEFAULT_COLOR_NESTED_ITEMS = false;
 export const DEFAULT_TAG_CALLOUTS = false;
 
 /**
+ * What a callout added without a color of its own starts with. A muted
+ * yellow rather than the gray of the built-in `%` callout, so it still stands
+ * apart from that one.
+ */
+export const NEW_CALLOUT_COLOR = '201, 180, 88';
+
+/**
  * The class `hideBullets` puts on the document body. Everything the
  * preference changes is done in styles.css under this class, so the editor,
  * reading view and settings previews all follow it the moment it flips.

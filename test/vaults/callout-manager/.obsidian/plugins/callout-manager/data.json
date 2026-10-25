@@ -1,0 +1,12 @@
+{
+  "callouts": {
+    "custom": ["definition", "2024"],
+    "settings": {
+      "definition": [
+        { "changes": { "color": "12, 34, 56", "icon": "lucide-book-open" } }
+      ],
+      "note": [{ "changes": { "color": "200, 0, 0" } }]
+    }
+  },
+  "calloutDetection": { "obsidian": true, "theme": true, "snippet": true }
+}

@@ -17,6 +17,13 @@ import {
   setTooltip,
 } from 'obsidian';
 
+import {
+  CALLOUT_MANAGER_NAME,
+  CalloutManagerImport,
+  ConfirmCalloutManagerImportModal,
+  calloutManagerAvailable,
+  readCalloutManager,
+} from './calloutManager';
 import { allIconIds, searchIcons } from './iconSearch';
 import { ConfirmImportModal, LEGACY_PLUGIN_NAME } from './import';
 import type ListCalloutsPlugin from './main';
@@ -26,6 +33,7 @@ import {
   DEFAULT_HIDE_BULLETS,
   DEFAULT_TAG_CALLOUTS,
   HighlightSettings,
+  NEW_CALLOUT_COLOR,
   calloutColorStyle,
 } from './settings';
 
@@ -512,11 +520,9 @@ export function buildCalloutRow(
  * Collects the character, icon and color for a new custom callout.
  */
 export class NewCalloutModal extends Modal {
-  // A muted yellow rather than the gray of the built-in `%` callout, so a
-  // callout added without touching the picker still stands apart from it.
   private callout: Callout = {
     char: '',
-    color: '201, 180, 88',
+    color: NEW_CALLOUT_COLOR,
     custom: true,
   };
 
@@ -684,6 +690,23 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     });
   }
 
+  private calloutManagerImportDesc(): DocumentFragment {
+    // Markdown, not UI text, so held apart from the sentence-case check.
+    const block = '[!definition]';
+    const tag = '#definition';
+    return createFragment((f) => {
+      f.appendText(
+        `Add a tag callout for each callout ${CALLOUT_MANAGER_NAME} knows, so `
+      );
+      f.append(createEl('code', { text: tag }));
+      f.appendText(' colors a list item the way ');
+      f.append(createEl('code', { text: block }));
+      f.appendText(
+        " styles a callout block. Obsidian's built-in callouts and the ones you already have are left out."
+      );
+    });
+  }
+
   private highlightsDesc(): DocumentFragment {
     return createFragment((f) => {
       f.appendText(
@@ -767,6 +790,38 @@ export class ListCalloutSettingTab extends PluginSettingTab {
     }
   }
 
+  private async startCalloutManagerImport(): Promise<void> {
+    let plan: CalloutManagerImport;
+    try {
+      plan = await readCalloutManager(this.plugin.app, this.plugin.settings);
+    } catch (e) {
+      new Notice(`Import failed. ${(e as Error).message}`);
+      return;
+    }
+
+    if (plan.added.length === 0) {
+      new Notice(
+        `Nothing to import. Every callout from ${CALLOUT_MANAGER_NAME} is already here or can't be a tag.`
+      );
+      return;
+    }
+
+    new ConfirmCalloutManagerImportModal(
+      this.plugin.app,
+      plan,
+      this.plugin.tagCallouts,
+      () => {
+        this.plugin.settings.push(...plan.added);
+        void this.plugin.saveSettings();
+        this.refresh();
+        const count = plan.added.length;
+        new Notice(
+          `Imported ${count} callout${count === 1 ? '' : 's'} from ${CALLOUT_MANAGER_NAME}.`
+        );
+      }
+    ).open();
+  }
+
   private deleteCallout(index: number): void {
     this.plugin.settings.splice(index, 1);
     void this.plugin.saveSettings();
@@ -847,6 +902,22 @@ export class ListCalloutSettingTab extends PluginSettingTab {
                 void this.runImport();
               }).open();
             })
+        );
+      },
+    });
+
+    definitions.push({
+      name: `Import from ${CALLOUT_MANAGER_NAME}`,
+      desc: this.calloutManagerImportDesc(),
+      // Asked on every render of the tab, like the row above, so the row
+      // follows Callout Manager being turned on or off. The check is a
+      // lookup, so it needs no cached answer.
+      visible: () => calloutManagerAvailable(this.plugin.app),
+      render: (setting: Setting) => {
+        setting.addButton((btn) =>
+          btn
+            .setButtonText('Import')
+            .onClick(() => void this.startCalloutManagerImport())
         );
       },
     });

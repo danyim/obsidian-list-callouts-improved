@@ -101,6 +101,7 @@ Everything importable lives in `src/`, one module per responsibility:
 | `iconSearch.ts` | Fuzzy search behind the icon picker. |
 | `iconAliases.ts` | **Generated** by `npm run icons` from `lucide-static`. Don't edit by hand. |
 | `import.ts` | Reads settings from the original List Callouts plugin so they can be imported. |
+| `calloutManager.ts` | Asks a running Callout Manager for its callouts and turns them into tag callouts (the "Import from Callout Manager" row). |
 
 The two renderers (`extension.ts`, `postProcessor.ts`) are separate
 implementations of the same rules — a change to how a callout is detected or
@@ -198,6 +199,10 @@ Specific to this plugin:
 - The only vault access is reading the configured icon folder
   (`customIcons.ts`) and this plugin's own settings/data file. Don't widen
   that without a clear reason.
+- The Callout Manager import (`calloutManager.ts`) reads another plugin, but
+  only through its plugin API, only while it is enabled, and only when the
+  user clicks the import. It declares the few API types it uses rather than
+  depending on Callout Manager's npm package, an alpha last published in 2023.
 - No telemetry, analytics, or remote code execution.
 
 ## Coding conventions
