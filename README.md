@@ -78,6 +78,12 @@ With the setting off, a tag callout only counts at the start of an item, like an
 
 This follows [List Callouts Tags](https://github.com/kltsv/obsidian-list-callouts-tags), without replacing character callouts: both kinds can be used side by side.
 
+### From Callout Manager
+
+With [Callout Manager](https://github.com/eth-p/obsidian-callout-manager) enabled, the settings tab offers an **Import from Callout Manager** button. It adds a tag callout for each callout Callout Manager lists, with the color and icon it shows for it, so `- #definition` matches `> [!definition]`. That includes the callouts your theme and CSS snippets define, not only the ones made in Callout Manager. Obsidian's built-in callouts, the tags you already have a callout for, and ids that can't be tags (such as `2024`) are left out, and the button lists what it will add before it adds anything.
+
+The import is a copy: a callout changed in Callout Manager afterwards isn't updated here. A callout with different colors for light and dark mode comes over in the color it has in the current mode.
+
 ## Managing callouts
 
 Callouts are defined in one list. A new vault starts with the seven shown above, and any of them can be edited, reordered by dragging, or deleted, built-in ones included.

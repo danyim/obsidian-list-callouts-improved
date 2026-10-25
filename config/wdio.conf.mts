@@ -13,6 +13,7 @@ const OLDEST_PUBLIC_VERSION = '1.13.4';
 
 // Pinned so a new upstream release can't change what the tests exercise.
 const LEGACY_PLUGIN_VERSION = '1.2.9';
+const CALLOUT_MANAGER_VERSION = '1.1.2';
 
 let defaultVersions = `${OLDEST_PUBLIC_VERSION}/latest latest/latest`;
 if (await obsidianBetaAvailable({ cacheDir })) {
@@ -32,11 +33,18 @@ if (env.CI) {
 // The plugin this one was forked from, installed but left off so most specs
 // don't see it. The coexistence spec turns it on to check that the import
 // reads what the real plugin actually writes, not just a hand-made data.json.
+// Callout Manager is left off the same way, and its import spec turns it on:
+// that import asks the running plugin rather than reading a file.
 const plugins = [
   '..',
   {
     repo: 'mgmeyers/obsidian-list-callouts',
     version: LEGACY_PLUGIN_VERSION,
+    enabled: false,
+  },
+  {
+    repo: 'eth-p/obsidian-callout-manager',
+    version: CALLOUT_MANAGER_VERSION,
     enabled: false,
   },
 ];

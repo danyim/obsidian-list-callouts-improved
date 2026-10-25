@@ -185,43 +185,43 @@ export async function clickAddCallout(): Promise<void> {
 }
 
 /**
- * Whether the "Import from List Callouts" row is showing in the settings
- * tab. The row is always in the definitions and hidden with `visible`, which
- * Obsidian applies as an inline display:none, so the tab's text isn't enough
- * to tell.
+ * Whether an import row, "Import from List Callouts" unless named, is
+ * showing in the settings tab. The row is always in the definitions and
+ * hidden with `visible`, which Obsidian applies as an inline display:none, so
+ * the tab's text isn't enough to tell.
  */
-export function importRowVisible(): Promise<boolean> {
-  return browser.executeObsidian(({ app }) => {
+export function importRowVisible(
+  name = 'Import from List Callouts'
+): Promise<boolean> {
+  return browser.executeObsidian(({ app }, rowName) => {
     const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
     if (!root) return false;
 
     const row = Array.from(
       root.querySelectorAll<HTMLElement>('.setting-item')
     ).find(
-      (el) =>
-        el.querySelector('.setting-item-name')?.textContent ===
-        'Import from List Callouts'
+      (el) => el.querySelector('.setting-item-name')?.textContent === rowName
     );
     return row !== undefined && getComputedStyle(row).display !== 'none';
-  });
+  }, name);
 }
 
 /**
- * Click the Import button on the "Import from List Callouts" row of the
- * settings tab, the way a user migrating would. Throws if the row isn't
- * showing.
+ * Click the Import button on an import row of the settings tab ("Import
+ * from List Callouts" unless named), the way a user migrating would. Throws
+ * if the row isn't showing.
  */
-export async function clickImportButton(): Promise<void> {
-  const clicked = await browser.executeObsidian(({ app }) => {
+export async function clickImportButton(
+  name = 'Import from List Callouts'
+): Promise<void> {
+  const clicked = await browser.executeObsidian(({ app }, rowName) => {
     const root = (app as any).setting.activeTab?.containerEl as HTMLElement;
     if (!root) return false;
 
     const row = Array.from(
       root.querySelectorAll<HTMLElement>('.setting-item')
     ).find(
-      (el) =>
-        el.querySelector('.setting-item-name')?.textContent ===
-        'Import from List Callouts'
+      (el) => el.querySelector('.setting-item-name')?.textContent === rowName
     );
     const button = row?.querySelector<HTMLElement>('button');
     if (!row || !button || getComputedStyle(row).display === 'none') {
@@ -230,10 +230,10 @@ export async function clickImportButton(): Promise<void> {
 
     button.click();
     return true;
-  });
+  }, name);
 
   if (!clicked) {
-    throw new Error('No "Import from List Callouts" row in the settings tab');
+    throw new Error(`No "${name}" row in the settings tab`);
   }
 }
 
@@ -1681,4 +1681,48 @@ export function highlightTextColors(
       callouts,
     };
   }, view);
+}
+
+/**
+ * The text of every notice on screen. Like a dialog (see inTopmostModal), a
+ * notice opens in whichever window is active, so both are searched.
+ */
+export function noticeTexts(): Promise<string[]> {
+  return browser.executeObsidian(({ app }) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    const docs = new Set([root?.ownerDocument ?? document, document]);
+    return Array.from(docs).flatMap((doc) =>
+      Array.from(doc.querySelectorAll('.notice')).map(
+        (el) => el.textContent ?? ''
+      )
+    );
+  });
+}
+
+/**
+ * Callout Manager, as installed by config/wdio.conf.mts. Its callout list
+ * comes from scanning stylesheets after it loads, so a snippet's callout
+ * shows up a moment later than its own custom ones.
+ */
+export const CALLOUT_MANAGER_ID = 'callout-manager';
+
+export async function calloutManagerIds(): Promise<string[]> {
+  return await browser.executeObsidian(async ({ app }, id) => {
+    const cm = (app as any).plugins.plugins[id];
+    if (!cm) return [] as string[];
+    const api = await cm.newApiHandle('v1', undefined, () => {});
+    return (api.getCallouts() as { id: string }[]).map((c) => c.id);
+  }, CALLOUT_MANAGER_ID);
+}
+
+export async function setCalloutManagerEnabled(on: boolean): Promise<void> {
+  await browser.executeObsidian(
+    async ({ app }, id, enable) => {
+      const plugins = (app as any).plugins;
+      await (enable ? plugins.enablePlugin(id) : plugins.disablePlugin(id));
+    },
+    CALLOUT_MANAGER_ID,
+    on
+  );
 }

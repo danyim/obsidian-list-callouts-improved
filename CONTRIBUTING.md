@@ -67,6 +67,7 @@ Everything lives in `src/`:
 | `iconSearch.ts` | Fuzzy search behind the icon picker. |
 | `iconAliases.ts` | **Generated** by `npm run icons` from `lucide-static`. Don't edit it by hand. |
 | `import.ts` | Reads settings from the original List Callouts plugin so they can be imported. |
+| `calloutManager.ts` | Asks a running Callout Manager for its callouts and turns them into tag callouts (the "Import from Callout Manager" row). |
 
 The two renderers are separate implementations of the same rules, so a change to
 how a callout is detected or drawn usually needs to land in both `extension.ts`
