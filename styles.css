@@ -454,14 +454,18 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
   min-height: max-content;
 }
 
-/* The character input holds a single character, in the settings row and
-   the Add callout dialog alike; at Obsidian's default width it would push
-   the dialog's marker color dropdown onto a line of its own. Typed so the
-   color inputs keep Obsidian's own width, which is what keeps their swatch
-   a circle rather than a pill, and a direct child so the icon picker's
+/* The character input starts at 4em, room for a character, and grows to
+   take whatever the row has left, so a tag callout's character such as
+   `#activity/example` can be read in full. A flex-basis rather than a
+   width: flex lines break by each item's basis, before any growing, so in
+   the Add callout dialog the marker color dropdown still fits on the same
+   line rather than being pushed onto one of its own. Typed so the color
+   inputs keep Obsidian's own width, which is what keeps their swatch a
+   circle rather than a pill, and a direct child so the icon picker's
    search box, which opens inside this same container, keeps its own. */
 .lc-input-container > input[type="text"] {
-  width: 4em;
+  flex: 1 1 4em;
+  min-width: 4em;
 }
 
 .lc-callout-container {
@@ -610,7 +614,7 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
    plus the list's delete and drag buttons into eight lines per callout.
    Instead, two lines:
 
-     [color] [char] [ Set icon              ] [trash]
+     [color] [ char                ] [Set icon] [trash]
      [ Default marker color     ] [marker] [x] [=]
 
    The list's delete and drag buttons are appended to the control column
@@ -629,11 +633,14 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
   margin-right: 0;
 }
 
+/* The character input takes what the first line has left, as it does on
+   desktop, so a tag callout's character gets room there too. */
 .is-phone .setting-item.lc-setting .lc-input-container > input[type="text"] {
-  flex: 0 0 3.5em;
+  flex: 1 1 3.5em;
+  min-width: 3.5em;
 }
 
-/* The icon button takes what the first line has left. A basis of auto
+/* The icon button keeps the width of its content. A basis of auto
    rather than 0: Obsidian's ButtonComponent marks a button mod-loading
    (overflow: hidden, so no automatic minimum width) for as long as its
    click handler runs, and with a basis of 0 the button's hypothetical size
@@ -642,12 +649,11 @@ li.task-list-item > .lc-li-wrapper > .task-list-item-checkbox {
    to position itself. auto defers to width, which Obsidian sets to 100%
    on a phone; put back to its content so that is what the basis is. */
 .is-phone .setting-item.lc-setting .setting-item-control button {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   width: auto;
 }
 
-/* The trash that clears the icon keeps its size; the icon button next to
-   it takes the rest of the line. */
+/* The trash that clears the icon keeps its size too. */
 .is-phone .setting-item.lc-setting .lc-clear-icon {
   flex: 0 0 auto;
 }
