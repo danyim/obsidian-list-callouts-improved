@@ -113,6 +113,37 @@ export function settingsText(): Promise<string> {
   });
 }
 
+/**
+ * How the settings tab's character input holding `value` fits its text:
+ * the width the text needs against the width the input shows, and whether
+ * the input still shares a line with the rest of its row's controls (the
+ * icon button after it).
+ */
+export function characterInputFit(value: string): Promise<{
+  textWidth: number;
+  boxWidth: number;
+  sameLineAsIcon: boolean;
+} | null> {
+  return browser.executeObsidian(({ app }, wanted) => {
+    const root = (app as any).setting.activeTab?.containerEl as
+      HTMLElement | undefined;
+    const input = Array.from(
+      root?.querySelectorAll<HTMLInputElement>(
+        '.lc-input-container > input[type="text"]'
+      ) ?? []
+    ).find((el) => el.value === wanted);
+    if (!input) return null;
+
+    const button = input.parentElement?.querySelector('button');
+    const top = (el: Element) => el.getBoundingClientRect().top;
+    return {
+      textWidth: input.scrollWidth,
+      boxWidth: input.clientWidth,
+      sameLineAsIcon: !!button && Math.abs(top(input) - top(button)) < 4,
+    };
+  }, value);
+}
+
 export async function closeSettings(): Promise<void> {
   await browser.executeObsidian(({ app }) => {
     (app as any).setting.close();

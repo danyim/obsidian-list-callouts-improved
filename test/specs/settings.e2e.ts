@@ -8,6 +8,7 @@ import {
 import {
   calloutPatternsAreNull,
   calloutPreviewCount,
+  characterInputFit,
   clearPluginData,
   clickAddCallout,
   clickIconInMenu,
@@ -316,6 +317,23 @@ describe('Editing callouts', function () {
     await openPluginSettings();
     expect(await calloutPreviewCount()).toBe(BUILT_IN_COUNT + 1);
     await closeSettings();
+  });
+
+  // The input was sized for a single character, which cut a tag callout's
+  // character off after a few letters.
+  it("shows a tag callout's character in full", async function () {
+    await setSettings([
+      ...(await getSettings()),
+      { char: '#meeting', color: '9, 9, 9', custom: true },
+    ]);
+
+    await openPluginSettings();
+    const fit = await characterInputFit('#meeting');
+    await closeSettings();
+
+    expect(fit).not.toBeNull();
+    expect(fit.textWidth).toBeLessThanOrEqual(fit.boxWidth);
+    expect(fit.sameLineAsIcon).toBe(true);
   });
 
   // The picker is positioned within its own row, which scrolls with the tab.
