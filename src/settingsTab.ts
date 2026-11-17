@@ -95,6 +95,15 @@ function attachIconMenu(
   let menuRef: HTMLDivElement = null;
   const btnEl = btn.buttonEl;
 
+  // Undoes what opening the menu changed on its dialog, if anything.
+  let restoreDialog = () => {};
+  const closeMenu = () => {
+    menuRef?.detach();
+    menuRef = null;
+    restoreDialog();
+    restoreDialog = () => {};
+  };
+
   btn.onClick((e) => {
     e.preventDefault();
     // The settings tab has a scrolling pane around the row; a dialog
@@ -106,8 +115,7 @@ function attachIconMenu(
     const clickOutside = (e: MouseEvent) => {
       if (menuRef) {
         if (!menuRef.contains(e.targetNode)) {
-          menuRef.detach();
-          menuRef = null;
+          closeMenu();
           destroyEventHandlers();
         }
       } else {
@@ -181,14 +189,28 @@ function attachIconMenu(
 
     if (menuRef) {
       destroyEventHandlers();
-      menuRef.detach();
-      menuRef = null;
+      closeMenu();
       return;
     }
 
     createDiv('lc-menu', (menu) => {
       menuRef = menu;
       btnEl.after(menuRef);
+
+      // Obsidian 1.15.1 sets will-change: transform on a phone's dialogs,
+      // inline. That makes the dialog the containing block for position:
+      // fixed, so the menu's viewport coordinates were taken from the
+      // dialog's corner instead: it landed in the dialog's scrolling
+      // content, and taking focus scrolled the dialog away from its button.
+      // Dropped while the menu is open, and put back when it closes.
+      const dialogEl = inDialog ? btnEl.closest<HTMLElement>('.modal') : null;
+      const willChange = dialogEl?.style.getPropertyValue('will-change');
+      if (dialogEl && willChange) {
+        dialogEl.style.removeProperty('will-change');
+        restoreDialog = () =>
+          dialogEl.style.setProperty('will-change', willChange);
+      }
+
       calcMenuPos();
 
       // Obsidian registers a couple of thousand icons and the list shows
@@ -220,8 +242,7 @@ function attachIconMenu(
               btn.setIcon(icon);
               onSelect(icon);
               destroyEventHandlers();
-              menuRef.detach();
-              menuRef = null;
+              closeMenu();
             });
           }
         ));
